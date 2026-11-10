@@ -97,8 +97,17 @@ test("a voluntary objection remains blocking in a freshly qualified candidate", 
   }
 });
 
-test("candidate base movement does not rewrite independently collected member bases", () => {
+test("candidate base movement does not rewrite a stacked member's own base", () => {
   const facts = independentGroup();
+  const stacked = subject(2, "d".repeat(40), at(facts.members).headSha);
+  facts.members[1] = stacked;
+  const admission = passingPr(stacked.id, stacked.headSha, stacked.baseSha);
+  admission.assignments.requiredReviewers = ["human"];
+  admission.humanReviews = [
+    { reviewer: "human", state: "approved", subject: { ...stacked } },
+  ];
+  facts.admissions[1] = admission;
+  expect(evaluateEvidence(facts, policy()).eligible).toBe(true);
   facts.candidate.subject.baseSha = NEXT_BASE;
   facts.candidate.subject.headSha = "f".repeat(40);
   for (const check of facts.candidate.checks) {
