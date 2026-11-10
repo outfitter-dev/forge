@@ -7,6 +7,7 @@
   "scripts": {
     "bootstrap": "bash scripts/bootstrap.sh",
     "check": "bun run lint && bun run format:check && bun run typecheck && bun run test",
+    "evaluate": "bun src/cli.ts",
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "typecheck": "tsc --noEmit",

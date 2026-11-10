@@ -1,0 +1,19 @@
+{
+  "collector": {
+    "producer": "collector:fixture",
+    "runtimeFingerprint": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "repository": "example/project",
+  "requiredAgentProviders": [
+    {
+      "producer": "agent:fixture",
+      "provider": "self-hosted",
+      "runtimeFingerprint": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ],
+  "schemaVersion": 1,
+  "verification": {
+    "producer": "verification:fixture",
+    "runtimeFingerprint": "2222222222222222222222222222222222222222222222222222222222222222"
+  }
+}
