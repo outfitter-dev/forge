@@ -28,7 +28,7 @@ Bun 1.4.4, TypeScript 7.0.2, oxlint 1.69.0, oxfmt 0.54.0, Ultracite 7.8.3, exact
 
 ## First useful slice
 
-FOR-2 implements deterministic evaluation of normalized check/review evidence: explicit facts and policy produce separate lint, test, build, agent-review, human-review, and landing decisions. [The operation contract](evidence-evaluator.md) records the verified pilot baseline, strict input validation, provenance requirements, PR/merge-group semantics, offline fixtures, and deliberate adaptations. FOR-3 adds the [local JSON CLI](evidence-cli.md) and committed examples with offline subprocess qualification. FOR-4 owns one thin CI adapter. No live consumer migration is included.
+FOR-2 implements deterministic evaluation of normalized check/review evidence: explicit facts and policy produce separate lint, test, build, agent-review, human-review, and landing decisions. [The operation contract](evidence-evaluator.md) records the verified pilot baseline, strict input validation, provenance requirements, PR/merge-group semantics, offline fixtures, and deliberate adaptations. FOR-3 adds the [local JSON CLI](evidence-cli.md) and committed examples with offline subprocess qualification. FOR-4 adds a named [CI fixture step](evidence-cli.md#ci-adapter-qualification) that runs the same CLI subprocess suite; expected blocked/malformed cases assert failure results without failing the job. No live consumer migration is included.
 
 Keep head/base revision identity, required-evidence completeness, provider/runtime identity, and explicit authority intact. Missing, stale, canceled, failed, or incomplete required evidence must not become a pass. Agent judgment cannot override deterministic blockers. A successful API request is not proof that model work completed or a PR landed.
 
@@ -80,4 +80,4 @@ Keep code reuse and authority separate. Repository identity, landing actors, req
 
 See [legacy-forge.md](legacy-forge.md) for the archived old project and preserved local worktree. Its old design documents are historical, not normative requirements here.
 
-Next agent: qualify the FOR-4 thin CI adapter using the same local JSON CLI and evaluator. Resolve distribution/access before promising cross-owner Actions reuse. Dagger integration, Turbo helpers, Ranger invocation, worker relocation, and production adoption should each be explicit subsequent slices. Keep existing consumers working while replacements qualify, and record divergence in the relevant Linear issue and migration documentation.
+The first reusable slice now has one pure evaluator, a local JSON CLI, and a thin CI fixture step. Resolve distribution/access before promising cross-owner Actions reuse. Dagger integration, Turbo helpers, Ranger invocation, worker relocation, and production adoption should each be explicit subsequent slices. Keep existing consumers working while replacements qualify, and record divergence in the relevant Linear issue and migration documentation.

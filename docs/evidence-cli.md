@@ -44,4 +44,18 @@ This intentionally exits `2`: the valid JSON object declares an unsupported even
 
 The CLI validates shape and compares declared identities and fingerprints; **it does not authenticate the producer, source revision, runtime, policy, or authority**. Supply evidence from a trusted collector and run trusted evaluator/policy revisions outside proposed code. Do not put credentials, transcripts, or private runtime state in these files. An eligible result grants no merge permission and proves no live landing. See [the evaluator contract](evidence-evaluator.md) for collector responsibilities, exact-source semantics, and limitations.
 
-Offline subprocess tests run the actual entry point with an empty environment and cover passing/blocked/invalid results, parity with the library, argument errors, caller-relative paths with spaces, missing/unreadable files, malformed JSON, invalid policy, and unexpected evaluator failure. They prove the local adapter; they do not qualify production collection, cross-owner distribution, or trust isolation. FOR-4 separately qualifies invocation through a thin CI step.
+Offline subprocess tests run the actual entry point with an empty environment and cover passing/blocked/invalid results, parity with the library, argument errors, caller-relative paths with spaces, missing/unreadable files, malformed JSON, invalid policy, and unexpected evaluator failure. They prove adapter behavior; they do not qualify production collection, cross-owner distribution, or trust isolation.
+
+## CI adapter qualification
+
+The [CI workflow](../.github/workflows/ci.yml) includes a named `Qualify evaluator CLI on offline fixtures` step. It runs the same command locally and in Actions:
+
+```sh
+bun test tests/cli.test.ts
+```
+
+The [subprocess suite](../tests/cli.test.ts) launches the real `src/cli.ts` entry point through the installed Bun executable, with an empty child environment. The committed passing, blocked, and invalid-contract fixtures must respectively return `0`, `1`, and `2`, with matching structured result status and eligibility. Additional cases cover syntactically malformed JSON and unexpected evaluation failure. Library/CLI parity tests compare complete structured results with direct calls to the same evaluator. A deliberately blocked or malformed fixture passes its test only when the CLI returns the expected failure; expected negative cases therefore do not fail the Actions job. An unexpected exit or output does fail the job.
+
+This reuses the local adapter and its assertions instead of implementing gate logic or a second fixture runner in YAML. The focused suite also remains part of `bun run check`; the extra named step makes the adopted CLI qualification visible in Actions. Existing checkout/setup actions stay pinned, Bun and dependencies stay pinned, permissions remain `contents: read`, and neither the step nor its child processes need privileged secrets. No consumer workflow or service integration is introduced.
+
+A green fixture step proves that the CLI adapter and pure evaluator agree on these offline inputs in CI. It does **not** prove authenticated collection, proposed-code isolation, private cross-owner access, live provider review, queue admission/landing, or production adoption. Those require separately scoped qualification before replacing any consumer.

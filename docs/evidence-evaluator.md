@@ -1,6 +1,6 @@
 # Deterministic evidence evaluation
 
-Forge's first operation evaluates normalized evidence and explicit policy. Import `evaluateEvidence`, `validateEvidenceInput`, and their types from `src/index.ts`. Both functions are pure: no service calls, filesystem reads, credentials, clock, cache, reporting, process exits, or merge actions. The [local JSON CLI](evidence-cli.md) is a separate adapter (FOR-3); CI adapter qualification follows in FOR-4.
+Forge's first operation evaluates normalized evidence and explicit policy. Import `evaluateEvidence`, `validateEvidenceInput`, and their types from `src/index.ts`. Both functions are pure: no service calls, filesystem reads, credentials, clock, cache, reporting, process exits, or merge actions. The [local JSON CLI](evidence-cli.md) is a separate adapter (FOR-3); [CI fixture qualification](evidence-cli.md#ci-adapter-qualification) runs that same entry point through its subprocess suite (FOR-4).
 
 ```ts
 import { evaluateEvidence } from "./src/index.ts";
