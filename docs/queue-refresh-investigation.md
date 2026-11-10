@@ -2,6 +2,8 @@
 
 [FOR-11](https://linear.app/outfitter/issue/FOR-11) still requires live two-PR and advancing-main evidence. This November 10, 2026 increment inspects supported events and pilot source, and adds offline evaluator regressions. It does not reproduce a live queue, change settings, refresh admissions, trigger builds, or install a scheduler. The [pilot report](pilot-qualification.md) establishes single-candidate/passing-prefix landing and native-stack rebasing only; those are not proof of arbitrary independent-PR refresh.
 
+The subsequent [bounded live qualification record](queue-refresh-qualification.md) documents seven baseline builds, the delayed review-submission trigger, cleanup, and the remaining live acceptance gaps. Its dated execution record supersedes this increment's proposal-only status; no refresh mechanism was added.
+
 ## Supported events and their distinct subjects
 
 | Surface | Supported behavior | What it does not establish |
