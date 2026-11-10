@@ -6,14 +6,14 @@ Forge owns engineering workflows and evidence. [Ranger](https://github.com/outfi
 
 ## Foundation status
 
-This is a private bootstrap, not a deployed automation platform. It includes Bun **1.4.4**, TypeScript **7.0.2**, Biome **2.6.6**, exact dependencies with a lockfile, and CI. `src/index.ts` intentionally exports no API yet. No runtime behavior or behavioral tests have been introduced; the test command accepts an empty suite until the first operation arrives.
+This is a private bootstrap, not a deployed automation platform. It includes Bun **1.4.4**, TypeScript **7.0.2**, oxlint **1.69.0**, oxfmt **0.54.0**, Ultracite **7.8.3**, exact dependencies with a lockfile, and CI. `src/index.ts` intentionally exports no API yet. No runtime behavior or behavioral tests have been introduced; the test command accepts an empty suite until the first operation arrives.
 
 ```sh
 bun install --frozen-lockfile
 bun run check
 ```
 
-The commands check formatting/lint, strict TypeScript, and any Bun tests. CI uses the same command and pinned GitHub Actions revisions. No secrets or global machine setup are needed.
+The commands check lint with oxlint, formatting with oxfmt, strict TypeScript, and any Bun tests. Lint and formatting use Ultracite presets, following Skillset’s configuration pattern, with Markdown prose wrapping disabled. Run `bun run format` to apply formatting. CI uses the same command and pinned GitHub Actions revisions. No secrets or global machine setup are needed.
 
 ## Start here
 
