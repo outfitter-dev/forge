@@ -22,7 +22,7 @@ One private package is enough initially. Add `actions/`, `.github/workflows/`, `
 
 ## Bootstrap state
 
-Bun 1.4.4, TypeScript 7.0.2, oxlint 1.69.0, oxfmt 0.54.0, Ultracite 7.8.3, exact dependency versions, committed Bun lockfile, strict typechecking, and pinned GitHub Actions. `bun run check` runs lint/format validation, typechecking, and Bun tests. The test command currently permits zero tests because this bootstrap intentionally implements no runtime operation. Add meaningful tests with the first behavior.
+Bun 1.4.4, TypeScript 7.0.2, oxlint 1.69.0, oxfmt 0.54.0, Ultracite 7.8.3, exact dependency versions, committed Bun lockfile, strict typechecking, and pinned GitHub Actions. `bun run check` runs lint/format validation, typechecking, and Bun tests. The test command requires a nonempty suite. Offline subprocess tests cover checkout bootstrap behavior; add meaningful tests with each new automation operation. Fresh checkouts and worktrees use `./scripts/bootstrap.sh` to validate the exact Bun pin and install frozen, independent dependencies.
 
 `src/index.ts` is an empty module boundary, not a stable public API. There are no Ranger, Dagger, Turbo, Buildkite, or GitHub SDK dependencies yet. Choose dependencies only for the adopted first slice. No package has been published, no credentials copied, and no global installations or worker deployments performed.
 
