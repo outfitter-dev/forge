@@ -23,6 +23,7 @@ The commands check lint with oxlint, formatting with oxfmt, strict TypeScript, a
 - [Automation contract](docs/automation-contract.md): required behavior for evidence, authority, trust boundaries, and adoption.
 - [Implementation handoff](docs/handoff.md): scope, boundaries, evidence, cross-owner reuse, and the first implementation slice.
 - [Legacy Forge retirement](docs/legacy-forge.md): preserved old repository, local checkout, and linked worktree.
+- [Human approval qualification brief](docs/human-approval-qualification.md): proposed disposable consumer, actor policy, scenarios, access decisions, and evidence; no live qualification authorization.
 
 The previous project named Forge is archived at [outfitter-dev/forge-old](https://github.com/outfitter-dev/forge-old). Its durable multi-agent operating-model design is historical material, not the specification for this new project. Existing `outfitter-dev/actions` and the Buildkite pilot remain operational; migration is explicit future work.
 
