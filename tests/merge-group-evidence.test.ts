@@ -102,9 +102,32 @@ test.each(["headSha", "baseSha", "repository"] as const)(
   "self-consistent admission cannot substitute for authoritative member %s",
   (key) => {
     const facts = passingGroup();
+    at(facts.admissions).assignments.requiredReviewers = ["human"];
+    at(facts.admissions).humanReviews = [
+      { reviewer: "human", state: "approved", subject: subject() },
+    ];
     at(facts.members)[key] =
       key === "repository" ? "another/project" : "e".repeat(40);
-    expect(evaluateEvidence(facts, policy()).eligible).toBe(false);
+    const result = evaluateEvidence(facts, policy());
+    expect(result.status).toBe("evaluated");
+    expect(result.eligible).toBe(false);
+    if (result.status === "evaluated") {
+      for (const name of ["agent-review", "human-review", "mergeability"]) {
+        const decision = result.gates.find((item) => item.name === name);
+        expect(decision?.conclusion).toBe("failure");
+        expect(decision?.reasons).toContainEqual(
+          expect.objectContaining({
+            code: "subject-mismatch",
+            path: `facts.admissions[0].subject.${key}`,
+          })
+        );
+      }
+      for (const name of ["lint", "test", "build"]) {
+        expect(
+          result.gates.find((item) => item.name === name)?.conclusion
+        ).toBe("success");
+      }
+    }
   }
 );
 

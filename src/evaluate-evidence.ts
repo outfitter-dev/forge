@@ -88,9 +88,14 @@ export const evaluateEvidence = (
         (item) => item.id === pr.subject.id
       );
       if (member) {
-        problems.mergeability.push(
-          ...bindingProblems(pr.subject, member, `${path}.subject`)
-        );
+        const binding = bindingProblems(pr.subject, member, `${path}.subject`);
+        for (const name of [
+          "agent-review",
+          "human-review",
+          "mergeability",
+        ] as const) {
+          problems[name].push(...binding);
+        }
       }
       evaluatePullRequest(pr, requirements, path, problems, true);
     }
