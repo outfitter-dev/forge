@@ -8,14 +8,14 @@ The first operation is a [pure deterministic evidence evaluator](docs/evidence-e
 
 ## Foundation status
 
-This is a private package, not a deployed automation platform. It includes Bun **1.4.4**, TypeScript **7.0.2**, oxlint **1.69.0**, oxfmt **0.54.0**, Ultracite **7.8.3**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
+This is a private package, not a deployed automation platform. It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
 
 ```sh
 bun install --frozen-lockfile
 bun run check
 ```
 
-The commands check lint with oxlint, formatting with oxfmt, strict TypeScript, and any Bun tests. Lint and formatting use Ultracite presets, following Skillset’s configuration pattern, with Markdown prose wrapping disabled. Run `bun run format` to apply formatting. CI uses the same command and pinned GitHub Actions revisions. No secrets or global machine setup are needed.
+The commands check lint with oxlint (warnings fail), formatting with oxfmt, strict types with `bun check --no-script`, and Bun tests. Lint and formatting use Ultracite presets with Markdown prose wrapping disabled. [Tooling qualification and editor guidance](docs/tooling.md) records the accepted Ranger reference, strict/config-file checks, and the decision to omit a separate editor TypeScript pin. Run `bun run format` to apply formatting. CI uses the same command and pinned GitHub Actions revisions. No secrets or global machine setup are needed.
 
 ## Start here
 
@@ -23,6 +23,7 @@ The commands check lint with oxlint, formatting with oxfmt, strict TypeScript, a
 - [Automation contract](docs/automation-contract.md): required behavior for evidence, authority, trust boundaries, and adoption.
 - [Implementation handoff](docs/handoff.md): scope, boundaries, evidence, cross-owner reuse, and the first implementation slice.
 - [Legacy Forge retirement](docs/legacy-forge.md): preserved old repository, local checkout, and linked worktree.
+- [Worker lifecycle plan](docs/worker-lifecycle-plan.md): proposed ownership, preservation, lifecycle, and bounded capacity qualification; no deployment authorization.
 - [Human approval qualification brief](docs/human-approval-qualification.md): proposed disposable consumer, actor policy, scenarios, access decisions, and evidence; no live qualification authorization.
 
 The previous project named Forge is archived at [outfitter-dev/forge-old](https://github.com/outfitter-dev/forge-old). Its durable multi-agent operating-model design is historical material, not the specification for this new project. Existing `outfitter-dev/actions` and the Buildkite pilot remain operational; migration is explicit future work.
