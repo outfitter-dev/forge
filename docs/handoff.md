@@ -88,7 +88,7 @@ The closeout records final pilot source `5264279b9ce776d2a8f8e6c3785c663d9b653cf
 
 ## Private cross-owner reuse: unresolved by design
 
-Keep Forge private for now. GitHub documents standard private Actions/workflow sharing within the same owner or organization. Merely allowing other `outfitter-dev` repositories does not establish direct reuse from personal `galligan` repositories. Enterprise sharing has separate ownership/visibility/policy conditions; do not assume a personal account participates.
+Keep Forge private for now. GitHub documents standard private Actions/workflow sharing within the same owner or organization. Merely allowing other `outfitter-dev` repositories does not establish direct reuse from personal `galligan` repositories. Enterprise sharing has separate ownership/visibility/policy conditions; do not assume a personal account participates. The [private distribution analysis](private-distribution-analysis.md) records the current disabled sharing setting, recommends immutable authenticated source invocation first, and scopes consumer/access decisions and success/denial evidence. It does not qualify or enable access.
 
 Official references checked November 10, 2026:
 
