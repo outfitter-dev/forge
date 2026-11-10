@@ -1,19 +1,19 @@
 # Worker lifecycle and capacity plan
 
-FOR-8 delivers this plan, not an operational change. No worker, service, token, private state, process, or Rex session was inspected or changed for it. The [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md) are November 10, 2026 historical evidence, with pilot source `5264279b9ce776d2a8f8e6c3785c663d9b653cf8`. Their recorded paths, resource settings, token duration, restart times, and identifiers are not proof of current availability or ownership acceptance. Reverify live state only in a separately authorized implementation or validation task.
+FOR-8 originally delivered this plan without operational inspection or changes. A later Matt-authorized read-only inspection is recorded in the [established pilot setup](handoff.md#established-pilot-setup): the Studio/operator and Rex topology are established, with dated container limits and process availability. Reuse this setup where suitable; do not ask Matt to reselect the host or recreate workers. The [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md), at pilot source `5264279b9ce776d2a8f8e6c3785c663d9b653cf8`, remain historical evidence. Current setup does not authorize relocation, restart, renewal, services or more concurrency, and time-sensitive status must be rechecked before an authorized operation.
 
 ## Ownership and decisions before operation
 
 | Responsibility | Recorded baseline and proposed accountable owner | Decision still needed |
 | --- | --- | --- |
-| Host and pilot operation | The closeout records Matt's Studio/account running the disposable pilot. Propose Matt as the initial operator and change approver. | Matt must accept the operating role or name another owner and backup; current process/user identity is unverified. |
+| Host and pilot operation | Matt's Studio under `mg` and the existing Rex workers are established; see the dated handoff inspection. Matt is the current operator. | Name a backup and approve any new operational change; recheck process identity/availability before that action. Host selection is settled. |
 | Trusted automation runtime | Forge owns gate/collection behavior and runtime release definitions. Product repos own the commands under evaluation. | Name the person allowed to approve/install a pinned runtime release and its rollback. No installer or service is supplied here. |
 | Registration and service access | Existing Buildkite/GitHub/model access belongs to its current account owners; reuse grants no new authority. | Confirm service account, repository/queue scopes, allowed actors, and credential custodian before implementation. |
 | Token renewal | Propose the accepted operator as renewal DRI, with a named backup. The historical registration token had a seven-day lifetime. | Custodian must record actual expiry privately, arrange advance reminders, renew under explicit authority, and confirm old-token revocation/overlap policy. No expiry or validity was checked here. |
 | Persistent evidence and deletion | The operator must preserve review cache, PR admissions, and human-observation ledger; Forge defines their validity rules. | Accept backup/restore, retention, reader, deletion, and incident-response ownership before moving state. |
 | Agent behavior/history | Ranger owns its harness and history contract; it is not required to make this lifecycle plan. | Any later Ranger history/storage selection belongs to [FOR-15](https://linear.app/outfitter/issue/FOR-15), with its own access and retention decisions. Do not pre-create a shared store. |
 
-These are proposed assignments, not newly granted permissions. Planning can complete with these choices recorded; installing, renewing, moving, starting, or increasing capacity cannot proceed until the relevant owner and scope are explicitly accepted.
+Existing host/operator ownership is established; the remaining proposed future responsibilities grant no new permissions. Planning can complete with those choices recorded; installing, renewing, moving, starting, or increasing capacity still requires the relevant operational scope.
 
 ## Historical locations and preserved evidence
 
@@ -29,11 +29,11 @@ All baseline paths below are relative to `/Users/mg/Documents/Codex/2026-11-10/i
 | `work/pilot-secrets/buildkite-agent-token` | Historical private registration-token location, outside source control and proposed checkouts. It is a location reference only. |
 | `outputs/final-release-receipt.json` and private release ZIP | Source/digest-bound qualification artifacts; retain as historical evidence, not current admissions. |
 
-The historical Linux worker used Docker Compose project `outfitter-ci-pilot` and a persistent build volume. Treat the exact running container, mounts, volume identity, and ownership as unknown until authorized preflight. Model CLI login and GitHub/Buildkite credential sources also require custodian confirmation; do not enumerate or copy account credential stores during planning.
+The historical Linux worker used Docker Compose project `outfitter-ci-pilot` and a persistent build volume. The later handoff inspection confirms the existing container, limits, mounts and persistent volume at its recorded time; recheck mutable facts before operation rather than treating the setup as unselected. Model login, token validity and expiry were not inspected. Do not enumerate or copy account credential stores during planning, or infer Devin API access from worker registration.
 
 ## Proposed stable placement
 
-Select an operator-owned root outside repositories, worktrees, and cleanup-managed job directories. Candidate on this Mac: `~/Library/Application Support/Forge/workers/<pilot-name>/`; the host, root, and account remain an implementation decision. Do not create this tree as part of FOR-8.
+For a later permanent relocation, select an operator-owned root outside repositories, worktrees, and cleanup-managed job directories. Candidate on the established Studio under `mg`: `~/Library/Application Support/Forge/workers/<pilot-name>/`; the new root remains a future implementation decision, not a prerequisite for reusing the existing setup. Do not create this tree as part of FOR-8.
 
 - `runtime-releases/<revision>-<fingerprint>/`: immutable reviewed code/configuration plus a manifest of source, policy, task/model/harness/prompt configuration, and actual executable identity. Launch resolves one approved release; a job cannot replace it from proposed code. Keep the previous known-good release available.
 - `state/<repository>/`: persistent admission, review-cache, and human-ledger data with source/runtime/schema provenance. Use existing locking/atomic-write semantics; permit one writer per state namespace. Job cleanup must never remove this directory.

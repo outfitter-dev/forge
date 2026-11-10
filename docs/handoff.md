@@ -48,9 +48,37 @@ The pilot uses six distinct statuses: lint, test, build, agent review, assigned-
 
 [MONO-91](https://linear.app/outfitter/issue/MONO-91) records completed pilot qualification. [MONO-92](https://linear.app/outfitter/issue/MONO-92) tracks the required Devin findings adapter: unresolved GitHub threads block today, but a green Devin status is not a clean-review verdict. [MONO-93](https://linear.app/outfitter/issue/MONO-93) tracks simultaneous PR groups and automatic admission refresh when unrelated work advances main. Creating Forge or Ranger does not resolve these gaps.
 
-The November 10 pilot snapshot records Studio workers in Rex session `remotes`, tab `buildkite-workers`, with native review and container verification panes; one review job plus one verification job; verification limits of two CPU equivalents and 2 GiB RAM; and native nice level 10 with a four-hour lifetime. The recorded native restart was 12:47 PM Eastern that day. These are historical observations, not current availability/capacity evidence. The [worker lifecycle plan](worker-lifecycle-plan.md) records proposed ownership, placement, state preservation, renewal, drain/update/rollback, and evidence needed before more concurrency. It authorizes no operations. Reverify live state in a separately authorized operational task; no permanent installation, native memory cap, or desktop-load throttle is established by these records.
+The [established pilot setup](#established-pilot-setup) below records the existing Studio/Rex workers and read-only verification. Reuse it where suitable; do not repeatedly ask Matt to select the host or recreate workers. The [worker lifecycle plan](worker-lifecycle-plan.md) governs future relocation/service lifecycle and evidence before more concurrency, not selection of the already established host. Availability remains time-sensitive; no permanent installation, native memory cap, or desktop-load throttle is established. [Devin findings discovery](devin-findings-discovery.md) separates this setup from the remaining Devin API access and supported-findings gap.
 
 Local pilot checkout: `~/Documents/Codex/2026-11-10/i/work/agentic-ci-pilot`. Its private runtime/secrets are outside the checkout. Saved evidence: `~/Documents/Codex/2026-11-10/i/outputs/pilot-report.md`. Those temporary paths are not the intended permanent infrastructure layout.
+
+## Established pilot setup
+
+Matt confirmed the existing Buildkite worker setup in Rex on November 10, 2026 and requested read-only inspection. At approximately 22:15 UTC, Rex session/process metadata, bounded recent pane output, selected runtime source hashes, directory metadata, and selected Docker inspection fields established the following. No input was sent to worker panes, processes restarted/signaled, secret values read, or worker configuration changed. These facts supersede host-selection uncertainty in the historical closeout; they are not a permanent health or unattended-access guarantee.
+
+| Established identity | Verified fact |
+| --- | --- |
+| Host/operator | Matt's Studio, local Rex host ID `24a140f8-a090-4b21-a7a0-5c1772a68007`; process account `mg` (UID 501). Reuse this approved host/setup where suitable. |
+| Session/tab | `remotes`, session `session:01a1b1de-3fa7-77c4-ab78-9350e6391db0`; `buildkite-workers`, window `window:01a1c692-7c49-7cc5-93cc-817180fe37c7`. |
+| Layout | Equal horizontal 50/50 split: native review left, container verification right. Preserve the layout; pane IDs must be re-resolved if replaced. |
+| Native pane | `block:01a1c692-7c28-78ca-9792-a815cc7a794e`. At inspection Rex reported exit 0; output records the four-hour limit and disconnect at 16:47:32 Eastern. No active native reviewer was established by that pane. This is availability, not a host-selection decision or permission to restart. |
+| Verification pane | `block:01a1c692-a431-7153-9012-d34a9577a310`. Foreground Docker/OrbStack process PID 99820 under `mg`, working directory the pilot source checkout; recent Linux agent heartbeat output. PID is a dated observation, never sufficient signaling authority. |
+| Container | `outfitter-ci-pilot-agent-1` running; image tag `outfitter-agentic-ci-pilot:local`, inspected image ID `sha256:ee9e3467119cf010580a05b08aec73adf4b74592d5a18aa3b1795a2185d968c4`. A local tag is mutable. |
+| Container boundaries | Two CPU equivalents, 2 GiB memory, 256 processes, non-privileged container, `unless-stopped` restart policy. Inspected mounts: persistent `outfitter-ci-pilot_builds` volume at `/var/lib/buildkite`, and the token file read-only at `/run/secrets/buildkite-agent-token`; no host-home or Docker-socket mount. |
+
+The container agent's configured user is empty/default, not UID 1001. The reviewed pilot execution source explicitly requires the trusted root worker and drops proposed commands to UID/GID 1001 with cleared groups and a minimal environment. Container limits and mounts were inspected; this documentation task did not execute a proposal or prove every enforcement path anew. Native nice level 10 is the recorded launcher policy, not a CPU/memory cap; the exited native process supplied no current nice measurement. Keep the existing one-review/one-verification slot arrangement; no capacity increase is authorized.
+
+All path references below are under `/Users/mg/Documents/Codex/2026-11-10/i/`:
+
+| Location | Established role and verification limit |
+| --- | --- |
+| `work/agentic-ci-pilot` | Source checkout, distinct from installed runtime and job proposals. Inspected HEAD `897810f03bc14098809c5a113472649923d0d905`; selected source blobs match qualified `5264279b9ce776d2a8f8e6c3785c663d9b653cf8` on GitHub. |
+| `work/native-agent/runtime` | Existing installed trusted runtime outside proposed checkouts; owner-only directory under `mg`. Selected `github_reviews.py`, `merge_queue.py`, and `host_worker.py` contents match the inspected source checkout. This is a limited comparison, not attestation of every runtime file/configuration/executable. |
+| `work/native-agent/state` | Existing owner-only persistent directory for cache/admissions/human ledger; preserve it. Only directory metadata was inspected, not private records. |
+| `work/native-agent/builds`, `run-in-rex.sh`, `agent.pid` | Documented native job area, launcher, and PID reference. Runtime/ledger must remain outside proposal cleanup. PID-file contents and job state were not read here. |
+| `work/pilot-secrets/buildkite-agent-token` | Existing registration-token location; Docker mount metadata confirms delivery as a read-only file. No value, validity or expiry was inspected. Reference only; do not copy it into Forge or proposals. |
+
+The installed native hook path and container `/opt/pilot` source own trusted orchestration; proposed checkouts cannot replace them. Buildkite registration authority and existing GitHub/Codex access do not confer Devin API permission. Matt states Forge has no Devin API key yet. Exact Devin organization ID, future credential scope/custody/delivery and a supported findings contract remain FOR-9 decisions; the established host does not need reapproval. Recheck time-sensitive identity, availability and evidence before an authorized operation, preserving state and layout. Permanent service/placement changes, renewal, restarts and broader capacity remain separate operations.
 
 ## Pilot session closeout
 
