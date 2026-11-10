@@ -5,11 +5,12 @@
   "description": "Shared engineering automation for Outfitter and personal repositories.",
   "type": "module",
   "scripts": {
+    "bootstrap": "bash scripts/bootstrap.sh",
     "check": "bun run lint && bun run format:check && bun run typecheck && bun run test",
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "typecheck": "tsc --noEmit",
-    "test": "bun test --pass-with-no-tests",
+    "test": "bun test",
     "format:check": "oxfmt --check ."
   },
   "devDependencies": {
