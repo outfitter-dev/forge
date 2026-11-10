@@ -8,14 +8,14 @@ The first operation is a [pure deterministic evidence evaluator](docs/evidence-e
 
 ## Foundation status
 
-This is a private package, not a deployed automation platform. It includes Bun **1.4.4**, TypeScript **7.0.2**, oxlint **1.69.0**, oxfmt **0.54.0**, Ultracite **7.8.3**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
+This is a private package, not a deployed automation platform. It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
 
 ```sh
 bun install --frozen-lockfile
 bun run check
 ```
 
-The commands check lint with oxlint, formatting with oxfmt, strict TypeScript, and any Bun tests. Lint and formatting use Ultracite presets, following Skillset’s configuration pattern, with Markdown prose wrapping disabled. Run `bun run format` to apply formatting. CI uses the same command and pinned GitHub Actions revisions. No secrets or global machine setup are needed.
+The commands check lint with oxlint (warnings fail), formatting with oxfmt, strict types with `bun check --no-script`, and Bun tests. Lint and formatting use Ultracite presets with Markdown prose wrapping disabled. [Tooling qualification and editor guidance](docs/tooling.md) records the accepted Ranger reference, strict/config-file checks, and the decision to omit a separate editor TypeScript pin. Run `bun run format` to apply formatting. CI uses the same command and pinned GitHub Actions revisions. No secrets or global machine setup are needed.
 
 ## Start here
 

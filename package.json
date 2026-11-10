@@ -8,18 +8,17 @@
     "bootstrap": "bash scripts/bootstrap.sh",
     "check": "bun run lint && bun run format:check && bun run typecheck && bun run test",
     "evaluate": "bun src/cli.ts",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings .",
     "format": "oxfmt --write .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check --no-script",
     "test": "bun test",
     "format:check": "oxfmt --check ."
   },
   "devDependencies": {
     "@types/bun": "1.4.4",
-    "oxfmt": "0.54.0",
-    "oxlint": "1.69.0",
-    "typescript": "7.0.2",
-    "ultracite": "7.8.3"
+    "oxfmt": "0.78.0",
+    "oxlint": "1.93.0",
+    "ultracite": "8.1.1"
   },
   "engines": {
     "bun": ">=1.4.4"
