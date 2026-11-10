@@ -21,3 +21,5 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun run check
+      - name: Qualify evaluator CLI on offline fixtures
+        run: bun test tests/cli.test.ts
