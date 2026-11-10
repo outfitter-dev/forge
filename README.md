@@ -17,6 +17,8 @@ The commands check lint with oxlint, formatting with oxfmt, strict TypeScript, a
 
 ## Start here
 
+- [Design tenets](docs/tenets.md): durable principles governing shared operations, evidence, authority, and adoption.
+
 - [Implementation handoff](docs/handoff.md): scope, boundaries, evidence, cross-owner reuse, and the first implementation slice.
 - [Legacy Forge retirement](docs/legacy-forge.md): preserved old repository, local checkout, and linked worktree.
 
