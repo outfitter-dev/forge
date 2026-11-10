@@ -4,9 +4,11 @@ Shared engineering automation for `outfitter-dev` and personal `galligan` reposi
 
 Forge owns engineering workflows and evidence. [Ranger](https://github.com/outfitter-dev/ranger) owns the Pi agent harness and agent behavior. Product repositories retain their actual test/build commands and build graphs. Shared implementation does not imply shared credentials or authority.
 
+The first operation is a [pure deterministic evidence evaluator](docs/evidence-evaluator.md) for PR and merge-group qualification. It returns six structured gate decisions from normalized evidence and explicit policy, with offline tests for passing, blocked, and invalid input. It performs no collection, reporting, or landing actions. Local CLI and CI adapter entry points follow separately.
+
 ## Foundation status
 
-This is a private bootstrap, not a deployed automation platform. It includes Bun **1.4.4**, TypeScript **7.0.2**, oxlint **1.69.0**, oxfmt **0.54.0**, Ultracite **7.8.3**, exact dependencies with a lockfile, and CI. `src/index.ts` intentionally exports no API yet. No automation operation has been introduced yet. Offline tests cover checkout bootstrap behavior.
+This is a private package, not a deployed automation platform. It includes Bun **1.4.4**, TypeScript **7.0.2**, oxlint **1.69.0**, oxfmt **0.54.0**, Ultracite **7.8.3**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
 
 ```sh
 bun install --frozen-lockfile
