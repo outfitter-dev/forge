@@ -4,7 +4,7 @@ Prepared November 10, 2026. This is a fresh private repository for shared engine
 
 ## Intended scope
 
-[Forge’s design tenets](tenets.md) govern implementation and migration decisions. This handoff records current scope and evidence; it does not override those principles. The tenets were compared with the proposed [Ranger tenets in PR #3](https://github.com/outfitter-dev/ranger/pull/3) at revision `626baab`. The shared principles align on contracts, evidence, explicit authority, and faithful provider semantics. Ranger owns agent workflows; Forge owns engineering automation; execution hosts enforce permissions and isolation. This alignment does not establish a cross-project API.
+[Forge’s design tenets](tenets.md) govern construction principles; the [automation contract](automation-contract.md) governs evidence, authority, trust boundaries, and migration. This handoff records current scope and evidence; it does not override those principles. The initial principles and behavioral guarantees were compared with the proposed [Ranger tenets in PR #3](https://github.com/outfitter-dev/ranger/pull/3) at revision `626baab`. The shared principles align on contracts, evidence, explicit authority, and faithful provider semantics. Ranger owns agent workflows; Forge owns engineering automation; execution hosts enforce permissions and isolation. This alignment does not establish a cross-project API.
 
 Forge serves both `outfitter-dev` and personal `galligan` repositories. It can contain reusable GitHub Actions and workflows, Buildkite pipeline integration, worker provisioning and launchers, shared local CI operations, release qualification, and future Dagger or Turbo support. Keep execution-environment adapters thin around reusable operations.
 

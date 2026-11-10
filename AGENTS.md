@@ -1,6 +1,6 @@
 # Forge
 
-Read README.md, docs/tenets.md, docs/handoff.md, and docs/legacy-forge.md before implementing. docs/tenets.md governs design decisions. This is the shared engineering automation repository, not the legacy multi-agent operating-model project.
+Read README.md, docs/tenets.md, docs/automation-contract.md, docs/handoff.md, and docs/legacy-forge.md before implementing. docs/tenets.md governs how we build; docs/automation-contract.md governs behavior and trust boundaries. This is the shared engineering automation repository, not the legacy multi-agent operating-model project.
 
 Use Bun and strict TypeScript. Prefer one implementation of an operation with thin GitHub Actions, Buildkite, and local adapters. Product repos own their task graphs; Ranger owns agent behavior. Keep organization/repository identity and authority explicit. Do not assume all consumers belong to Outfitter or share credentials.
 

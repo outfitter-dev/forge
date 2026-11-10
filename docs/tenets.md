@@ -1,94 +1,65 @@
 # Forge Design Tenets
 
-> Shared operations, explicit authority, verifiable outcomes.
+> Build small, composable operations whose behavior can be understood and verified.
 
-These tenets govern Forge's engineering automation: reusable operations, execution adapters, evidence collection, deterministic gates, and release qualification. They describe durable design commitments. Tool versions and commands belong in the README and repository guidance; current implementation and migration state belong in the handoff; consequential design choices belong in decision records when those choices arise.
+These tenets govern how we design and build Forge. They guide module boundaries, interfaces, dependencies, diagnostics, tests, and evolution. The [automation contract](automation-contract.md) separately defines what Forge must uphold when handling evidence, authority, and adoption. Construction principles and behavioral guarantees support each other; neither replaces the other.
 
-When implementation conflicts with a tenet, bring the implementation into alignment or explicitly revise the tenet with the reason and consequences recorded. A tactical workaround does not silently change the contract. These commitments guide new work; they do not claim that the bootstrap already implements every guarantee.
+Tenets should outlast tool versions and individual features. Current commands belong in the README and repository guidance, implementation state belongs in the handoff, and consequential design choices belong in decision records when those choices arise. When implementation conflicts with a tenet, correct the implementation or explicitly revise the tenet with the reason and consequences recorded.
 
 ## Principles
 
-### One operation, many execution surfaces
+### Give each module one coherent responsibility
 
-A reusable operation has one contract and one implementation. Local commands, GitHub Actions, and Buildkite integrations adapt inputs, execution context, and reporting around that operation. They do not maintain competing definitions of success.
+Organize code around operations and boundaries that can be understood and changed independently. Collection, evaluation, reporting, and authorized action have different dependencies and reasons to change. Keep their interfaces small and their dependencies explicit.
 
-Keep deterministic evaluation separate from collection and side effects. An evaluator should accept facts and policy and return decisions without reading credentials, querying a service, publishing status, or exiting the process. Operations that perform side effects make those effects explicit in their contract. This separation makes the same behavior testable locally and usable from adopted CI surfaces.
+Compose those responsibilities instead of accumulating them in a central CLI or workflow file. A module is useful when it owns a coherent behavior, not merely because it shortens another file. Start within one package; package boundaries must earn their distribution or dependency cost.
 
-### Ownership stays with the system that knows
+### Implement shared meaning once
 
-Forge owns engineering automation, evidence, deterministic gates, and release qualification. Ranger owns the agent harness, agent workflows, tools, prompts, sessions, execution, and structured assessments. Product repositories own their build, test, and lint commands and task graphs. Execution hosts enforce permissions and isolation; hosted services enforce their own queues, access controls, and repository rules.
+Local commands and CI adapters should invoke the same operation. Adapters own transport, execution context, and presentation; the operation owns its meaning. A fix to a shared decision should not require matching edits in several workflow implementations.
 
-Compose those responsibilities through explicit contracts. A shared workflow invokes a product's declared task; it does not become a second build system. An agent review consumes Ranger's supported contract when one exists; Forge does not duplicate the agent loop or the meaning of an agent workflow. Existing schedulers and build tools should carry the responsibilities they already supply.
+Derive repeated information from the owning contract when the derivation is unambiguous. Share only what is semantically shared: provider-specific behavior should remain explicit when normalizing it would erase a consequential difference. Avoid both duplicate logic and abstractions that make unlike operations look interchangeable.
 
-### Evidence earns the decision
+### Make contracts explicit at boundaries
 
-A green status is meaningful only when the evidence establishes the required outcome. Keep verification, agent review, assigned-human review, and landing eligibility distinguishable. A successful API request proves that the request succeeded; it does not prove that an agent finished, findings were resolved, an artifact qualified, or a change landed.
+Use strict types to describe inputs, results, dependencies, and failure states. Validate external data when it crosses into the typed contract; types alone cannot establish the shape or authenticity of JSON from another process. After validation, internal code should rely on the established contract rather than repeatedly reconstructing it.
 
-Missing, stale, canceled, failed, ambiguous, or incomplete required evidence cannot authorize progression. Report what is known and what remains unsatisfied. Model judgment can contribute an assessment under explicit policy; it cannot override a deterministic blocker.
+Represent distinctions that affect decisions in the data model. Missing evidence, a failed check, a canceled run, and invalid input need distinguishable results. Keep repository identity and execution authority explicit in interfaces that need them. Add a schema dependency only when the adopted boundary benefits from it.
 
-### Evidence belongs to an exact subject
+### Keep decisions separate from effects
 
-Evidence identifies the repository, source revisions, producer, and execution context needed to establish what it proves. Bind review and verification receipts to the relevant head and base. Merge-candidate checks prove integration behavior; they do not replace each member's required admission evidence.
+Build deterministic evaluation as facts and policy in, decisions out. Supply external observations explicitly. Keep filesystem access, service calls, credentials, status publication, and process exits at the boundaries that own them.
 
-Retain the provenance needed to invalidate evidence when its assumptions change, including relevant model, harness, prompt, and policy configuration. A collector must validate the producer and source binding before normalizing evidence. Adding the current revision to an unbound provider response does not make it current. Shape validation and revision matching do not authenticate the producer.
+Side-effecting operations remain necessary. Make their effects and dependencies visible so callers can understand what an invocation may change and tests can exercise failure behavior. This separation supports local verification and adapter reuse without requiring a dependency-injection framework.
 
-### Reuse does not confer authority
+### Design for observability
 
-Sharing an implementation does not share credentials, trust, or permission to act. Repository identity, authorized actors, required providers, execution queues, and release destinations remain explicit. A personal repository does not inherit organization credentials because it runs the same code.
+An operation's result should make its behavior explainable: what it attempted, which inputs and policy mattered, what completed, and why it stopped. Preserve structured reasons and provenance at the point they are known, rather than asking a reporting adapter to infer them from prose logs.
 
-An eligibility decision is an input to an authorized landing operation, not a grant of merge permission. Building an artifact does not authorize publication. Keep the authority for each consequential action separate from the reusable mechanism that performs it.
+Keep diagnostics useful to both humans and automation. Carry the identifiers needed to connect results to their evidence and distinguish stages of a workflow. Observability belongs in operation contracts from the start; it does not require deploying a telemetry platform before the first operation exists. The automation contract defines the evidence and privacy boundaries those diagnostics must respect.
 
-### Proposed code cannot govern its own acceptance
+### Make correctness easy to exercise
 
-Run trusted orchestration and policy from a trusted revision outside the proposed checkout. Proposed code may supply the product implementation and tasks under evaluation; it cannot replace the evaluator, waive required evidence, or access privileged orchestration credentials.
+Design operations so their meaningful success and failure paths can be tested without credentials or live services. Use representative fixtures at external boundaries and test observable results rather than private implementation shape. Preserve concrete regressions as tests where they can prevent recurrence.
 
-Treat checked-out code, model output, and provider responses according to their trust boundary. Validate external data when it enters the contract, and preserve the distinction between a well-formed claim and verified evidence. Trusted collection and authorized execution remain necessary even when the pure evaluator is correct.
+Separate deterministic tests from live integration qualification. An offline fixture can prove how Forge handles a provider response; it cannot prove that the provider emits that response or that a consumer has access. Verify each claim at the boundary that can establish it. Use failures to improve contracts and checks before adding procedural reminders.
 
-### Preserve meaning across providers
+### Use existing strengths before adding machinery
 
-Share behavior only when the underlying semantics match. Adapters may translate names and representations, but they must preserve consequential differences in review states, cancellation, identity, permissions, and service capabilities.
+Use Bun and TypeScript deliberately, and compose supported runtime, CI, build-tool, and Ranger capabilities where they meet the need. Keep product task graphs with product repositories and agent workflows with Ranger. Forge should not maintain parallel implementations of capabilities those systems already own.
 
-When a provider cannot establish a required fact, expose the limitation and keep that requirement unsatisfied. A green check without findings data is not equivalent to a completed clean review. Prefer an explicit provider-specific contract over a portable-looking abstraction that hides missing guarantees.
+Start with a useful operation for a concrete consumer. Prefer configuration or an existing primitive when it solves the problem clearly. Introduce abstractions, dependencies, and additional packages when adopted behavior demonstrates their value. A possible future provider is not sufficient reason to build a provider framework.
 
-### The smallest useful operation earns its place
+### Evolve through complete, reversible slices
 
-Start with a concrete consumer and an independently useful operation. Prefer existing tools, configuration, and composition before adding infrastructure. Add abstractions when adopted behavior requires them, with a clear responsibility and a demonstrated benefit.
+Build the smallest end-to-end capability that can demonstrate its contract, including failures, diagnostics, tests, and usage guidance. Qualify a local operation before broadening its execution surfaces. Separate changes that establish behavior from changes that deploy it or migrate consumers.
 
-Reduce repeated authoring when the system already has the necessary facts. Defaults may remove mechanical ceremony; they must not invent authority or evidence. One package is sufficient until real boundaries justify another. Experimentation can establish that need without becoming an implied production commitment.
-
-### Qualification precedes replacement
-
-A migration succeeds when the consuming workflow is proven, including its failure behavior. Carry forward concrete regressions and trust boundaries, then qualify the replacement in the intended environment before retiring the previous path.
-
-Use small, reversible adoption steps. Test shared code locally before adding a CI adapter, and verify distribution and access with the intended consumer before promising reuse. Package publication, worker deployment, cross-owner access changes, and product migration each need their own explicit scope and authority.
-
-### Decisions leave usable evidence
-
-A result should let the next person or agent understand what ran, against which subject, under which policy, and why it passed or stopped. Preserve actionable reasons, provenance, and the distinction between blocked work and completed work. Recheck mutable service state before consequential actions; a prior receipt is not proof that the target has remained unchanged.
-
-Put durable facts in their owning artifact and link to them from other surfaces. Forge receipts can reference Ranger-owned run history without duplicating transcripts or requiring a shared store. Keep credentials, private runtime state, logs, caches, and transcripts out of Git. Auditability requires sufficient evidence, with access and retention appropriate to that evidence; it does not justify copying sensitive material into source control.
-
-## Promises to consumers
-
-These are acceptance criteria for operations as they are adopted:
-
-- The same normalized facts and policy produce the same deterministic decision, regardless of the invoking adapter.
-- Results explain unmet requirements without turning unknown states into success.
-- Authority and provenance remain explicit through collection, evaluation, reporting, and action.
-- Local verification of deterministic behavior is offline and credential-free by default. Live integration qualification is identified separately.
-- Changes to observable behavior carry tests, including the failure cases that could otherwise permit an unsafe pass.
-- Adoption includes the contract, usage instructions, and qualification evidence needed by the next consumer. Unsupported behavior remains visible.
+Keep diffs focused and compatibility consequences visible. Record why a consequential choice was made in the owning repository, and link to that record instead of duplicating it across handoffs. Refine the design from observed use; preserve a working path while a replacement is being qualified.
 
 ## Applying the tenets
 
-For a proposed operation, identify its consumer, owning system, input and output contract, authority, evidence, and verification. Choose the smallest implementation that satisfies those facts. Turn recurring failures into boundary validation, fixtures, tests, or service enforcement rather than relying on a longer checklist.
+For a proposed change, identify the useful outcome, the module that owns it, its contract and dependencies, how its behavior will be observed, and the check that proves it works. Choose the smallest implementation that preserves those properties and the automation contract.
 
-For example, adding a Buildkite adapter to an existing evaluator should reuse its decisions and translate reporting. Adding a new review provider requires evidence that its normalized result preserves source identity and findings semantics. Neither change authorizes altering a product's task graph or granting new credentials.
+For example, a Buildkite adapter should translate invocation and reporting around an existing evaluator. A new review provider may need its own boundary validator and fixtures when its evidence has different semantics. Neither case automatically calls for a new package or provider framework.
 
-## Relationship to neighboring projects
-
-Trails contributes the discipline of one contract across surfaces and reducing drift through derivation and checks. Skillset contributes faithful adaptation, inspectable provenance, and the separation of artifact production from runtime authority. Historical Ranger contributes live verification, durable decisions, reversible progress, and respect for project-local doctrine. Those are influences, not dependencies on their implementation or historical operating model.
-
-Forge and the current Ranger should share conventions for explicit contracts, evidence, authority, and visible failure. Each repository owns its tenets. Changes to their shared boundary should be reconciled in both repositories; neither repository silently grants itself the other's responsibilities. Shared principles do not establish an API, storage design, or enforcement guarantee; those require their own accepted contracts.
-
-See the [implementation handoff](handoff.md) for current scope and unresolved adoption decisions, and [legacy Forge retirement](legacy-forge.md) for the historical project boundary.
+These principles draw on Trails' shared contracts and reduced ceremony, Skillset's faithful adaptation and explicit boundaries, and historical Ranger's live verification and durable decisions. Coordinate shared conventions with the current Ranger while respecting each project's ownership. Shared principles do not establish an API, storage design, or enforcement guarantee.
