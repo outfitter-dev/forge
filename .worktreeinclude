@@ -1,0 +1,4 @@
+# No local files need copying: Forge development is credential-free.
+# Tracked configuration arrives through Git; bootstrap installs dependencies.
+# Add only explicitly needed ignored files here when a consumer requires them.
+# Never share node_modules, credentials, logs, caches, or agent runtime state.

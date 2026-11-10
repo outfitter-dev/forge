@@ -6,7 +6,7 @@ Forge owns engineering workflows and evidence. [Ranger](https://github.com/outfi
 
 ## Foundation status
 
-This is a private bootstrap, not a deployed automation platform. It includes Bun **1.4.4**, TypeScript **7.0.2**, oxlint **1.69.0**, oxfmt **0.54.0**, Ultracite **7.8.3**, exact dependencies with a lockfile, and CI. `src/index.ts` intentionally exports no API yet. No runtime behavior or behavioral tests have been introduced; the test command accepts an empty suite until the first operation arrives.
+This is a private bootstrap, not a deployed automation platform. It includes Bun **1.4.4**, TypeScript **7.0.2**, oxlint **1.69.0**, oxfmt **0.54.0**, Ultracite **7.8.3**, exact dependencies with a lockfile, and CI. `src/index.ts` intentionally exports no API yet. No automation operation has been introduced yet. Offline tests cover checkout bootstrap behavior.
 
 ```sh
 bun install --frozen-lockfile
@@ -23,3 +23,11 @@ The commands check lint with oxlint, formatting with oxfmt, strict TypeScript, a
 - [Legacy Forge retirement](docs/legacy-forge.md): preserved old repository, local checkout, and linked worktree.
 
 The previous project named Forge is archived at [outfitter-dev/forge-old](https://github.com/outfitter-dev/forge-old). Its durable multi-agent operating-model design is historical material, not the specification for this new project. Existing `outfitter-dev/actions` and the Buildkite pilot remain operational; migration is explicit future work.
+
+## Checkout and worktree setup
+
+Install the Bun version in `.bun-version` and make it available on `PATH`, then run `./scripts/bootstrap.sh` (or `bun run bootstrap`). The script resolves its own checkout, validates the exact Bun version, and runs `bun install --frozen-lockfile`. It is safe to repeat and reports installation failures without changing the lockfile or your global runtime. Run `bun run check` afterward to verify the checkout.
+
+BB managed worktrees invoke `.bb-env-setup.sh`; Codex environment setup invokes the same bootstrap through `.codex/environments/environment.toml`. For a plain Git worktree, run the script explicitly after creation. Setup is repository code: run it only for a revision you trust, without privileged orchestration credentials.
+
+Each worktree installs its own `node_modules`; bootstrap rejects a symlink rather than mutating another checkout's dependencies. `.worktreeinclude` intentionally has no copy patterns because development needs no local secrets or state. Git supplies tracked files. Worktree tools that support this convention may copy explicitly listed ignored files in the future; ordinary `git worktree add` does not consume it. No teardown hook is needed: setup creates only ignored dependencies inside the worktree, whose removal remains the worktree manager's responsibility.
