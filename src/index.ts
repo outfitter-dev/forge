@@ -1,3 +1,4 @@
-/** Shared automation entry point. Export concrete operations as they are adopted. */
-// oxlint-disable-next-line unicorn/require-module-specifiers -- Bootstrap exports no API yet.
-export {};
+export { evaluateEvidence } from "./evaluate-evidence.ts";
+export { GATE_NAMES, VERIFICATION_GATES } from "./evidence-types.ts";
+export type * from "./evidence-types.ts";
+export { validateEvidenceInput } from "./validate-evidence.ts";
