@@ -2,19 +2,19 @@
 
 This document defines the behavior and trust boundaries Forge operations must preserve as they are adopted. It governs evidence, authority, provider semantics, and migration. The [design tenets](tenets.md) govern how we construct the software that upholds this contract. Neither document claims that the bootstrap already implements these guarantees.
 
-If an implementation conflicts with this contract, correct the implementation or explicitly revise the contract with the reason and consequences recorded. A passing test or a tactical workaround does not waive a requirement.
+If an implementation conflicts with this contract, correct the implementation or revise the contract with the project owner’s approval, recording the reason and consequences. An implementation change cannot waive a guarantee on its own. A passing test or a tactical workaround does not waive a requirement.
 
 ## Ownership stays with the system that knows
 
-Forge owns engineering automation, evidence, deterministic gates, and release qualification. Ranger owns the agent harness, agent workflows, tools, prompts, sessions, execution, and structured assessments. Product repositories own their build, test, and lint commands and task graphs. Execution hosts enforce permissions and isolation; hosted services enforce their own queues, access controls, and repository rules.
+Forge owns engineering automation, gate evidence and receipts, deterministic gates, landing eligibility, and release qualification. Ranger owns the agent harness, agent workflows, tools, prompts, sessions, agent execution, run history, and structured assessments. Product repositories own their build, test, and lint commands and task graphs. Execution hosts enforce permissions and isolation; hosted services enforce their own queues, access controls, and repository rules.
 
-Compose those responsibilities through explicit contracts. A shared workflow invokes a product's declared task; it does not become a second build system. An agent review consumes Ranger's supported contract when one exists; Forge does not duplicate the agent loop or the meaning of an agent workflow. Existing schedulers and build tools should carry the responsibilities they already supply.
+Compose those responsibilities through explicit contracts. A shared workflow invokes a product's declared task; it does not become a second build system. An agent review consumes Ranger's supported contract when one exists; Forge does not duplicate the agent loop or the meaning of an agent workflow. Existing schedulers and build tools should carry the responsibilities they already supply. Ranger reports what ran and how it met its task; Forge decides what that evidence establishes for its gates. Changes to this shared boundary should be reconciled in both repositories; neither repository silently grants itself the other’s responsibilities.
 
 ## Evidence earns the decision
 
 A green status is meaningful only when the evidence establishes the required outcome. Keep verification, agent review, assigned-human review, and landing eligibility distinguishable. A successful API request proves that the request succeeded; it does not prove that an agent finished, findings were resolved, an artifact qualified, or a change landed.
 
-Missing, stale, canceled, failed, ambiguous, or incomplete required evidence cannot authorize progression. Report what is known and what remains unsatisfied. Model judgment can contribute an assessment under explicit policy; it cannot override a deterministic blocker.
+Missing, stale, canceled, failed, ambiguous, or incomplete required evidence cannot authorize progression. An evaluation that could not complete cannot authorize progression either. Report what is known and what remains unsatisfied. Model judgment can contribute an assessment under explicit policy; it cannot override a deterministic blocker.
 
 ## Evidence belongs to an exact subject
 
@@ -32,7 +32,7 @@ An eligibility decision is an input to an authorized landing operation, not a gr
 
 Run trusted orchestration and policy from a trusted revision outside the proposed checkout. Proposed code may supply the product implementation and tasks under evaluation; it cannot replace the evaluator, waive required evidence, or access privileged orchestration credentials.
 
-Treat checked-out code, model output, and provider responses according to their trust boundary. Validate external data when it enters the contract, and preserve the distinction between a well-formed claim and verified evidence. Trusted collection and authorized execution remain necessary even when the pure evaluator is correct.
+Treat checked-out code, model output, and provider responses according to their trust boundary. Validate external data when it crosses a typed boundary, and preserve the distinction between a well-formed claim and verified evidence. Trusted collection and authorized execution remain necessary even when the pure evaluator is correct.
 
 ## Preserve meaning across providers
 
