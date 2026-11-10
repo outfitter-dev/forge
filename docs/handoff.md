@@ -2,6 +2,8 @@
 
 Prepared November 10, 2026. This is a fresh private repository for shared engineering automation. The user requested a TypeScript/Bun foundation and handoff, with cross-owner reuse left to be resolved. No production migration is authorized merely by this document.
 
+For the complete originating-session record, including worker recovery details and superseded decisions, read [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md).
+
 ## Intended scope
 
 [Forge’s design tenets](tenets.md) govern construction principles; the [automation contract](automation-contract.md) governs evidence, authority, trust boundaries, and migration. This handoff records current scope and evidence; it does not override those principles. The initial principles and behavioral guarantees were compared with the proposed [Ranger tenets in PR #3](https://github.com/outfitter-dev/ranger/pull/3) at revision `626baab`, then reviewed against the construction/operating-contract split at `b815e01`. The shared principles align on contracts, evidence, explicit authority, and faithful provider semantics. Ranger owns agent workflows; Forge owns engineering automation; execution hosts enforce permissions and isolation. This alignment does not establish a cross-project API.
