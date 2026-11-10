@@ -50,6 +50,12 @@ Studio workers are visible in Rex session `remotes`, tab `buildkite-workers`, wi
 
 Local pilot checkout: `~/Documents/Codex/2026-11-10/i/work/agentic-ci-pilot`. Its private runtime/secrets are outside the checkout. Saved evidence: `~/Documents/Codex/2026-11-10/i/outputs/pilot-report.md`. Those temporary paths are not the intended permanent infrastructure layout.
 
+## Pilot session closeout
+
+The supplemental archive entry point is `~/Documents/Codex/2026-11-10/i/outputs/session-closeout.md`, supplied by Matt after this handoff. Read it before resuming pilot integration or worker work; it links the implementation handoff and `pilot-qualification.md`, and records recovery pointers, preserved runtime state, and local release artifacts. It is a historical snapshot; current repository and live service state take precedence.
+
+The closeout records final pilot source `5264279b9ce776d2a8f8e6c3785c663d9b653cf8`. It distinguishes private release qualification from distribution and explicitly leaves live assigned-human approval, simultaneous PR-group admission refresh, validated Devin findings, and Ranger replacement of the working Codex reviewer unqualified. Preserve the existing native review state during continuation. Worker availability, registration validity, and Rex pane identifiers must be rechecked before operation; archiving the originating chat does not stop workers. These pointers do not authorize deployment or migration.
+
 ## Private cross-owner reuse: unresolved by design
 
 Keep Forge private for now. GitHub documents standard private Actions/workflow sharing within the same owner or organization. Merely allowing other `outfitter-dev` repositories does not establish direct reuse from personal `galligan` repositories. Enterprise sharing has separate ownership/visibility/policy conditions; do not assume a personal account participates.
