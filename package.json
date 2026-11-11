@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Shared engineering automation for Outfitter and personal repositories.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "bootstrap": "bash scripts/bootstrap.sh",

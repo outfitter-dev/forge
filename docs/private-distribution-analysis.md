@@ -1,4 +1,6 @@
-# Private distribution analysis
+# Private distribution analysis — superseded
+
+Historical November 10, 2026 planning, superseded by Matt’s November 11 decision to prepare Forge for public source reuse. The [public-readiness report](public-readiness.md#distribution-work-rescope-proposal) proposes the replacement FOR-6 qualification. Repository visibility has not changed; this record’s private-source constraints describe its original setting, not the intended public design. [Selected distribution qualification](distribution-qualification.md) remains evidence only for the dated private-at-the-time run. No historical access result is reclassified, and no new invocation, credential, publication or migration is authorized here.
 
 [FOR-6](https://linear.app/outfitter/issue/FOR-6) requires a route grounded in actual consumer/access decisions, including authorized success and denied access for intended private/public uses. This November 10, 2026 analysis recommends a first route and proposes disposable qualification. It does not establish consumer access or complete the live criteria. No consumer, package, grant, credential, workflow permission, worker, or production integration was created or changed.
 
@@ -6,7 +8,7 @@
 
 Forge (`outfitter-dev/forge`) is private. Read-only GitHub metadata reports Actions sharing `access_level: none`. That is the current setting, not a recommendation to change it. Repository source at `44a6777aa213ee8cb29847db900221a726dcbaaf` has a self-CI workflow, no `workflow_call` consumer interface, no published distribution, and `package.json` marked private. The pure evaluator and local Bun CLI are usable source operations; no consumer build graph or provider framework is needed to share them. The existing CLI's runtime imports need no production package dependency; repository development checks use frozen pinned development dependencies.
 
-The current workstation identity can read Forge. This does not prove that a `galligan` repository's CI token, a public/fork job, a package consumer, or another runner can read it. The [Studio/Rex infrastructure](handoff.md#established-pilot-setup) is established. Do not ask Matt to choose a host again. He selected `outfitter-dev` for these disposable consumers, directed reuse of existing authorized access without new keys, and subsequently approved creating/testing the two fixtures below. That scoped release establishes permission, not qualification results; no worker deployment is needed.
+The current workstation identity can read Forge. This does not prove that a `galligan` repository's CI token, a public/fork job, a package consumer, or another runner can read it. The [Studio/Rex infrastructure](handoff.md#pilot-evidence-and-recovery-records) is established. Do not ask Matt to choose a host again. He selected `outfitter-dev` for these disposable consumers, directed reuse of existing authorized access without new keys, and subsequently approved creating/testing the two fixtures below. That scoped release establishes permission, not qualification results; no worker deployment is needed.
 
 ## Route comparison
 

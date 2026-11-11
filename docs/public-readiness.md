@@ -1,0 +1,100 @@
+# Public source readiness
+
+[FOR-25](https://linear.app/outfitter/issue/FOR-25) prepares Forge for public source reuse. Matt selected that direction on November 11, 2026, explicitly accepted leaving Git history, PR discussions and Actions logs as-is, and chose MIT. Repository metadata at the audited baseline still reports **private**; this preparation does not change visibility, settings, access, workers or package publication. A later visibility change requires separate explicit authorization after reviewable preparation lands.
+
+`package.json` remains `private: true` and now declares MIT. The LICENSE follows the existing [Skillset copyright convention](https://github.com/outfitter-dev/skillset/blob/main/LICENSE), with 2026 Matt Galligan for Forge. Source licensing does not qualify a public adapter, package release or consumer migration.
+
+## Audit scope and findings
+
+The November 11 baseline is `ba30cb941ae8dfd483508c1c8cb918a3dbbe8bd0`. Origin was fetched, including all available PR heads 1–23 into a separate local audit-ref namespace; remote branch enumeration reported only `main`. Complete reachable blob contents and commit/tag metadata were scanned: **69 commits, 183 unique blobs, 1,233,502 bytes**, plus the tracked working tree. No matches were found for the credential patterns below. Repeat the scan on the final candidate and immediately before any visibility change; these counts describe the baseline, not later commits.
+
+| Surface | Collected evidence | Finding and limit |
+| --- | --- | --- |
+| PRs 1–23 | 22 PR titles/bodies, 33 review records, 18 inline review comments including diff hunks, 190 conversation comments; paginated current REST representations, 289,524 content bytes | No listed credential-pattern matches. PR #3 returned 404 on all four endpoints and has no pull head; unused/deleted/inaccessible cannot be distinguished. Previous edits/deleted text, attachments, external reviewer UIs and linked private records were not independently recovered. |
+| Actions history | All **126** currently listed runs, each attempt 1, downloaded as **350** log entries; no failed download or scan | No listed credential-pattern matches. Logs expose source/repository/branch identities, dependency/test names, hosted-runner paths, setup diagnostics and artifact references. Deleted or no-longer-listed runs cannot be recovered by this enumeration. |
+| Workflow artifacts | Both listed non-expired SARIF artifacts from [run 42907084256](https://github.com/outfitter-dev/forge/actions/runs/42907084256), downloaded and scanned without execution/extraction to the checkout | No listed credential-pattern matches. Artifact expiry was reported as February 8, 2027. SARIF includes source/analysis identities; no arbitrary artifact producer authenticity is inferred. |
+| Actions caches | **24** metadata entries, 467,347,751 bytes: 21 CodeQL database caches and 3 Bun caches | **Contents uninspected.** No supported archive download was used and no workflow was triggered to restore them. Treat possible historical source/dependency/analysis content as an unresolved exposure limit; keys/metadata do not establish sanitization. |
+| Other repository surfaces | No releases, deployments, environments or repository webhooks returned; wiki and Discussions disabled | This does not inventory organization-wide integrations, deleted assets, external services, local private receipts or all security-feature records. No package was published by this preparation. |
+
+Discussion context includes trusted-host topology, token custody/lifetime references without values, review/provider limitations, private repository/Linear links and quota failures. [PR #15’s bot summary](https://github.com/outfitter-dev/forge/pull/15#issuecomment-6781963204) repeats a Rex pane identifier. Historical commits contain machine paths, state/secret-location references, host/pane/process/container identities and service/actor identifiers. These are exposure to acknowledge, not credentials found by this scan. Matt’s retention decision preserves these records; current-tree sanitization cannot remove them from history, PR diffs/discussions, caches or retained logs. An actual credential or other material unsuitable exposure discovered later must stop publication preparation and be reported privately by location, without its value.
+
+GitHub documents that [Actions history and logs become publicly visible](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility#making-a-repository-public). Its [cache guidance](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) warns that fork PRs may access base-branch caches. Preserve this distinction when assessing cached historical data; no cache deletion, history rewrite or PR/log edit is authorized here.
+
+### Refresh after FOR-26, FOR-27 and FOR-28
+
+A subsequent November 11 refresh collected PRs 1–27: **26 available PRs, 42 review records, 26 inline comments and 221 conversation comments**, totaling 412,984 content bytes. PR #3 remained unavailable. All **160** then-listed Actions runs and both SARIF artifacts downloaded successfully and were scanned: 945 log entries plus 2 artifact entries, with no listed credential-pattern matches or scan errors. This includes newer check/receipt output; later runs and subsequent discussion edits are outside that snapshot and must be reconsidered before the separate visibility action.
+
+The refreshed inventory has **27 caches**, 522,766,890 bytes; their contents remain **uninspected**. Repository settings were re-read without changing them; private visibility, write-default workflow permissions, no effective main protections and the unavailable public-fork approval setting remain as reported above. [PR #24’s Linear linkback](https://github.com/outfitter-dev/forge/pull/24#issuecomment-6804274785) repeats original operational references from the issue briefing. Like the earlier PR #15 context, these remain in the accepted retained discussion history; current-tree sanitization does not remove them.
+
+### Credential-pattern coverage
+
+The exact Python regular expressions used across reachable Git objects, current PR payload text, retained log entries and SARIF bytes were:
+
+```json
+{
+  "github-token": "(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{30,})",
+  "buildkite-token": "(?<![A-Za-z0-9])(?:bkua|bkra|bkuc|bkac)_[A-Za-z0-9_-]{20,}",
+  "npm-token": "(?<![A-Za-z0-9])npm_[A-Za-z0-9]{20,}",
+  "slack-token": "xox[baprs]-[A-Za-z0-9-]{16,}",
+  "openai-style-token": "(?<![A-Za-z0-9])sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}",
+  "private-key-block": "-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----",
+  "aws-access-key-id": "(?<![A-Z0-9])(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])",
+  "google-api-key": "AIza[A-Za-z0-9_-]{35}",
+  "jwt-shaped": "(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}",
+  "credential-url": "https?://[^\\s/:@]{1,80}:[^\\s/@]{8,}@[A-Za-z0-9.-]+"
+}
+```
+
+These are bounded lexical checks, not proof of absence. Unknown formats, arbitrary high-entropy secrets, encoded/encrypted values, masked output, deleted/unreachable objects, uncollected prior edits and inaccessible/expired remote evidence can evade them. No secret values are printed in scan results. Private receipts retain exact enumerations, request outcomes, content hashes and match locations outside Git; no raw logs or transcripts are committed here.
+
+## Repository settings: observations and proposals
+
+Read-only API observations at the baseline:
+
+| Setting | Observed state | Proposed follow-up, not applied |
+| --- | --- | --- |
+| Source visibility / package | Repository private; `package.json private: true`; no pre-existing license | MIT is now recorded in source; retain package publication guard. Visibility remains a separate action. |
+| Main protection | Branch reports `protected: false`; rulesets and effective main rules empty; classic protection endpoint 404 | Before public contribution/adoption, explicitly select required CI/security checks, PR review and resolved-thread protections, preserving exact-head review practice. No bypass or setting change here. |
+| Actions workflow defaults | Enabled, all actions allowed; SHA pinning not required globally; default token permission **write**; workflow PR approvals **enabled** | Prefer default read-only and disable workflow PR approvals unless a concrete operation separately needs them. Keep reviewed SHA pins and explicit per-job permissions. |
+| Forge CI source | `pull_request` and main `push`; `contents: read`, checkout credential persistence disabled, pinned actions, hosted Ubuntu, frozen dependencies and offline suite; no secret references | Preserve these properties; no `pull_request_target` or privileged worker execution is added. PR workflow/dependency changes still require scrutiny. |
+| Fork contributor approval | Public-fork approval endpoint rejects this private repository; private-fork settings endpoint 404; private forking currently disabled | Public effective approval policy is **unverified**. Explicitly choose approval for outside-collaborator workflows and re-read effective org/repo policy before accepting such runs. [GitHub approval guidance](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/approve-runs-from-forks) applies; no assumption that today's private setting protects tomorrow's public forks. |
+| Repository Actions secrets / sharing | Zero repository secret names; zero environments; Actions sharing `none` | Not proof that organization secrets, integration credentials or operator accounts do not exist. Public source should not need new private-source credentials. |
+| Security features | Code security, secret scanning, push protection, non-provider patterns and validity checks enabled; Dependabot security updates disabled | Reassess desired public security configuration separately; enabled scanning is not a clean-alert attestation or absence proof. |
+
+AGENTS.md contains no private-repository assumption requiring change. The automation contract and provider policy remain unchanged. FOR-26 separately owns the optional-provider/versioned-evidence work and FOR-9 narrowing; the earlier hold is superseded, no live provider qualification is authorized, and FOR-25 changes no review policy. Buildkite host is explicit configuration, with Studio one historical option; this does not implement FOR-8 host/lifecycle changes. The tokens artifact trial and all loader/sandbox continuation are parked.
+
+## Operational record preservation
+
+Matt selected a local ignored `.archive/` directory in the **primary Forge checkout**, replacing the proposed private-pilot PR route. The verified destination is `.archive/forge-operational-records/2026-11-11/` relative to that checkout, not only this disposable worktree. Matt explicitly accepted machine-local storage even without long-term durability. No off-machine backup, publication, private-repository commit or retention service is established. The prior local pilot archive remains unpublished and preserved; no pilot push, Buildkite/queue job or worker operation was needed.
+
+Before copying, the exact root-anchored `/.archive/` rule was added to the primary repository’s local exclude file, preserving prior content without duplicates. Actual `git check-ignore` succeeded before and after copying; the PR also tracks `/.archive/` in `.gitignore`. No archive file is tracked. The primary checkout’s branch, HEAD and tracked files were unchanged. These are new local archive files plus one scoped ignore rule, not a runtime/state/credential relocation.
+
+All seven exact originals from Forge `ba30cb941ae8dfd483508c1c8cb918a3dbbe8bd0` were verified by byte length and SHA256 before replacing tracked operational specifics. The local index and `manifest.json` record provenance and storage limits:
+
+| Original document | SHA256 | Bytes |
+| --- | --- | --: |
+| `docs/session-closeout.md` | `f779db99c711fcd8e718625722b4ad927f3c4c72e9d6c1db9f22573d4414e76b` | 9645 |
+| `docs/pilot-qualification.md` | `db0b632c5c2117ea25b0405e9625460ad67e2f3e3894144b84d3bee61a5208c8` | 7914 |
+| `docs/handoff.md` | `37b238bf6ffed0cbdb3c4f3947ab2627fbd004003d5bb55fd3930836e4f5349c` | 19276 |
+| `docs/worker-lifecycle-plan.md` | `40f205fdf65e4775e3548300d48563bceea18bc6a79345a61b04724366c8b49a` | 15108 |
+| `docs/queue-refresh-qualification.md` | `9eaec557063f823c28d7fadb25562e37ecf4488d11d40423108304134f3167b6` | 9140 |
+| `docs/devin-findings-discovery.md` | `8a66bf7e808edd30a8112ae8dfe831362c42139b2b5f11333bb2836e4e76d765` | 9413 |
+| `docs/legacy-forge.md` | `1da519f7c308dab09565fe766844bf554bcc01ede1fdf8b9ad264107dde0b65c` | 1766 |
+
+The verified local manifest SHA256 is `a7b835ebc4ea566a6fed19a55c5d5099fa3669bebccf8b858c593da8f8150acb`. Public summaries retain six distinct gates, exact revision/runtime evidence, credential-free proposal execution, trigger-budget limits and host-configurable lifecycle boundaries. The original documents remain identifiable through retained Git history at the source revision; local copies are a convenience/recovery record, not a claim of durable private storage or history sanitization. No operational secret values, state, logs or transcripts were copied.
+
+The archive-route blocker is resolved. Current-tree cleanup removes local account/session/process/path identifiers while preserving historical qualification meaning; it does not hide history, PR discussions, logs or caches. The tokens trial and all loader diagnosis remain parked.
+
+## Distribution work rescope proposal
+
+The current [FOR-6](https://linear.app/outfitter/issue/FOR-6/qualify-immutable-forge-source-consumption-across-owners) contract is “Qualify immutable Forge source consumption across owners”; its private-only criteria are superseded. The [November 11 direction](https://linear.app/outfitter/document/forge-direction-one-shape-from-worktree-to-release-38bbf3de42a1) makes the Forge CLI primary, with [FOR-28](https://linear.app/outfitter/issue/FOR-28/implement-forge-check-with-explicit-project-commands-and-local) now delivering the first [self-consumer check path](forge-check.md). Its local observations do not authenticate public-source consumption or skip CI. Proposed remaining qualification uses one consumer that selects an approved repository/full commit and Bun runtime, verifies the fetched commit before execution, invokes the operation with explicit harmless facts/policy and records expected success/blocked/invalid outcomes. A deliberately wrong configured pin must fail before invocation, with no mutable fallback. Demonstrate anonymous public-source fetch only after visibility is actually changed; before that, report the test held. Keep source identity, policy authority, cleanup and negative evidence explicit. No new package, generic distribution helper, public adapter, consumer migration or live qualification is released by rescoping.
+
+Retain the November 10 private-at-the-time analysis/results as superseded historical evidence. Their consumer-token denials and trusted-host results are not reclassified as public or cross-owner qualification. Public source removes the need for cross-owner source-read credentials; it does not grant status/release/merge rights, resolve authenticated collection, or make job-level reusable workflows interchangeable with step checkout.
+
+Current **FOR-19** canonicalizes release operations behind Forge commands. Its delivered policy/diff/version operations remain useful; private-source transport ceases to be a prerequisite once public, while immutable command/runtime identity, concrete consumer qualification and explicit product policy remain. **FOR-23** adopts Forge commands for monorepo CI/release after self-consumption and selected outside-consumer qualification; Skillset then Trails are proposed before monorepo, not migrated by this preparation. A thin public Action is optional only when a consumer needs it, never a required route into Forge. **FOR-20** preserves existing Actions consumers and documentation, and **FOR-21** maps useful capabilities for extraction rather than restoring Belay as a product. Existing consumers stay intact; product-owned MONO-83 artifact choices remain. These current tracker descriptions supersede the earlier mandatory-adapter architecture. No cross-repo implementation, package publication or parked trial execution occurs here.
+
+Routine scoped PR/check/review/eligible merge follows canonical [standing delivery authority](../AGENTS.md#standing-delivery-authority); [owned failure recovery](../AGENTS.md#owned-failure-recovery) assigns an accountable next owner and action while keeping required evidence non-passing. The local archive choice resolves that documentation route only; the parked tokens trial and all live qualification/worker limits remain. Public visibility, access/credential changes and deletion still go to Matt. FOR-25 references the accepted policy without changing its implementation.
+
+## Remaining completion evidence
+
+Verify the local archive and ignored status, repeat candidate-head current/history and identifier scans, run frozen/full Forge checks and independent latest-head review, and retain the actual coverage gaps above. The repository must remain private throughout FOR-25. Matt’s history-retention and MIT choices are settled; no new license, history or broad host-selection question is pending. A final visibility change, settings changes and any acceptance of additional unsuitable exposure remain separate explicit decisions.
