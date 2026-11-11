@@ -25,6 +25,7 @@ The commands check lint with oxlint (warnings fail), formatting with oxfmt, stri
 
 - [Design tenets](docs/tenets.md): how we build—modularity, contracts, observability, testability, and evolution.
 - [Automation contract](docs/automation-contract.md): required behavior for evidence, authority, trust boundaries, and adoption.
+- [Canonical CI and release patterns](docs/ci-release-patterns.md): audited source evidence, selected operation/adapter boundaries and product-owned behavior; extraction guidance without adoption or Belay-retirement claims.
 - [Implementation handoff](docs/handoff.md): scope, boundaries, evidence, cross-owner reuse, and the first implementation slice.
 - [Legacy Forge retirement](docs/legacy-forge.md): preserved old repository, local checkout, and linked worktree.
 - [Worker lifecycle plan](docs/worker-lifecycle-plan.md): proposed ownership, preservation, lifecycle, and bounded capacity qualification; no deployment authorization.
