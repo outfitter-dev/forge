@@ -35,6 +35,21 @@ test("real lefthook adapter runs the declared command once without installing ho
     path.join(root, "package.json"),
     JSON.stringify({ scripts: { forge: `bun ${cli}` } })
   );
+  // An up-to-date tracking branch normally triggers Lefthook push filtering.
+  gitFixture(root, "add", ".");
+  gitFixture(
+    root,
+    "-c",
+    "core.hooksPath=/dev/null",
+    "commit",
+    "-qm",
+    "adapter"
+  );
+  const branch = gitFixture(root, "branch", "--show-current");
+  gitFixture(root, "remote", "add", "origin", path.join(root, "unused-remote"));
+  gitFixture(root, "update-ref", `refs/remotes/origin/${branch}`, "HEAD");
+  gitFixture(root, "config", `branch.${branch}.remote`, "origin");
+  gitFixture(root, "config", `branch.${branch}.merge`, `refs/heads/${branch}`);
   const result = Bun.spawnSync(
     [
       path.join(source, "node_modules/.bin/lefthook"),
