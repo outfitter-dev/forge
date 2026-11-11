@@ -10,7 +10,7 @@ The approved ceiling was five minutes, one immutable disposable source snapshot,
 
 ## Stopped attempt — November 11, 2026
 
-The measured attempt began at **12:06:06.545481 UTC** and stopped **0.044 seconds** later. A restrictive macOS sandbox launched the pinned Bun binary with a scrubbed environment and owned temporary paths. It aborted with `SIGABRT` (exit signal 6) before producing the planned UID/environment/filesystem/network assertions. Captured stdout/stderr were empty; the isolation boundary was therefore **not qualified**.
+The measured attempt began at **12:06:06.545481 UTC** and stopped **0.044 seconds** later. A restrictive macOS sandbox launched the pinned Bun binary with a scrubbed environment and owned temporary paths. It returned `SIGABRT` (exit signal 6), so the required UID/environment/filesystem/network assertions were not accepted. The initial failure receipt retained empty stderr but did not retain stdout; no successful assertion receipt or matching initial crash report was available. The isolation boundary was therefore **not qualified**. The later synthetic probes retained both output streams and their own matching crash metadata.
 
 | Actual operation | Count |
 | --- | --: |
