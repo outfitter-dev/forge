@@ -20,6 +20,8 @@ For work within the agreed task scope, proceed with PR preparation, opening, che
 - Preserve explicit task holds and scope limits. A parked task resumes only when its owner releases the hold; routine delivery authority does not release it.
 - Treat `forge:hold` as a landing hold and `forge:hotfix` as a priority signal, never a gate bypass. These names describe policy vocabulary; they do not establish that labels, queue automation, or repository settings are installed.
 
+Review independence requires clean context without inherited author or parent reasoning. An author may launch that reviewer, but must supply the review scope and evidence without supplying the author's verdict.
+
 ## Owned failure recovery
 
 A deterministic non-passing result stops the affected progression; it does not require an unattended wait or a new permission request. Missing, stale, failed, or incomplete required evidence stays non-passing throughout recovery.
