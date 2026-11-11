@@ -18,3 +18,6 @@ export type {
   PackageExport,
   PackedPackageEvidence,
 } from "./package-artifact-types.ts";
+export { evaluateReleasePolicy } from "./evaluate-release-policy.ts";
+export { releasePolicyDigest } from "./release-policy-validation.ts";
+export type * from "./release-policy-types.ts";
