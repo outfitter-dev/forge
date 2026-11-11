@@ -257,8 +257,9 @@ export const evaluateAgentReview = (
     ...diagnostics,
   ];
   const doubts = exhaustionProblems(pr, policy, `${path}.reviewLadder`);
-  // Only unresolved findings may stand beside an accepted claim: a missing,
-  // ambiguous, or incomplete ledger is collection to retry, not exhaustion.
+  // Only unresolved findings may stand beside an accepted claim. A missing,
+  // ambiguous, or incomplete ledger is a collection gap for the caller to
+  // diagnose, not exhaustion, and this result authorizes no replay.
   const unsettled =
     blockers.some((item) => item.code !== "blocking-findings") ||
     diagnostics.some(
