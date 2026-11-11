@@ -1,4 +1,8 @@
-import type { EvidenceInput, ValidationResult } from "./evidence-types.ts";
+import type {
+  EvidenceInput,
+  EvidenceInputV2,
+  ValidationResult,
+} from "./evidence-types.ts";
 import { VERIFICATION_GATES } from "./evidence-types.ts";
 import {
   array,
@@ -13,6 +17,14 @@ import {
   subject,
   text,
 } from "./evidence-validation-primitives.ts";
+import {
+  agentReviewPolicy,
+  reviewAttempts,
+  reviewFindings,
+  reviewLadder,
+} from "./validate-agent-review.ts";
+
+type SchemaVersion = 1 | 2;
 
 const checks = (value: unknown, path: string) => {
   for (const [index, item] of array(value, path).entries()) {
@@ -72,7 +84,7 @@ const agentReviews = (value: unknown, path: string) => {
   }
 };
 
-const pullRequest = (value: unknown, path: string) => {
+const pullRequest = (value: unknown, path: string, version: SchemaVersion) => {
   const result = object(value, path, [
     "subject",
     "provenance",
@@ -85,11 +97,19 @@ const pullRequest = (value: unknown, path: string) => {
     "mergeable",
     "mergeAuthorized",
     "unresolvedThreads",
+    // Version 1 has no review ledger or ladder; it keeps its original fields.
+    ...(version === 2 ? ["reviewFindings", "reviewLadder"] : []),
   ]);
   subject(result.subject, `${path}.subject`, "pull_request");
   provenance(result.provenance, `${path}.provenance`);
   checks(result.checks, `${path}.checks`);
-  agentReviews(result.agentReviews, `${path}.agentReviews`);
+  if (version === 2) {
+    reviewAttempts(result.agentReviews, `${path}.agentReviews`);
+    reviewFindings(result.reviewFindings, `${path}.reviewFindings`);
+    reviewLadder(result.reviewLadder, `${path}.reviewLadder`);
+  } else {
+    agentReviews(result.agentReviews, `${path}.agentReviews`);
+  }
   const assignments = object(result.assignments, `${path}.assignments`, [
     "recorded",
     "requiredReviewers",
@@ -127,18 +147,24 @@ const pullRequest = (value: unknown, path: string) => {
   }
 };
 
-const validatePolicy = (value: unknown) => {
+const validatePolicy = (value: unknown): SchemaVersion => {
+  const common = ["schemaVersion", "repository", "collector", "verification"];
+  // Inspect the version before accepting version-specific fields.
   const result = object(value, "policy", [
-    "schemaVersion",
-    "repository",
-    "collector",
-    "verification",
+    ...common,
     "requiredAgentProviders",
+    "agentReview",
   ]);
-  choice(result.schemaVersion, "policy.schemaVersion", [1]);
+  choice(result.schemaVersion, "policy.schemaVersion", [1, 2]);
   repository(result.repository, "policy.repository");
   producer(result.collector, "policy.collector");
   producer(result.verification, "policy.verification");
+  if (result.schemaVersion === 2) {
+    object(value, "policy", [...common, "agentReview"]);
+    agentReviewPolicy(result.agentReview, "policy.agentReview");
+    return 2;
+  }
+  object(value, "policy", [...common, "requiredAgentProviders"]);
   const providers = array(
     result.requiredAgentProviders,
     "policy.requiredAgentProviders"
@@ -159,9 +185,10 @@ const validatePolicy = (value: unknown) => {
     }
     seen.add(requirement.provider);
   }
+  return 1;
 };
 
-const validateFacts = (value: unknown) => {
+const validateFacts = (value: unknown, version: SchemaVersion) => {
   const common = ["schemaVersion", "event", "modelAssessment"];
   // Inspect the discriminant before accepting event-specific fields.
   const result = object(value, "facts", [
@@ -171,7 +198,14 @@ const validateFacts = (value: unknown) => {
     "members",
     "admissions",
   ]);
-  choice(result.schemaVersion, "facts.schemaVersion", [1]);
+  choice(result.schemaVersion, "facts.schemaVersion", [1, 2]);
+  if (result.schemaVersion !== version) {
+    // A record is never read under another version's rules.
+    invalid(
+      "facts.schemaVersion",
+      "facts and policy must use the same schema version"
+    );
+  }
   choice(result.event, "facts.event", ["pull_request", "merge_group"]);
   if ("modelAssessment" in result) {
     const model = object(result.modelAssessment, "facts.modelAssessment", [
@@ -183,7 +217,7 @@ const validateFacts = (value: unknown) => {
   }
   if (result.event === "pull_request") {
     object(value, "facts", [...common, "pullRequest"]);
-    pullRequest(result.pullRequest, "facts.pullRequest");
+    pullRequest(result.pullRequest, "facts.pullRequest", version);
     return;
   }
   object(value, "facts", [...common, "candidate", "members", "admissions"]);
@@ -205,7 +239,7 @@ const validateFacts = (value: unknown) => {
     result.admissions,
     "facts.admissions"
   ).entries()) {
-    pullRequest(admission, `facts.admissions[${index}]`);
+    pullRequest(admission, `facts.admissions[${index}]`, version);
   }
 };
 
@@ -218,11 +252,10 @@ export const validateEvidenceInput = (
     // Validate the same detached snapshot that will be evaluated, not a second
     // read of a caller-owned object with potentially changing property values.
     const input = structuredClone({ facts, policy });
-    validatePolicy(input.policy);
-    validateFacts(input.facts);
-    // Both branches and every nested field have been checked above.
+    validateFacts(input.facts, validatePolicy(input.policy));
+    // Both versions and every nested field have been checked above.
     return {
-      input: input as EvidenceInput,
+      input: input as EvidenceInput | EvidenceInputV2,
       valid: true,
     };
   } catch (error) {

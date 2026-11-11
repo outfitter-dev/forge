@@ -1,11 +1,13 @@
 import type {
   CheckEvidence,
   EvidencePolicy,
+  EvidencePolicyBase,
   GateName,
   GateReason,
   ProducerPolicy,
   Provenance,
   PullRequestEvidence,
+  PullRequestEvidenceOf,
   Subject,
 } from "./evidence-types.ts";
 import { VERIFICATION_GATES } from "./evidence-types.ts";
@@ -54,7 +56,7 @@ export const bindingProblems = (
   return problems;
 };
 
-const provenanceProblems = (
+export const provenanceProblems = (
   actual: Provenance,
   expected: ProducerPolicy,
   path: string
@@ -84,7 +86,7 @@ const provenanceProblems = (
 export const collectionProblems = (
   subject: Subject,
   provenance: Provenance,
-  policy: EvidencePolicy,
+  policy: EvidencePolicyBase,
   path: string
 ): GateReason[] => {
   const problems = provenanceProblems(
@@ -108,7 +110,7 @@ export const verificationProblems = (
   checks: CheckEvidence[],
   subject: Subject,
   name: string,
-  policy: EvidencePolicy,
+  policy: EvidencePolicyBase,
   path: string
 ): GateReason[] => {
   const matches = checks.filter((check) => check.name === name);
@@ -143,7 +145,8 @@ export const verificationProblems = (
   return problems;
 };
 
-const agentProblems = (
+/** Schema version 1: every required provider must pass. */
+export const agentProblems = (
   pr: PullRequestEvidence,
   policy: EvidencePolicy,
   path: string
@@ -199,7 +202,10 @@ const agentProblems = (
   return problems;
 };
 
-const humanProblems = (pr: PullRequestEvidence, path: string): GateReason[] => {
+const humanProblems = (
+  pr: PullRequestEvidenceOf<unknown>,
+  path: string
+): GateReason[] => {
   const problems: GateReason[] = [];
   if (!pr.assignments.recorded) {
     problems.push(
@@ -266,7 +272,7 @@ const humanProblems = (pr: PullRequestEvidence, path: string): GateReason[] => {
 };
 
 const landingProblems = (
-  pr: PullRequestEvidence,
+  pr: PullRequestEvidenceOf<unknown>,
   path: string
 ): GateReason[] => {
   const problems: GateReason[] = [];
@@ -290,12 +296,20 @@ const landingProblems = (
   return problems;
 };
 
-export const evaluatePullRequest = (
-  pr: PullRequestEvidence,
-  policy: EvidencePolicy,
+/** The version-specific agent-review rule; `blocked` reports collection problems. */
+export type AgentReviewGate<Pr> = (
+  pr: Pr,
+  path: string,
+  blocked: boolean
+) => GateReason[];
+
+export const evaluatePullRequest = <Pr extends PullRequestEvidenceOf<unknown>>(
+  pr: Pr,
+  policy: EvidencePolicyBase,
   path: string,
   problems: Problems,
-  admission: boolean
+  admission: boolean,
+  agentReview: AgentReviewGate<Pr>
 ) => {
   const common = collectionProblems(pr.subject, pr.provenance, policy, path);
   for (const name of VERIFICATION_GATES) {
@@ -310,7 +324,10 @@ export const evaluatePullRequest = (
       )
     );
   }
-  problems["agent-review"].push(...common, ...agentProblems(pr, policy, path));
+  problems["agent-review"].push(
+    ...common,
+    ...agentReview(pr, path, common.length > 0)
+  );
   problems["human-review"].push(...common, ...humanProblems(pr, path));
   problems.mergeability.push(...common, ...landingProblems(pr, path));
 };
