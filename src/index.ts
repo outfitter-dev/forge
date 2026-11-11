@@ -21,3 +21,6 @@ export type {
 export { evaluateReleasePolicy } from "./evaluate-release-policy.ts";
 export { releasePolicyDigest } from "./release-policy-validation.ts";
 export type * from "./release-policy-types.ts";
+export { evaluateGeneratedReleaseDiff } from "./evaluate-generated-release-diff.ts";
+export { generatedReleaseDiffPolicyDigest } from "./generated-release-diff-validation.ts";
+export type * from "./generated-release-diff-types.ts";

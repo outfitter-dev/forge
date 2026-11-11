@@ -1,0 +1,27 @@
+# Generated-release diff assessment
+
+`evaluateGeneratedReleaseDiff(subject, policy, evidence)` is a pure path/status assessment adapted from [release-action's diff checker](https://github.com/outfitter-dev/release-action/blob/781379183eaf3d4b6139894582e58a47cad28e08/src/diff.ts) and [six source tests](https://github.com/outfitter-dev/release-action/blob/781379183eaf3d4b6139894582e58a47cad28e08/src/diff.test.ts). It implements another offline FOR-19 operation; it collects no Git/provider data, invokes no tasks and grants no publishing, approval or migration authority.
+
+## Explicit product inputs
+
+The subject identifies `repository`, exact `baseSha` and `headSha`, trusted `workflowSha`, `validatorSha` and `runtime`. All revisions are full lowercase 40-character Git SHAs. The base is the actual comparison endpoint selected by trusted policy, not a moving branch reference or an implicitly computed merge base.
+
+The product supplies a trusted `GeneratedReleaseDiffPolicy` with its repository, package names and exact repository-relative `manifestPath`/`changelogPath` pairs, plus exact `changesetPaths` eligible for deletion. Root manifests and custom changelog locations work without workspace discovery. Changeset candidates must be selected from the trusted base; listing a path does not establish that its contents are a legitimate changeset. Unlike the source's directory-wide Markdown glob, this slice accepts only the supplied paths. A product must deliberately select these candidates; proposed code cannot choose its own allowlist. No package name, owner, directory, extension or release channel is inferred.
+
+Package names and every path are unique; a path cannot serve more than one role. Paths use relative POSIX segments, without empty/dot/parent segments, backslashes, colons, whitespace or control characters. Selectors are bounded to 512 characters, policy has at most 100 packages, changeset candidates and evidence each have at most 10,000 entries. Products outside these limits are unsupported. There are no globs, additional-file exceptions or default lockfile exemptions.
+
+`generatedReleaseDiffPolicyDigest(policy)` returns a SHA-256 digest for valid policy, or `null`. Object keys are canonicalized recursively; declared array order is preserved. Evidence includes the exact subject and policy digest, collection `state`, and a complete `files` array of `{path, status}` entries. Duplicate paths, sparse arrays, malformed records and unknown fields are rejected. Raw statuses are preserved so renames, copies, additions, removals of package files, type changes, unmerged entries and unknown statuses cannot silently become modifications.
+
+## Decision
+
+A `pass` requires complete collection, matching subject/policy/repository, at least one modified package manifest, the identical set of modified package changelogs, and at least one allowed changeset deletion. Only `M` on declared manifests/changelogs and `D` on declared changesets are accepted. A subset of packages may change; this preserves the source's partial-package behavior. Any unexpected path/status or unmatched pair yields `block` with diagnostics. Missing, failed, canceled, unavailable or incomplete evidence blocks even if all supplied paths appear acceptable.
+
+The result includes the expected subject/policy `binding` and diagnostics; invalid subject or policy returns a null binding. A binding on a blocked result describes the attempted assessment, not proof that evidence matched. No input is mutated. Consumers can normalize the result into a named product safety or automatic-eligibility assessment for [release-policy routing](release-policy.md); this slice adds no implicit wiring or choice of whether that requirement belongs in `requiredChecks` or `autoChecks`. Product policy must keep mandatory safety evidence blocking manual as well as automatic progression.
+
+A manifest modification is not proof of a version bump. A changelog modification is not proof of a correct entry, and a deletion is not proof that a changeset was consumed correctly. Those content/version/package-set checks remain separate product requirements. Products that legitimately modify lockfiles or other generated metadata need a separately qualified contract; this operation blocks those files. Passing this path check alone cannot qualify a release.
+
+## Trust and verification
+
+A trusted collector must authenticate the source, establish comparison semantics and full pagination/completeness, preserve rename/status information, and bind observations to the actual endpoints before normalization. An asserted `complete` state, valid shape and matching revision fields do not authenticate the producer or prove a collector did not omit a path. This operation supplies no collector and must run from a trusted revision/policy outside the proposed checkout, without granting proposed code orchestration credentials.
+
+Offline tests preserve the source's paired full/partial changes and failure cases, then cover explicit root/custom paths, wrong base/head/repository/runtime/policy, incomplete states, ambiguous policy, duplicate/truncated/malformed evidence, unsupported statuses, undeclared files, input immutability and canonical policy digests. Run `bun install --frozen-lockfile` and `bun run check`. No production consumer, public adapter or live release is qualified here; FOR-19 remains open for its remaining integration criteria.
