@@ -246,6 +246,32 @@ describe("packed package qualification", () => {
     }
   );
 
+  test.each(["NODE_MODULES", "Node_Modules"])(
+    "reserved segment %s is case-insensitive",
+    (segment) => {
+      const fixture = artifactFixture();
+      const target = `${segment}/feature.js`;
+      const exports = {
+        ...(fixture.contract.entrypoints.exports as object),
+        "./feature": `./${target}`,
+      };
+      fixture.contract.entrypoints.exports = exports;
+      fixture.contract.allowedFiles.push(target);
+      fixture.pack.files.push(target);
+      fixture.pack.manifest = { ...(fixture.pack.manifest as object), exports };
+      fixture.consumer.contractDigest =
+        packageArtifactContractDigest(fixture.contract) ?? "invalid-contract";
+      expect(evaluate(fixture).state).toBe("invalid");
+
+      const valid = artifactFixture();
+      valid.pack.manifest = {
+        ...(valid.pack.manifest as object),
+        exports: { ".": `./${target}` },
+      };
+      expect(evaluate(valid).state).toBe("unsupported");
+    }
+  );
+
   test("malformed entrypoints cannot throw or pass", () => {
     const fixture = artifactFixture();
     fixture.pack.manifest = { ...(fixture.pack.manifest as object), main: 1n };

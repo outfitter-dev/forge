@@ -27,7 +27,10 @@ export const packageFile = (value: unknown): value is string =>
     .split("/")
     .every(
       (part) =>
-        part !== "" && part !== "." && part !== ".." && part !== "node_modules"
+        part !== "" &&
+        part !== "." &&
+        part !== ".." &&
+        part.toLowerCase() !== "node_modules"
     );
 
 export const uniqueStrings = (value: unknown): value is string[] =>
