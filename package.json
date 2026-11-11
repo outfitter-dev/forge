@@ -12,10 +12,13 @@
     "format": "oxfmt --write .",
     "typecheck": "bun check --no-script",
     "test": "bun test",
-    "format:check": "oxfmt --check ."
+    "format:check": "oxfmt --check .",
+    "forge": "bun src/forge-cli.ts",
+    "check:hook": "lefthook run pre-push --no-auto-install"
   },
   "devDependencies": {
     "@types/bun": "1.4.4",
+    "lefthook": "2.2.2",
     "oxfmt": "0.78.0",
     "oxlint": "1.93.0",
     "ultracite": "8.1.1"
@@ -23,5 +26,6 @@
   "engines": {
     "bun": ">=1.4.4"
   },
-  "packageManager": "bun@1.4.4"
+  "packageManager": "bun@1.4.4",
+  "trustedDependencies": []
 }
