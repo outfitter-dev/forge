@@ -30,6 +30,8 @@ Sharing an implementation does not share credentials, trust, or permission to ac
 
 An eligibility decision is an input to an authorized landing operation, not a grant of merge permission. Building an artifact does not authorize publication. Keep the authority for each consequential action separate from the reusable mechanism that performs it.
 
+[Standing delivery authority and owned failure recovery](../AGENTS.md#standing-delivery-authority) define routine scoped progression, the exceptions requiring Matt's decision, and accountable routing of non-passing results; this contract retains the evidence and trust requirements for those actions.
+
 ## Proposed code cannot govern its own acceptance
 
 Run trusted orchestration and policy from a trusted revision outside the proposed checkout. Proposed code may supply the product implementation and tasks under evaluation; it cannot replace the evaluator, waive required evidence, or access privileged orchestration credentials.
