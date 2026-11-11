@@ -6,6 +6,8 @@ Forge owns engineering workflows and evidence. [Ranger](https://github.com/outfi
 
 The first operation is a [pure deterministic evidence evaluator](docs/evidence-evaluator.md) for PR and merge-group qualification. It returns six structured gate decisions from normalized evidence and explicit policy, with offline tests for passing, blocked, and invalid input. It performs no collection, reporting, or landing actions. A [local JSON CLI](docs/evidence-cli.md) invokes the same operation: `bun run evaluate examples/evidence/passing-pr.json --policy examples/evidence/policy.json`. A named [CI qualification step](docs/evidence-cli.md#ci-adapter-qualification) exercises that entry point through the same offline subprocess suite.
 
+[Immutable npm evidence](docs/npm-evidence.md) adds registry-metadata classification and bounded read-only observation of a product-supplied publication set. It preserves integrity conflicts, partial propagation and unavailable evidence; its provenance checks validate references, not authenticated producers. It includes no publisher or network implementation.
+
 ## Foundation status
 
 This is a private package, not a deployed automation platform. It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
