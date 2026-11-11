@@ -108,6 +108,8 @@ Keep code reuse and authority separate. Repository identity, landing actors, req
 
 ## Migration and next decisions
 
+[Canonical CI and release patterns](ci-release-patterns.md) records FOR-22's evidence-backed extraction selections for FOR-19 and the FOR-21 Belay decision. Reuse the delivered FOR-18/FOR-24 qualification primitives, preserve product policy and source/proof distinctions, and treat proposed public adapters as unqualified until their access/runtime/consumer contracts pass. The map authorizes no adoption or retirement.
+
 See [legacy-forge.md](legacy-forge.md) for the archived old project and preserved local worktree. Its old design documents are historical, not normative requirements here.
 
 The first reusable slice now has one pure evaluator, a local JSON CLI, and a thin CI fixture step. Resolve distribution/access before promising cross-owner Actions reuse. Dagger integration, Turbo helpers, Ranger invocation, worker relocation, and production adoption should each be explicit subsequent slices. Keep existing consumers working while replacements qualify, and record divergence in the relevant Linear issue and migration documentation.
