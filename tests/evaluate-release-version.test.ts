@@ -229,6 +229,7 @@ test.each([
     "beta\u0080",
     "next/other",
     "*",
+    "x",
     "v1",
     "beta.1",
     "Beta",

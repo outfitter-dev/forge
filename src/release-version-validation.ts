@@ -16,6 +16,7 @@ const only = (value: Record<string, unknown>, keys: string[]) =>
 const tag = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length <= 64 &&
+  value !== "x" &&
   !/\s/u.test(value) &&
   /^[a-z]+(?:-[a-z]+)*$/u.test(value);
 const validPolicy = (value: ReleaseVersionPolicy): boolean =>
