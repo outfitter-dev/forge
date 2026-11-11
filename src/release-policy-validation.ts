@@ -126,10 +126,22 @@ export const validReleasePolicy = (value: ReleasePolicy): boolean =>
   ) &&
   validPolicyChecks(value);
 
-export const releasePolicyDigest = (policy: ReleasePolicy): string | null =>
-  validReleasePolicy(policy)
-    ? `sha256-${createHash("sha256").update(JSON.stringify(policy)).digest("hex")}`
-    : null;
+/** Object key insertion order is irrelevant; array order remains part of the declared policy. */
+export const releasePolicyDigest = (policy: ReleasePolicy): string | null => {
+  if (!validReleasePolicy(policy)) {
+    return null;
+  }
+  const serialized = JSON.stringify(policy, (_key, value: unknown) =>
+    record(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .toSorted()
+            .map((key) => [key, value[key]])
+        )
+      : value
+  );
+  return `sha256-${createHash("sha256").update(serialized).digest("hex")}`;
+};
 
 const uniqueCiRuns = (
   checks: NonNullable<ReleasePolicyEvidence["ci"]>["checks"]

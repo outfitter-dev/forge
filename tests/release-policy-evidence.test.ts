@@ -7,6 +7,9 @@ import {
   releaseFixture,
 } from "./release-policy-fixtures.ts";
 
+const reorder = <T extends object>(value: T): T =>
+  Object.fromEntries(Object.entries(value).toReversed()) as T;
+
 const evaluate = ({
   subject,
   policy,
@@ -232,4 +235,21 @@ test("an empty branch selector is invalid policy or subject, not a release conte
   fixture.subject.ref = "refs/heads/main";
   fixture.policy.ref = "refs/heads/";
   expect(evaluate(fixture)).toMatchObject({ binding: null, decision: "block" });
+});
+
+test("equivalent policy object key orders share a digest across collector/evaluator", () => {
+  const fixture = releaseFixture();
+  fixture.policy = reorder(fixture.policy);
+  fixture.policy.channels = fixture.policy.channels.map(reorder);
+  fixture.policy.ciChecks = fixture.policy.ciChecks.map(reorder);
+  expect(evaluate(fixture).decision).toBe("auto");
+  const previous = fixture.evidence.policyDigest;
+  refreshReleasePolicy(fixture);
+  expect(fixture.evidence.policyDigest).toBe(previous);
+});
+
+test("canonical object keys do not erase declared array order", () => {
+  const fixture = releaseFixture();
+  fixture.policy.autoChecks = fixture.policy.autoChecks.toReversed();
+  expect(evaluate(fixture).blockers).toContain("stale-evidence");
 });
