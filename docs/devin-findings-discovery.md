@@ -1,5 +1,7 @@
 # Devin findings discovery
 
+November 11 status: FOR-9 is on hold pending Matt’s review-provider policy decision from a separate session. The investigation below records the earlier provider-specific intent and evidence limits; it does not make Devin or any single provider universally mandatory. No gate-policy change or further provider discovery is implemented by [FOR-25 preparation](public-readiness.md). Operational identifiers below remain preserved pending verified private archival.
+
 [FOR-9](https://linear.app/outfitter/issue/FOR-9) requires a supported findings interface, validated credentials, exact repository/head/base binding, offline regressions, and live negative/passing cases before Devin becomes a required provider. This November 10, 2026 record covers read-only documentation/runtime inspection and two explicitly authorized supported GET requests. It is not a completed findings adapter or live passing/negative findings qualification. No review trigger, settings change, or worker operation was performed; Matt supplied the service-user credential through protected delivery.
 
 ## Supported public interface found

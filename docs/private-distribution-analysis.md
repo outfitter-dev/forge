@@ -1,4 +1,6 @@
-# Private distribution analysis
+# Private distribution analysis — superseded
+
+Historical November 10, 2026 planning, superseded by Matt’s November 11 decision to prepare Forge for public source reuse. The [public-readiness report](public-readiness.md#distribution-work-rescope-proposal) proposes the replacement FOR-6 qualification. Repository visibility has not changed; this record’s private-source constraints describe its original setting, not the intended public design. [Selected distribution qualification](distribution-qualification.md) remains evidence only for the dated private-at-the-time run. No historical access result is reclassified, and no new invocation, credential, publication or migration is authorized here.
 
 [FOR-6](https://linear.app/outfitter/issue/FOR-6) requires a route grounded in actual consumer/access decisions, including authorized success and denied access for intended private/public uses. This November 10, 2026 analysis recommends a first route and proposes disposable qualification. It does not establish consumer access or complete the live criteria. No consumer, package, grant, credential, workflow permission, worker, or production integration was created or changed.
 

@@ -1,12 +1,14 @@
 # Worker lifecycle and capacity plan
 
+November 11 clarification: execution host is explicit configuration. Studio was one established pilot host; it is not the permanent or sole Buildkite host. Historical operational details below are preserved pending verified private archival under [FOR-25](public-readiness.md#operational-record-preservation). This preparation changes no host, service, state, capacity or lifecycle implementation.
+
 FOR-8 originally delivered this plan without operational inspection or changes. A later Matt-authorized read-only inspection is recorded in the [established pilot setup](handoff.md#established-pilot-setup): the Studio/operator and Rex topology are established, with dated container limits and process availability. Reuse this setup where suitable; do not ask Matt to reselect the host or recreate workers. The [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md), at pilot source `5264279b9ce776d2a8f8e6c3785c663d9b653cf8`, remain historical evidence. Current setup does not authorize relocation, restart, renewal, services or more concurrency, and time-sensitive status must be rechecked before an authorized operation.
 
 ## Ownership and decisions before operation
 
 | Responsibility | Recorded baseline and proposed accountable owner | Decision still needed |
 | --- | --- | --- |
-| Host and pilot operation | Matt's Studio under `mg` and the existing Rex workers are established; see the dated handoff inspection. Matt is the current operator. | Name a backup and approve any new operational change; recheck process identity/availability before that action. Host selection is settled. |
+| Host and pilot operation | The dated pilot used Matt’s Studio and existing Rex workers; other hosts can be explicitly configured. Matt operated that pilot. | Select the configured host/operator for each released operation, name a backup, and recheck process identity/availability; this does not require repeatedly selecting the established pilot host. |
 | Trusted automation runtime | Forge owns gate/collection behavior and runtime release definitions. Product repos own the commands under evaluation. | Name the person allowed to approve/install a pinned runtime release and its rollback. No installer or service is supplied here. |
 | Registration and service access | Existing Buildkite/GitHub/model access belongs to its current account owners; reuse grants no new authority. | Confirm service account, repository/queue scopes, allowed actors, and credential custodian before implementation. |
 | Token renewal | Propose the accepted operator as renewal DRI, with a named backup. The historical registration token had a seven-day lifetime. | Custodian must record actual expiry privately, arrange advance reminders, renew under explicit authority, and confirm old-token revocation/overlap policy. No expiry or validity was checked here. |

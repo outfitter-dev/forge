@@ -1,6 +1,8 @@
 # Forge implementation handoff
 
-Prepared November 10, 2026. This is a fresh private repository for shared engineering automation. The user requested a TypeScript/Bun foundation and handoff, with cross-owner reuse left to be resolved. No production migration is authorized merely by this document.
+Originally prepared November 10, 2026 for a private TypeScript/Bun bootstrap. Matt selected public source reuse on November 11; [public-readiness preparation](public-readiness.md) supersedes the original private-distribution constraint. Visibility remains unchanged pending separate authorization. No production migration is authorized by this handoff.
+
+The operational sections below remain preserved pending verified archival in the private pilot repository. Their machine/session/process observations are historical. Buildkite execution host is explicit configuration; Studio was one qualified pilot host, not Forge’s sole or permanent host. FOR-9 is on hold pending owner review-provider policy; no provider-policy implementation is selected here. The tokens artifact shadow trial and further loader/sandbox diagnosis are parked.
 
 For the complete originating-session record, including worker recovery details and superseded decisions, read [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md).
 
@@ -88,23 +90,13 @@ The supplemental archive entry point is `~/Documents/Codex/2026-11-10/i/outputs/
 
 The closeout records final pilot source `5264279b9ce776d2a8f8e6c3785c663d9b653cf8`. It distinguishes private release qualification from distribution and explicitly leaves live assigned-human approval, simultaneous PR-group admission refresh, validated Devin findings, and Ranger replacement of the working Codex reviewer unqualified. Preserve the existing native review state during continuation. Worker availability, registration validity, and Rex pane identifiers must be rechecked before operation; archiving the originating chat does not stop workers. These pointers do not authorize deployment or migration.
 
-## Private cross-owner reuse: unresolved by design
+## Intended public source reuse
 
-Keep Forge private for now. GitHub documents standard private Actions/workflow sharing within the same owner or organization. Merely allowing other `outfitter-dev` repositories does not establish direct reuse from personal `galligan` repositories. Enterprise sharing has separate ownership/visibility/policy conditions; do not assume a personal account participates. The [private distribution analysis](private-distribution-analysis.md) records the current disabled sharing setting, recommends immutable authenticated source invocation first, and scopes consumer/access decisions and success/denial evidence. It does not qualify or enable access.
+Matt’s November 11 decision selects public Forge source as the distribution direction. After a separately authorized visibility change, a consumer can fetch an approved immutable Forge commit without a cross-owner private-source credential. Until that change, existing private access controls remain. `package.json` stays private; no package, public adapter or reusable-workflow interface is published by this decision.
 
-Official references checked November 10, 2026:
+The [public-readiness report](public-readiness.md) proposes FOR-6’s smaller remaining qualification: verify the exact repository/full source pin and Bun runtime, invoke the existing operation with explicit harmless facts/policy, and reject a wrong pin before invocation. The [private distribution analysis](private-distribution-analysis.md) is superseded planning; [selected-consumer qualification](distribution-qualification.md) remains dated private-at-the-time evidence. Preserve those historical subjects and limits rather than claiming they already qualify public reuse.
 
-- [Sharing with your organization](https://docs.github.com/en/actions/how-tos/reuse-automations/share-with-your-organization).
-- [Repository Actions access settings](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-your-repository).
-- [Reusable workflow access](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations).
-
-Evaluate these options with a disposable consumer before adopting one:
-
-1. For shared scripts or local/composite actions, explicitly fetch an immutable Forge revision using a narrowly scoped credential accessible to that consumer, then invoke it locally. Verify the selected action type's build/runtime requirements. A caller's ordinary `GITHUB_TOKEN` should not be assumed to read another owner's private repo.
-2. For reusable workflows, validate supported service access separately. A job-level `uses: owner/repo/.github/workflows/file.yml@ref` is resolved before checkout steps; checking out Forge inside that same job is not a workaround for unavailable workflow access. Thin consumer workflows calling authenticated shared code may be preferable.
-3. Consider a private package or immutable artifact with explicitly tested cross-owner authentication, or a later public release of non-sensitive reusable components. Neither publication nor credentials are configured by this bootstrap.
-
-Keep code reuse and authority separate. Repository identity, landing actors, required checks, review providers, worker queues, and release destinations must be explicit inputs. Do not grant personal jobs Outfitter credentials merely because they use the same code. Validate both private and public consumer needs before choosing a distribution mechanism.
+A later thin adapter still needs its own immutable code/runtime/invocation contract and concrete consumer qualification. Job-level reusable-workflow resolution remains distinct from checkout in steps; source visibility does not create a missing interface. Product task graphs and artifact/release policy stay local. Public source grants no status, merge, release, credential or worker authority. Keep organization/repository identity explicit and untrusted proposal code outside privileged collection and action boundaries.
 
 ## Migration and next decisions
 
