@@ -4,6 +4,8 @@ Shared engineering automation for repositories with explicit product policy and 
 
 Some historical evidence links target private repositories or Linear records and may be unavailable to outside readers. They remain provenance references, not public dependencies or promises of access.
 
+[Standing delivery authority](AGENTS.md#standing-delivery-authority) governs routine scoped PR/check/review/eligible merge and the exceptions requiring Matt’s decision. [Owned failure recovery](AGENTS.md#owned-failure-recovery) assigns non-passing work to an accountable owner and next action. Explicit task holds and evidence/trust requirements remain.
+
 Forge owns engineering workflows and evidence. [Ranger](https://github.com/outfitter-dev/ranger) owns the Pi agent harness and agent behavior. Product repositories retain their actual test/build commands and build graphs. Shared implementation does not imply shared credentials or authority.
 
 The first operation is a [pure deterministic evidence evaluator](docs/evidence-evaluator.md) for PR and merge-group qualification. It returns six structured gate decisions from normalized evidence and explicit policy, with offline tests for passing, blocked, and invalid input. It performs no collection, reporting, or landing actions. A [local JSON CLI](docs/evidence-cli.md) invokes the same operation: `bun run evaluate examples/evidence/passing-pr.json --policy examples/evidence/policy.json`. A named [CI qualification step](docs/evidence-cli.md#ci-adapter-qualification) exercises that entry point through the same offline subprocess suite.

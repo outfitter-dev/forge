@@ -1,6 +1,6 @@
 # Tokens artifact shadow qualification
 
-Matt approved one bounded artifact-only shadow trial for `outfitter-dev/monorepo`, `@outfitter/tokens@0.0.0`, preserving its current source-TypeScript/generated-CSS contract for Bun 1.4.4. [MONO-83](https://linear.app/outfitter/issue/MONO-83) retains the broader source-versus-built/Node publishing decision. This record distinguishes a stopped isolation attempt from package qualification; no artifact outcome has been established.
+Matt approved one bounded artifact-only shadow trial for `outfitter-dev/monorepo`, `@outfitter/tokens@0.0.0`, preserving its current source-TypeScript/generated-CSS contract for Bun 1.4.4. [MONO-83](https://linear.app/outfitter/issue/MONO-83) retains the broader source-versus-built/Node publishing decision. This record distinguishes a stopped isolation attempt from package qualification; no artifact outcome has been established. The trial and loader diagnosis remain explicitly parked under [standing delivery authority](../AGENTS.md#standing-delivery-authority); [owned failure recovery](../AGENTS.md#owned-failure-recovery) does not release a parked task. The parent owns that release decision, while Forge Builder preserves the stopped evidence and cleanup record.
 
 ## Selected contract and bounds
 
