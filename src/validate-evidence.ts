@@ -1,122 +1,30 @@
 import type {
   EvidenceInput,
-  ValidationIssue,
+  EvidenceInputV2,
   ValidationResult,
 } from "./evidence-types.ts";
 import { VERIFICATION_GATES } from "./evidence-types.ts";
+import {
+  array,
+  choice,
+  count,
+  InvalidEvidenceError,
+  invalid,
+  object,
+  producer,
+  provenance,
+  repository,
+  subject,
+  text,
+} from "./evidence-validation-primitives.ts";
+import {
+  agentReviewPolicy,
+  reviewAttempts,
+  reviewFindings,
+  reviewLadder,
+} from "./validate-agent-review.ts";
 
-class InvalidEvidenceError extends Error {
-  readonly issue: ValidationIssue;
-
-  constructor(path: string, message: string) {
-    super(`${path}: ${message}`);
-    this.name = "InvalidEvidenceError";
-    this.issue = { message, path };
-  }
-}
-
-const invalid = (path: string, message: string): never => {
-  throw new InvalidEvidenceError(path, message);
-};
-
-const object = (value: unknown, path: string, keys: string[]) => {
-  if (
-    value === null ||
-    typeof value !== "object" ||
-    (Object.getPrototypeOf(value) !== Object.prototype &&
-      Object.getPrototypeOf(value) !== null)
-  ) {
-    return invalid(path, "expected a JSON object");
-  }
-  const result = value as Record<string, unknown>;
-  for (const key of Object.keys(result)) {
-    if (!keys.includes(key)) {
-      invalid(`${path}.${key}`, "unsupported field");
-    }
-  }
-  return result;
-};
-
-const array = (value: unknown, path: string): unknown[] => {
-  if (!Array.isArray(value)) {
-    return invalid(path, "expected an array");
-  }
-  return value;
-};
-
-const text = (value: unknown, path: string): string => {
-  if (typeof value !== "string" || !value || value.trim() !== value) {
-    return invalid(path, "expected a nonempty trimmed string");
-  }
-  return value;
-};
-
-const choice = (value: unknown, path: string, choices: readonly unknown[]) => {
-  if (!choices.includes(value)) {
-    invalid(path, `expected one of ${choices.join(", ")}`);
-  }
-};
-
-const count = (value: unknown, path: string) => {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    invalid(path, "expected a nonnegative safe integer");
-  }
-};
-
-const digest = (value: unknown, path: string, length: number) => {
-  const result = text(value, path);
-  if (result.length !== length || !/^[\da-f]+$/u.test(result)) {
-    invalid(path, `expected ${length} lowercase hexadecimal characters`);
-  }
-};
-
-const repository = (value: unknown, path: string) => {
-  if (!/^[\w.-]+\/[\w.-]+$/u.test(text(value, path))) {
-    invalid(path, "expected an explicit owner/repository identity");
-  }
-};
-
-const subject = (value: unknown, path: string, kind?: string) => {
-  const result = object(value, path, [
-    "kind",
-    "repository",
-    "headSha",
-    "baseSha",
-    "id",
-  ]);
-  choice(
-    result.kind,
-    `${path}.kind`,
-    kind ? [kind] : ["pull_request", "merge_group"]
-  );
-  repository(result.repository, `${path}.repository`);
-  digest(result.headSha, `${path}.headSha`, 40);
-  digest(result.baseSha, `${path}.baseSha`, 40);
-  if (result.kind === "pull_request") {
-    count(result.id, `${path}.id`);
-    if (result.id === 0) {
-      invalid(`${path}.id`, "expected a positive PR number");
-    }
-  } else if ("id" in result) {
-    invalid(`${path}.id`, "a candidate is not a PR");
-  }
-};
-
-const producer = (value: unknown, path: string, extra: string[] = []) => {
-  const result = object(value, path, [
-    "producer",
-    "runtimeFingerprint",
-    ...extra,
-  ]);
-  text(result.producer, `${path}.producer`);
-  digest(result.runtimeFingerprint, `${path}.runtimeFingerprint`, 64);
-  return result;
-};
-
-const provenance = (value: unknown, path: string) => {
-  const result = producer(value, path, ["runId"]);
-  text(result.runId, `${path}.runId`);
-};
+type SchemaVersion = 1 | 2;
 
 const checks = (value: unknown, path: string) => {
   for (const [index, item] of array(value, path).entries()) {
@@ -176,7 +84,7 @@ const agentReviews = (value: unknown, path: string) => {
   }
 };
 
-const pullRequest = (value: unknown, path: string) => {
+const pullRequest = (value: unknown, path: string, version: SchemaVersion) => {
   const result = object(value, path, [
     "subject",
     "provenance",
@@ -189,11 +97,19 @@ const pullRequest = (value: unknown, path: string) => {
     "mergeable",
     "mergeAuthorized",
     "unresolvedThreads",
+    // Version 1 has no review ledger or ladder; it keeps its original fields.
+    ...(version === 2 ? ["reviewFindings", "reviewLadder"] : []),
   ]);
   subject(result.subject, `${path}.subject`, "pull_request");
   provenance(result.provenance, `${path}.provenance`);
   checks(result.checks, `${path}.checks`);
-  agentReviews(result.agentReviews, `${path}.agentReviews`);
+  if (version === 2) {
+    reviewAttempts(result.agentReviews, `${path}.agentReviews`);
+    reviewFindings(result.reviewFindings, `${path}.reviewFindings`);
+    reviewLadder(result.reviewLadder, `${path}.reviewLadder`);
+  } else {
+    agentReviews(result.agentReviews, `${path}.agentReviews`);
+  }
   const assignments = object(result.assignments, `${path}.assignments`, [
     "recorded",
     "requiredReviewers",
@@ -231,18 +147,24 @@ const pullRequest = (value: unknown, path: string) => {
   }
 };
 
-const validatePolicy = (value: unknown) => {
+const validatePolicy = (value: unknown): SchemaVersion => {
+  const common = ["schemaVersion", "repository", "collector", "verification"];
+  // Inspect the version before accepting version-specific fields.
   const result = object(value, "policy", [
-    "schemaVersion",
-    "repository",
-    "collector",
-    "verification",
+    ...common,
     "requiredAgentProviders",
+    "agentReview",
   ]);
-  choice(result.schemaVersion, "policy.schemaVersion", [1]);
+  choice(result.schemaVersion, "policy.schemaVersion", [1, 2]);
   repository(result.repository, "policy.repository");
   producer(result.collector, "policy.collector");
   producer(result.verification, "policy.verification");
+  if (result.schemaVersion === 2) {
+    object(value, "policy", [...common, "agentReview"]);
+    agentReviewPolicy(result.agentReview, "policy.agentReview");
+    return 2;
+  }
+  object(value, "policy", [...common, "requiredAgentProviders"]);
   const providers = array(
     result.requiredAgentProviders,
     "policy.requiredAgentProviders"
@@ -263,9 +185,10 @@ const validatePolicy = (value: unknown) => {
     }
     seen.add(requirement.provider);
   }
+  return 1;
 };
 
-const validateFacts = (value: unknown) => {
+const validateFacts = (value: unknown, version: SchemaVersion) => {
   const common = ["schemaVersion", "event", "modelAssessment"];
   // Inspect the discriminant before accepting event-specific fields.
   const result = object(value, "facts", [
@@ -275,7 +198,14 @@ const validateFacts = (value: unknown) => {
     "members",
     "admissions",
   ]);
-  choice(result.schemaVersion, "facts.schemaVersion", [1]);
+  choice(result.schemaVersion, "facts.schemaVersion", [1, 2]);
+  if (result.schemaVersion !== version) {
+    // A record is never read under another version's rules.
+    invalid(
+      "facts.schemaVersion",
+      "facts and policy must use the same schema version"
+    );
+  }
   choice(result.event, "facts.event", ["pull_request", "merge_group"]);
   if ("modelAssessment" in result) {
     const model = object(result.modelAssessment, "facts.modelAssessment", [
@@ -287,7 +217,7 @@ const validateFacts = (value: unknown) => {
   }
   if (result.event === "pull_request") {
     object(value, "facts", [...common, "pullRequest"]);
-    pullRequest(result.pullRequest, "facts.pullRequest");
+    pullRequest(result.pullRequest, "facts.pullRequest", version);
     return;
   }
   object(value, "facts", [...common, "candidate", "members", "admissions"]);
@@ -309,7 +239,7 @@ const validateFacts = (value: unknown) => {
     result.admissions,
     "facts.admissions"
   ).entries()) {
-    pullRequest(admission, `facts.admissions[${index}]`);
+    pullRequest(admission, `facts.admissions[${index}]`, version);
   }
 };
 
@@ -322,11 +252,10 @@ export const validateEvidenceInput = (
     // Validate the same detached snapshot that will be evaluated, not a second
     // read of a caller-owned object with potentially changing property values.
     const input = structuredClone({ facts, policy });
-    validatePolicy(input.policy);
-    validateFacts(input.facts);
-    // Both branches and every nested field have been checked above.
+    validateFacts(input.facts, validatePolicy(input.policy));
+    // Both versions and every nested field have been checked above.
     return {
-      input: input as EvidenceInput,
+      input: input as EvidenceInput | EvidenceInputV2,
       valid: true,
     };
   } catch (error) {

@@ -39,7 +39,8 @@ test("validates discriminants and rejects unsupported contract fields", () => {
   const facts = passingFacts();
   invalid({ ...facts, event: "push" }, policy(), "facts.event");
   invalid({ ...facts, schemaVersion: 2 }, policy(), "facts.schemaVersion");
-  invalid(facts, { ...policy(), schemaVersion: 2 }, "policy.schemaVersion");
+  invalid({ ...facts, schemaVersion: 3 }, policy(), "facts.schemaVersion");
+  invalid(facts, { ...policy(), schemaVersion: 3 }, "policy.schemaVersion");
   invalid({ ...facts, eligible: true }, policy(), "facts.eligible");
   invalid({ ...facts, members: [] });
   invalid({ ...passingGroup(), pullRequest: facts.pullRequest });

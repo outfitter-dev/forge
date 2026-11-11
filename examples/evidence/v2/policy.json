@@ -1,0 +1,43 @@
+{
+  "agentReview": {
+    "instructions": [
+      {
+        "digest": "4444444444444444444444444444444444444444444444444444444444444444",
+        "id": "general-review/standard@1"
+      },
+      {
+        "digest": "5555555555555555555555555555555555555555555555555555555555555555",
+        "id": "general-review/fresh-eyes@1"
+      }
+    ],
+    "ladder": {
+      "producer": "ladder:fixture",
+      "runtimeFingerprint": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    "reviewers": [
+      {
+        "producer": "hosted-collector:fixture",
+        "runtimeFingerprint": "6666666666666666666666666666666666666666666666666666666666666666",
+        "reviewer": "hosted-bot",
+        "rung": "hosted",
+        "waitSeconds": 900
+      },
+      {
+        "producer": "agent:fixture",
+        "runtimeFingerprint": "3333333333333333333333333333333333333333333333333333333333333333",
+        "reviewer": "local-cli",
+        "rung": "local"
+      }
+    ]
+  },
+  "collector": {
+    "producer": "collector:fixture",
+    "runtimeFingerprint": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "repository": "example/project",
+  "schemaVersion": 2,
+  "verification": {
+    "producer": "verification:fixture",
+    "runtimeFingerprint": "2222222222222222222222222222222222222222222222222222222222222222"
+  }
+}
