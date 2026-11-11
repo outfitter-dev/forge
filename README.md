@@ -14,6 +14,8 @@ The first operation is a [pure deterministic evidence evaluator](docs/evidence-e
 
 [Generated-release diff assessment](docs/generated-release-diff.md) checks complete, revision-bound path/status evidence against explicit product manifest/changelog pairs and deletable changeset paths. It qualifies file roles without claiming that modified content is a valid version bump.
 
+[Strict version/channel assessment](docs/release-version.md) checks literal version progression and product-declared destination tags. Malformed versions block; valid build metadata preserves prerelease routing and cannot alone establish a newer version.
+
 ## Foundation status
 
 This is a private package, not a deployed automation platform. It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
