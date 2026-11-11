@@ -12,6 +12,8 @@ The first operation is a [pure deterministic evidence evaluator](docs/evidence-e
 
 [Pure release-policy routing](docs/release-policy.md) adapts block/none/manual/auto intent classification under explicit product safety, channel and CI requirements. It preserves exact subject/policy bindings and grants no publishing or approval authority.
 
+[Generated-release diff assessment](docs/generated-release-diff.md) checks complete, revision-bound path/status evidence against explicit product manifest/changelog pairs and deletable changeset paths. It qualifies file roles without claiming that modified content is a valid version bump.
+
 ## Foundation status
 
 This is a private package, not a deployed automation platform. It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
