@@ -155,7 +155,7 @@ const exhaustedFacts = () => {
   return facts;
 };
 
-test("an exhausted ladder is a distinct blocked result for a human", () => {
+test("an exhausted ladder is a distinct blocked result needing outside disposition", () => {
   const result = blocked(exhaustedFacts(), "ladder-exhausted");
   expect(at(result.outcomes).disposition).toBe("needs_human");
   expect(result.reasons).toContainEqual(
@@ -270,7 +270,7 @@ test.each<[string, (facts: PullRequestFactsV2) => void, ReasonCode]>([
     "missing-evidence",
   ],
 ])(
-  "incomplete collection such as %s is not routed to a human",
+  "incomplete collection such as %s is not reported as an exhausted ladder",
   (_name, mutate, code) => {
     const facts = exhaustedFacts();
     mutate(facts);

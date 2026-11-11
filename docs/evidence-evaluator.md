@@ -140,11 +140,13 @@ Nothing else is required. A configured reviewer that never started is not missin
 
 ### Ladder exhaustion
 
-`pullRequest.reviewLadder` is `null` or the ladder runner's claim `{ subject, provenance, exhausted }`. It never changes whether the gate passes. When no attempt satisfies the gate, an `exhausted` claim that is bound to the exact revision, comes from the policy's `ladder` issuer, and stands beside no pending attempt, no deadline mismatch, and no collection problem (including an unrecorded, ambiguous, or incomplete finding ledger) turns the failure into a distinct result a caller can route to a human. A claim that fails one of those tests leaves the result `blocked`, with the reason.
+`pullRequest.reviewLadder` is `null` or the ladder runner's claim `{ subject, provenance, exhausted }`. It never changes whether the gate passes. When no attempt satisfies the gate, an `exhausted` claim that is bound to the exact revision, comes from the policy's `ladder` issuer, and stands beside no pending attempt, no deadline mismatch, and no collection problem (including an unrecorded, ambiguous, or incomplete finding ledger) turns the failure into the distinct `needs_human` result. A claim that fails one of those tests leaves the result `blocked`, with the reason.
 
 The claim is diagnostic. Forge does not prove from it that every rung ran.
 
-An exhausted ladder is blocked, not passed. An approval in the `human-review` gate does not satisfy it: this gate does not read human reviews, and no override exists. Whether a distinct human override should exist is undecided and deliberately not implemented.
+`needs_human` is the wire value in this schema version. It means the ladder is exhausted and the change needs a disposition from outside the ladder. It does not mean that only a human can act, and it is not an escalation to the project owner: who receives it is the caller's routing policy, which Forge's evaluator does not decide. Routing it is not passing it. The result resets no attempt budget, authorizes no further dispatch, and bypasses nothing; the gate stays failed until acceptable evidence exists.
+
+An exhausted ladder is blocked, not passed. An approval in the `human-review` gate does not satisfy it: this gate does not read human reviews, and no override exists. Whether a distinct override should exist is undecided and deliberately not implemented.
 
 ### Result
 
@@ -153,7 +155,7 @@ A version 2 result has `schemaVersion: 2` and `agentReview`, one entry per evalu
 | Field | Meaning |
 | --- | --- |
 | `pullRequest` | The PR number. |
-| `disposition` | `satisfied`, `blocked`, or `needs_human`. `needs_human` is the accepted exhaustion case above. |
+| `disposition` | `satisfied`, `blocked`, or `needs_human`. `needs_human` is the accepted exhaustion case above, and is a failed gate. |
 | `satisfiedBy` | IDs of the attempts that meet requirement 1. Look one up in the input snapshot to see its reviewer and `launch`. |
 
 The `agent-review` gate conclusion stays authoritative; a disposition explains one PR's review evidence. Unresolved-finding reasons remain in the gate under `needs_human`. New reason codes are `findings-unknown`, `reviewer-not-acceptable`, `review-unavailable`, `review-pending`, `review-not-independent`, `instructions-untrusted`, `deadline-mismatch`, and `ladder-exhausted`. When no attempt satisfies the gate, the reasons also say why each presented attempt fell short.

@@ -50,7 +50,7 @@ bun run evaluate examples/evidence/v2/blocked-pr.json --policy examples/evidence
 bun run evaluate examples/evidence/v2/needs-human-pr.json --policy examples/evidence/v2/policy.json
 ```
 
-These exit `0`, `1`, and `1`. The passing example has a hosted reviewer that timed out and a clean local review. The blocked example has a clean local review that does not clear a hosted reviewer's unresolved finding. The last has every reviewer unavailable and an exhausted ladder; its result carries `agentReview[0].disposition: "needs_human"` so a caller can route it to a human. It is still blocked.
+These exit `0`, `1`, and `1`. The passing example has a hosted reviewer that timed out and a clean local review. The blocked example has a clean local review that does not clear a hosted reviewer's unresolved finding. The last has every reviewer unavailable and an exhausted ladder; its result carries `agentReview[0].disposition: "needs_human"` so a caller can route it for a decision outside the review ladder. Routing is not passing: the result is still blocked and exits `1`.
 
 ## Trust and qualification
 

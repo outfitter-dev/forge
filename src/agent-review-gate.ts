@@ -258,7 +258,7 @@ export const evaluateAgentReview = (
   ];
   const doubts = exhaustionProblems(pr, policy, `${path}.reviewLadder`);
   // Only unresolved findings may stand beside an accepted claim: a missing,
-  // ambiguous, or incomplete ledger is collection to retry, not a human's call.
+  // ambiguous, or incomplete ledger is collection to retry, not exhaustion.
   const unsettled =
     blockers.some((item) => item.code !== "blocking-findings") ||
     diagnostics.some(
@@ -278,7 +278,7 @@ export const evaluateAgentReview = (
       reason(
         "ladder-exhausted",
         `${path}.reviewLadder`,
-        "the review ladder is exhausted; a human-review approval does not satisfy this gate"
+        "the review ladder is exhausted and needs a decision from outside it; a human-review approval does not satisfy this gate"
       ),
     ],
   };

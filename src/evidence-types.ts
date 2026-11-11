@@ -312,7 +312,10 @@ export interface GateDecision {
 /** Why one PR's agent review stands where it does. The gate stays authoritative. */
 export interface AgentReviewOutcome {
   pullRequest: number;
-  /** `needs_human` is a failure a caller can route; it never passes the gate. */
+  /**
+   * `needs_human` is ladder exhaustion needing a disposition from outside the
+   * ladder. It is a failure a caller can route, not proof only a human can act.
+   */
   disposition: "satisfied" | "blocked" | "needs_human";
   /** Attempt IDs that meet every acceptable-review requirement. */
   satisfiedBy: string[];
