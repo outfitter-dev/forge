@@ -20,6 +20,8 @@ export const packageFile = (value: unknown): value is string =>
   !value.includes("\\") &&
   !value.includes(":") &&
   !value.includes("%") &&
+  !value.includes("#") &&
+  !value.includes("?") &&
   !value.includes("*") &&
   value
     .split("/")
