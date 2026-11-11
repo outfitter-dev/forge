@@ -1,50 +1,24 @@
 # Worker lifecycle and capacity plan
 
-November 11 clarification: execution host is explicit configuration. Studio was one established pilot host; it is not the permanent or sole Buildkite host. Historical operational details below are preserved pending verified private archival under [FOR-25](public-readiness.md#operational-record-preservation). This preparation changes no host, service, state, capacity or lifecycle implementation. Routine scoped delivery follows [standing authority](../AGENTS.md#standing-delivery-authority), with non-passes routed through [owned recovery](../AGENTS.md#owned-failure-recovery). The dated pilot limits below remain historical evidence, while explicit worker/archive execution holds remain in force.
+FOR-8 delivered a lifecycle plan and is reopened for configurable hosts and trusted/project execution lanes. The complete original machine-specific plan is preserved in the [local operational archive](public-readiness.md#operational-record-preservation); Matt accepted machine-local, non-durable storage. Routine scoped delivery follows [standing authority](../AGENTS.md#standing-delivery-authority), with non-passes routed through [owned recovery](../AGENTS.md#owned-failure-recovery). No worker, service, state, credential or capacity change is performed by this documentation move.
 
-FOR-8 originally delivered this plan without operational inspection or changes. A later Matt-authorized read-only inspection is recorded in the [established pilot setup](handoff.md#established-pilot-setup): the Studio/operator and Rex topology are established, with dated container limits and process availability. Reuse this setup where suitable; do not ask Matt to reselect the host or recreate workers. The [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md), at pilot source `5264279b9ce776d2a8f8e6c3785c663d9b653cf8`, remain historical evidence. Current setup does not authorize relocation, restart, renewal, services or more concurrency, and time-sensitive status must be rechecked before an authorized operation.
+Execution host is explicit configuration. Studio was one historical pilot host, not a permanent or sole Buildkite host. An operator must identify the actual host/account, queues, trusted runtime, isolated project-code lane and allowed inputs for an agreed operation. Prior setup observations are not current health or access evidence.
 
-## Ownership and decisions before operation
+## Ownership and preservation
 
-| Responsibility | Recorded baseline and proposed accountable owner | Decision still needed |
-| --- | --- | --- |
-| Host and pilot operation | The dated pilot used Matt’s Studio and existing Rex workers; other hosts can be explicitly configured. Matt operated that pilot. | Select the configured host/operator for each released operation, name a backup, and recheck process identity/availability; this does not require repeatedly selecting the established pilot host. |
-| Trusted automation runtime | Forge owns gate/collection behavior and runtime release definitions. Product repos own the commands under evaluation. | Name the person allowed to approve/install a pinned runtime release and its rollback. No installer or service is supplied here. |
-| Registration and service access | Existing Buildkite/GitHub/model access belongs to its current account owners; reuse grants no new authority. | Confirm service account, repository/queue scopes, allowed actors, and credential custodian before implementation. |
-| Token renewal | Propose the accepted operator as renewal DRI, with a named backup. The historical registration token had a seven-day lifetime. | Custodian must record actual expiry privately, arrange advance reminders, renew under explicit authority, and confirm old-token revocation/overlap policy. No expiry or validity was checked here. |
-| Persistent evidence and deletion | The operator must preserve review cache, PR admissions, and human-observation ledger; Forge defines their validity rules. | Accept backup/restore, retention, reader, deletion, and incident-response ownership before moving state. |
-| Agent behavior/history | Ranger owns its harness and history contract; it is not required to make this lifecycle plan. | Any later Ranger history/storage selection belongs to [FOR-15](https://linear.app/outfitter/issue/FOR-15), with its own access and retention decisions. Do not pre-create a shared store. |
-
-Existing host/operator ownership is established; the remaining proposed future responsibilities grant no new permissions. Planning can complete with those choices recorded; installing, renewing, moving, starting, or increasing capacity still requires the relevant operational scope.
-
-## Historical locations and preserved evidence
-
-All baseline paths below are relative to `/Users/mg/Documents/Codex/2026-11-10/i/`. They are recovery pointers from the closeout, not locations validated by this task. No secret file contents were read.
-
-| Recorded location | Role and preservation requirement |
+| Responsibility | Required ownership/configuration |
 | --- | --- |
-| `work/agentic-ci-pilot` | Source checkout, `infra/` and runtime documentation. Proposed checkouts must not supply privileged orchestration. |
-| `work/native-agent/runtime` | Installed trusted runtime outside proposed checkout cleanup. Retain its exact source/configuration/executable identity for rollback. |
-| `work/native-agent/run-in-rex.sh`, `agent.pid` | Historical launcher/PID pointer. A PID file alone is not permission or sufficient process identity for signaling. |
-| `work/native-agent/state` | Review cache, admissions, and human observation/assignment state. Preserve together with schema/runtime provenance; never silently grandfather stale evidence. |
-| `work/native-agent/builds`, `agent.log` | Checkout area and historical log. Active logs moved to Rex in the recorded run; neither path proves present activity. |
-| `work/pilot-secrets/buildkite-agent-token` | Historical private registration-token location, outside source control and proposed checkouts. It is a location reference only. |
-| `outputs/final-release-receipt.json` and private release ZIP | Source/digest-bound qualification artifacts; retain as historical evidence, not current admissions. |
+| Host and operation | Configure the host/operator and backup; reverify process/executable identity and active work before changing it. |
+| Trusted runtime | Forge owns gate/collection behavior and release definitions; the operator selects a reviewed immutable runtime/configuration and known-good rollback. Products own commands and task graphs. |
+| Service access and renewal | Credential custodians own scopes, protected delivery, actual expiry, renewal/overlap and revocation. Preserve access boundaries; no values or secret-store locations belong in public source. |
+| Persistent evidence | Preserve review cache, admissions and human-observation state with schema/runtime provenance. Assign retention, consistent backup/restore and deletion ownership before moving state. |
+| Agent behavior/history | Ranger owns its harness, history and recovery loop; Forge does not pre-create a shared store or agent loop. |
 
-The historical Linux worker used Docker Compose project `outfitter-ci-pilot` and a persistent build volume. The later handoff inspection confirms the existing container, limits, mounts and persistent volume at its recorded time; recheck mutable facts before operation rather than treating the setup as unselected. Model login, token validity and expiry were not inspected. Do not enumerate or copy account credential stores during planning, or infer Devin API access from worker registration.
+## Placement boundaries
 
-## Proposed stable placement
+Keep trusted runtime releases, persistent state, disposable job checkouts and bounded operator evidence in separate namespaces outside proposed checkout cleanup. An adopted runtime manifest binds reviewed source, policy/configuration and executable identity; a job cannot replace it with proposal code. Each extra slot needs disjoint workspaces and exclusive state-writer ownership. Adding a terminal pane supplies neither isolation nor concurrency safety.
 
-For a later permanent relocation, select an operator-owned root outside repositories, worktrees, and cleanup-managed job directories. Candidate on the established Studio under `mg`: `~/Library/Application Support/Forge/workers/<pilot-name>/`; the new root remains a future implementation decision, not a prerequisite for reusing the existing setup. Do not create this tree as part of FOR-8.
-
-- `runtime-releases/<revision>-<fingerprint>/`: immutable reviewed code/configuration plus a manifest of source, policy, task/model/harness/prompt configuration, and actual executable identity. Launch resolves one approved release; a job cannot replace it from proposed code. Keep the previous known-good release available.
-- `state/<repository>/`: persistent admission, review-cache, and human-ledger data with source/runtime/schema provenance. Use existing locking/atomic-write semantics; permit one writer per state namespace. Job cleanup must never remove this directory.
-- `builds/<repository>/<role>/<slot>/`: disposable job workspaces, separated from runtime/state. A later extra slot must earn its own checkout and writer namespace; adding a Rex pane is not isolation.
-- `logs/` and `evidence/`: bounded, access-controlled operator diagnostics/receipts outside Git. Decide retention and redaction before implementation; do not collect transcripts merely for convenience.
-
-Keep secrets separate from this movable runtime/state tree, outside proposed checkouts and their mounted views. Preserve the existing private token path until its custodian selects another protected store. Proposed host controls include owner-only directory/file access and minimal service scopes, but no permissions have been changed or verified here. A runtime release must reference credential delivery by role, not embed values in its manifest. A backup must not accidentally include the secret store.
-
-Native review remains trusted text-only work; it must not execute proposal code. Verification retains its unprivileged container boundary, no host-home or Docker-socket mount, and no model/GitHub/Buildkite credentials in the proposal execution environment. The agent process may need registration authority; that does not authorize passing it to product commands. Same-account native execution still shares the operator's account and provider quota; choosing a stable directory does not create a sandbox.
+Keep secrets outside both the movable runtime/state tree and proposal mounts. Reference delivery by role, never embed values or include the secret store in a backup. Native trusted review consumes text and must not execute proposals. Project commands run unprivileged without privileged orchestration credentials, host-home access or a Docker socket. Directory placement and same-account execution alone are not a sandbox. Concrete enforcement and namespace facts must be qualified on the configured host.
 
 ## Lifecycle contract for a later implementation
 
@@ -58,11 +32,11 @@ Native review remains trusted text-only work; it must not execute proposal code.
 | Roll back | Drain the new writer, select the prior known-good release, and restore only a compatible, verified snapshot in a separate state location if necessary. Confirm source/runtime/schema bindings and require fresh evidence when assumptions changed. Do not blindly run an old reader against upgraded state or erase newer audit records. If compatibility is unknown, stay stopped/blocked and recover with the owner. |
 | Retire | Only after evidence retention and recovery acceptance, stop owned processes, revoke unused registration/access under custodian authority, and remove approved disposable workspaces. Persistent state, private evidence, old runtime releases, and volumes each need an explicit retention/deletion decision. |
 
-Rex remains the proposed operator surface because Matt requested session `remotes`, tab `buildkite-workers`, two equal side-by-side panes: native review left and container verification right. Preserve that arrangement if retained; re-resolve actual pane/process IDs under operational authorization. The plan does not select a permanent native service manager or install a daemon. If unattended service management is later chosen, retain equivalent visibility and graceful drain/rollback; approve that choice separately instead of assuming a four-hour foreground pilot is permanent infrastructure.
+The configured operator surface must retain visibility of trusted review and isolated verification, with current process identity and a graceful drain/rollback path. A terminal layout is not a scheduler or resource boundary. The historical pilot selected no permanent native service manager; this plan installs no service.
 
 ## Resource boundaries and evidence before concurrency
 
-The closeout records one native review job and one verification job. The Linux container was limited to two CPU equivalents, 2 GiB memory, and 256 processes, with unprivileged UID 1001 and a persistent build volume. Native review used nice level 10 and a four-hour maximum process lifetime; Compose used `restart: unless-stopped`. These are historical settings, not measurements of present load, available capacity, or validated sustained throughput.
+The historical pilot used one trusted review slot and one isolated verification slot. Concrete per-host limits, uptime and process observations are preserved in the local operational archive; they are not universal Forge defaults or measurements of current headroom. Verification must remain unprivileged and resource-bounded, with persistent state separate from disposable checkouts.
 
 Native nice priority is a scheduler preference. It is not a CPU ceiling, memory cap, account boundary, or desktop-load throttle. Rex is visibility/control, not resource enforcement. The recorded pilot has no established native memory cap, automatic desktop-activity throttle, unattended refresh guarantee, or safe multi-slot namespace. The plan therefore keeps the default ceiling at the historical one review plus one verification job until separately authorized measurement and qualification justify a change.
 

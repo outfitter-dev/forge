@@ -28,10 +28,10 @@ This is an unpublished package, not a deployed automation platform. `package.jso
 
 ```sh
 bun install --frozen-lockfile
-bun run check
+bun run forge check
 ```
 
-The commands check lint with oxlint (warnings fail), formatting with oxfmt, strict types with `bun check --no-script`, and Bun tests. Lint and formatting use Ultracite presets with Markdown prose wrapping disabled. [Tooling qualification and editor guidance](docs/tooling.md) records the accepted Ranger reference, strict/config-file checks, and the decision to omit a separate editor TypeScript pin. Run `bun run format` to apply formatting. CI uses the same command and pinned GitHub Actions revisions. No secrets or global machine setup are needed.
+The commands check lint with oxlint (warnings fail), formatting with oxfmt, strict types with `bun check --no-script`, and Bun tests. Lint and formatting use Ultracite presets with Markdown prose wrapping disabled. [Tooling qualification and editor guidance](docs/tooling.md) records the accepted Ranger reference, strict/config-file checks, and the decision to omit a separate editor TypeScript pin. Run `bun run format` to apply formatting. [Forge check](docs/forge-check.md) invokes the existing `bun run check` aggregate from explicit `forge.json` configuration and records local execution observations. CLI, direct hook qualification and CI use that same operation; receipts do not authenticate a producer or skip CI. Hooks are configured without installation during dependency setup; activation requires checkout-owner coordination. No secrets or global machine setup are needed.
 
 ## Start here
 
@@ -47,7 +47,7 @@ The previous project named Forge is archived at [outfitter-dev/forge-old](https:
 
 ## Checkout and worktree setup
 
-Install the Bun version in `.bun-version` and make it available on `PATH`, then run `./scripts/bootstrap.sh` (or `bun run bootstrap`). The script resolves its own checkout, validates the exact Bun version, and runs `bun install --frozen-lockfile`. It is safe to repeat and reports installation failures without changing the lockfile or your global runtime. Run `bun run check` afterward to verify the checkout.
+Install the Bun version in `.bun-version` and make it available on `PATH`, then run `./scripts/bootstrap.sh` (or `bun run bootstrap`). The script resolves its own checkout, validates the exact Bun version, and runs `bun install --frozen-lockfile`. It is safe to repeat and reports installation failures without changing the lockfile or your global runtime. Run `bun run forge check` afterward to verify the checkout through the same command used by CI.
 
 BB managed worktrees invoke `.bb-env-setup.sh`; Codex environment setup invokes the same bootstrap through `.codex/environments/environment.toml`. For a plain Git worktree, run the script explicitly after creation. Setup is repository code: run it only for a revision you trust, without privileged orchestration credentials.
 
