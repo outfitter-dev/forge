@@ -257,10 +257,14 @@ export const evaluateAgentReview = (
     ...diagnostics,
   ];
   const doubts = exhaustionProblems(pr, policy, `${path}.reviewLadder`);
-  const unsettled = diagnostics.some(
-    (item) =>
-      item.code === "review-pending" || item.code === "deadline-mismatch"
-  );
+  // Only unresolved findings may stand beside an accepted claim: a missing,
+  // ambiguous, or incomplete ledger is collection to retry, not a human's call.
+  const unsettled =
+    blockers.some((item) => item.code !== "blocking-findings") ||
+    diagnostics.some(
+      (item) =>
+        item.code === "review-pending" || item.code === "deadline-mismatch"
+    );
   if (doubts?.length !== 0 || unsettled || collectionBlocked) {
     return {
       outcome: outcome("blocked"),

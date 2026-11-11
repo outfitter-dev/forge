@@ -140,7 +140,7 @@ Nothing else is required. A configured reviewer that never started is not missin
 
 ### Ladder exhaustion
 
-`pullRequest.reviewLadder` is `null` or the ladder runner's claim `{ subject, provenance, exhausted }`. It never changes whether the gate passes. When no attempt satisfies the gate, an `exhausted` claim that is bound to the exact revision, comes from the policy's `ladder` issuer, and stands beside no pending attempt, no deadline mismatch, and no collection problem turns the failure into a distinct result a caller can route to a human. A claim that fails one of those tests leaves the result `blocked`, with the reason.
+`pullRequest.reviewLadder` is `null` or the ladder runner's claim `{ subject, provenance, exhausted }`. It never changes whether the gate passes. When no attempt satisfies the gate, an `exhausted` claim that is bound to the exact revision, comes from the policy's `ladder` issuer, and stands beside no pending attempt, no deadline mismatch, and no collection problem (including an unrecorded, ambiguous, or incomplete finding ledger) turns the failure into a distinct result a caller can route to a human. A claim that fails one of those tests leaves the result `blocked`, with the reason.
 
 The claim is diagnostic. Forge does not prove from it that every rung ran.
 

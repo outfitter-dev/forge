@@ -233,6 +233,53 @@ test.each<[string, (facts: PullRequestFactsV2) => void, ReasonCode]>([
   expect(at(result.outcomes).disposition).toBe("blocked");
 });
 
+test("an exhausted ladder keeps its unresolved findings in the result", () => {
+  const facts = exhaustedFacts();
+  facts.pullRequest.reviewFindings.findings = [finding()];
+  const result = blocked(facts, "ladder-exhausted");
+  expect(result.codes).toContain("blocking-findings");
+  expect(at(result.outcomes).disposition).toBe("needs_human");
+});
+
+test.each<[string, (facts: PullRequestFactsV2) => void, ReasonCode]>([
+  [
+    "an unrecorded ledger",
+    (facts) => {
+      facts.pullRequest.reviewFindings.recorded = false;
+    },
+    "findings-unknown",
+  ],
+  [
+    "an ambiguous ledger",
+    (facts) => {
+      facts.pullRequest.reviewFindings.findings = [finding(), finding()];
+    },
+    "duplicate-evidence",
+  ],
+  [
+    "a reported finding missing from the ledger",
+    (facts) => {
+      facts.pullRequest.agentReviews.push(
+        localAttempt({
+          attemptId: "ladder-1/3",
+          findingIds: ["F9"],
+          verdict: "failed",
+        })
+      );
+    },
+    "missing-evidence",
+  ],
+])(
+  "incomplete collection such as %s is not routed to a human",
+  (_name, mutate, code) => {
+    const facts = exhaustedFacts();
+    mutate(facts);
+    const result = blocked(facts, code);
+    expect(result.codes).not.toContain("ladder-exhausted");
+    expect(at(result.outcomes).disposition).toBe("blocked");
+  }
+);
+
 test("an exhaustion claim never changes a satisfied gate", () => {
   const facts = passingFactsV2();
   facts.pullRequest.reviewLadder = exhausted();
