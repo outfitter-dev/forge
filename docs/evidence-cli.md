@@ -40,6 +40,18 @@ bun run evaluate examples/evidence/invalid-facts.json --policy examples/evidence
 
 This intentionally exits `2`: the valid JSON object declares an unsupported event, so it cannot be evaluated. Syntactically malformed JSON, missing files, invalid policy, and incomplete input also exit `2`; they cannot look successful.
 
+## Schema version 2 examples
+
+`examples/evidence/v2/` holds the same kind of fictitious fixtures for [agent review under schema version 2](evidence-evaluator.md#agent-review-under-schema-version-2). Facts and policy must share a schema version; pairing a version 1 file with a version 2 file exits `2`.
+
+```sh
+bun run evaluate examples/evidence/v2/passing-pr.json --policy examples/evidence/v2/policy.json
+bun run evaluate examples/evidence/v2/blocked-pr.json --policy examples/evidence/v2/policy.json
+bun run evaluate examples/evidence/v2/needs-human-pr.json --policy examples/evidence/v2/policy.json
+```
+
+These exit `0`, `1`, and `1`. The passing example has a hosted reviewer that timed out and a clean local review. The blocked example has a clean local review that does not clear a hosted reviewer's unresolved finding. The last has every reviewer unavailable and an exhausted ladder; its result carries `agentReview[0].disposition: "needs_human"` so a caller can route it to a human. It is still blocked.
+
 ## Trust and qualification
 
 The CLI validates shape and compares declared identities and fingerprints; **it does not authenticate the producer, source revision, runtime, policy, or authority**. Supply evidence from a trusted collector and run trusted evaluator/policy revisions outside proposed code. Do not put credentials, transcripts, or private runtime state in these files. An eligible result grants no merge permission and proves no live landing. See [the evaluator contract](evidence-evaluator.md) for collector responsibilities, exact-source semantics, and limitations.
@@ -54,7 +66,7 @@ The [CI workflow](../.github/workflows/ci.yml) includes a named `Qualify evaluat
 bun test tests/cli.test.ts
 ```
 
-The [subprocess suite](../tests/cli.test.ts) launches the real `src/cli.ts` entry point through the installed Bun executable, with an empty child environment. The committed passing, blocked, and invalid-contract fixtures must respectively return `0`, `1`, and `2`, with matching structured result status and eligibility. Additional cases cover syntactically malformed JSON and unexpected evaluation failure. Library/CLI parity tests compare complete structured results with direct calls to the same evaluator. A deliberately blocked or malformed fixture passes its test only when the CLI returns the expected failure; expected negative cases therefore do not fail the Actions job. An unexpected exit or output does fail the job.
+The [subprocess suite](../tests/cli.test.ts) launches the real `src/cli.ts` entry point through the installed Bun executable, with an empty child environment. The committed passing, blocked, and invalid-contract fixtures must respectively return `0`, `1`, and `2`, with matching structured result status and eligibility. The version 2 examples must return their documented exit codes and review dispositions, and a mixed-version pair must return `2`. Additional cases cover syntactically malformed JSON and unexpected evaluation failure. Library/CLI parity tests compare complete structured results with direct calls to the same evaluator. A deliberately blocked or malformed fixture passes its test only when the CLI returns the expected failure; expected negative cases therefore do not fail the Actions job. An unexpected exit or output does fail the job.
 
 This reuses the local adapter and its assertions instead of implementing gate logic or a second fixture runner in YAML. The focused suite also remains part of `bun run check`; the extra named step makes the adopted CLI qualification visible in Actions. Existing checkout/setup actions stay pinned, Bun and dependencies stay pinned, permissions remain `contents: read`, and neither the step nor its child processes need privileged secrets. No consumer workflow or service integration is introduced.
 

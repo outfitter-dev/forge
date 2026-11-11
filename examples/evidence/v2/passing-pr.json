@@ -1,0 +1,152 @@
+{
+  "event": "pull_request",
+  "pullRequest": {
+    "agentReviews": [
+      {
+        "attemptId": "ladder-1/1",
+        "complete": false,
+        "context": "unknown",
+        "deadlineAt": "2026-01-01T00:15:00Z",
+        "findingIds": null,
+        "harness": null,
+        "instructions": null,
+        "kind": "general-review",
+        "launch": "unknown",
+        "model": null,
+        "nativeRef": null,
+        "observedAt": "2026-01-01T00:15:00Z",
+        "provenance": {
+          "producer": "hosted-collector:fixture",
+          "runtimeFingerprint": "6666666666666666666666666666666666666666666666666666666666666666",
+          "runId": "offline-run-1"
+        },
+        "reviewer": "hosted-bot",
+        "rung": "hosted",
+        "startedAt": "2026-01-01T00:00:00Z",
+        "state": "unavailable",
+        "subject": {
+          "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "id": 1,
+          "kind": "pull_request",
+          "repository": "example/project"
+        },
+        "unavailableReason": "timeout",
+        "verdict": "unknown"
+      },
+      {
+        "attemptId": "ladder-1/2",
+        "complete": true,
+        "context": "none",
+        "deadlineAt": null,
+        "findingIds": [],
+        "harness": "fixture-harness",
+        "instructions": {
+          "digest": "4444444444444444444444444444444444444444444444444444444444444444",
+          "id": "general-review/standard@1"
+        },
+        "kind": "general-review",
+        "launch": "separate-invocation",
+        "model": "fixture-model-a",
+        "nativeRef": "fixture://runs/ladder-1/attempts/2",
+        "observedAt": "2026-01-01T00:20:00Z",
+        "provenance": {
+          "producer": "agent:fixture",
+          "runId": "offline-run-1",
+          "runtimeFingerprint": "3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "reviewer": "local-cli",
+        "rung": "local",
+        "startedAt": "2026-01-01T00:15:00Z",
+        "state": "completed",
+        "subject": {
+          "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "id": 1,
+          "kind": "pull_request",
+          "repository": "example/project"
+        },
+        "unavailableReason": null,
+        "verdict": "passed"
+      }
+    ],
+    "assignments": {
+      "recorded": true,
+      "requiredReviewers": []
+    },
+    "checks": [
+      {
+        "name": "lint",
+        "provenance": {
+          "producer": "verification:fixture",
+          "runId": "offline-run-1",
+          "runtimeFingerprint": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "state": "passed",
+        "subject": {
+          "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "id": 1,
+          "kind": "pull_request",
+          "repository": "example/project"
+        }
+      },
+      {
+        "name": "test",
+        "provenance": {
+          "producer": "verification:fixture",
+          "runId": "offline-run-1",
+          "runtimeFingerprint": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "state": "passed",
+        "subject": {
+          "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "id": 1,
+          "kind": "pull_request",
+          "repository": "example/project"
+        }
+      },
+      {
+        "name": "build",
+        "provenance": {
+          "producer": "verification:fixture",
+          "runId": "offline-run-1",
+          "runtimeFingerprint": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "state": "passed",
+        "subject": {
+          "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "id": 1,
+          "kind": "pull_request",
+          "repository": "example/project"
+        }
+      }
+    ],
+    "draft": false,
+    "humanReviews": [],
+    "mergeAuthorized": true,
+    "mergeable": true,
+    "open": true,
+    "provenance": {
+      "producer": "collector:fixture",
+      "runId": "offline-run-1",
+      "runtimeFingerprint": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "subject": {
+      "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "id": 1,
+      "kind": "pull_request",
+      "repository": "example/project"
+    },
+    "unresolvedThreads": 0,
+    "reviewFindings": {
+      "findings": [],
+      "recorded": true
+    },
+    "reviewLadder": null
+  },
+  "schemaVersion": 2
+}

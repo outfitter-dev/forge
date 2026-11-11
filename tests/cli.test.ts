@@ -57,6 +57,43 @@ test.each([
   }
 );
 
+test.each([
+  ["passing-pr.json", 0, "satisfied"],
+  ["blocked-pr.json", 1, "blocked"],
+  ["needs-human-pr.json", 1, "needs_human"],
+] as const)(
+  "version 2 %s exits %i with a %s review",
+  (name, exitCode, disposition) => {
+    const directory = path.join(examples, "v2");
+    const child = run([
+      path.join(directory, name),
+      "--policy",
+      path.join(directory, "policy.json"),
+    ]);
+    const result: unknown = JSON.parse(child.stdout);
+    expect(child.exitCode).toBe(exitCode);
+    expect(result).toMatchObject({
+      agentReview: [{ disposition, pullRequest: 1 }],
+      eligible: exitCode === 0,
+      schemaVersion: 2,
+      status: "evaluated",
+    });
+  }
+);
+
+test("evidence and policy of different schema versions are invalid", () => {
+  const child = run([
+    path.join(examples, "passing-pr.json"),
+    "--policy",
+    path.join(examples, "v2/policy.json"),
+  ]);
+  expect(child.exitCode).toBe(2);
+  expect(JSON.parse(child.stdout)).toMatchObject({
+    issues: [{ path: "facts.schemaVersion" }],
+    status: "invalid",
+  });
+});
+
 test("CLI output matches the same pure evaluator for passing and blocked facts", () => {
   for (const state of ["passed", "failed"] as const) {
     const facts = passingFacts();
