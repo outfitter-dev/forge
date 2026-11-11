@@ -55,7 +55,7 @@ Read-only API observations at the baseline:
 | Repository Actions secrets / sharing | Zero repository secret names; zero environments; Actions sharing `none` | Not proof that organization secrets, integration credentials or operator accounts do not exist. Public source should not need new private-source credentials. |
 | Security features | Code security, secret scanning, push protection, non-provider patterns and validity checks enabled; Dependabot security updates disabled | Reassess desired public security configuration separately; enabled scanning is not a clean-alert attestation or absence proof. |
 
-AGENTS.md contains no private-repository assumption requiring change. The automation contract and provider policy remain unchanged. FOR-9 is on hold pending owner policy; no single provider is made universally required by this preparation. Buildkite host is explicit configuration, with Studio one historical option; this does not implement FOR-8 host/lifecycle changes. The tokens artifact trial and all loader/sandbox continuation are parked.
+AGENTS.md contains no private-repository assumption requiring change. The automation contract and provider policy remain unchanged. FOR-26 separately owns the optional-provider/versioned-evidence work and FOR-9 narrowing; the earlier hold is superseded, no live provider qualification is authorized, and FOR-25 changes no review policy. Buildkite host is explicit configuration, with Studio one historical option; this does not implement FOR-8 host/lifecycle changes. The tokens artifact trial and all loader/sandbox continuation are parked.
 
 ## Operational record preservation
 
@@ -68,7 +68,7 @@ The accepted destination is the private `outfitter-dev/agentic-ci-pilot`, propos
 | `docs/handoff.md` | `handoff.md` | General scope, operation boundaries, public-source direction; replace established-setup/local recovery sections |
 | `docs/worker-lifecycle-plan.md` | `worker-lifecycle-plan.md` | Host-configurable lifecycle/capacity/preservation contract without one-machine locations |
 | `docs/queue-refresh-qualification.md` | `queue-refresh-qualification.md` | Dated trigger-budget/partial-qualification findings without pane/process identities |
-| `docs/devin-findings-discovery.md` | `devin-findings-discovery.md` | Supported-status versus findings limits and held policy status without account identifiers |
+| `docs/devin-findings-discovery.md` | `devin-findings-discovery.md` | Supported-status versus findings limits and current separate policy ownership without account identifiers |
 | `docs/legacy-forge.md` | `legacy-forge.md` | Archive/repository distinction without local checkout paths |
 
 **Preservation is not yet committed.** The local immutable bundle and per-file SHA256 inventory are prepared; no destination write or Forge operational-record removal has occurred. The pilot has an active event webhook and enforced ALLGREEN merge queue plus six Buildkite statuses, so its ordinary docs PR/merge would invoke live automation. The preparation release excludes that work and settings/bypass changes. Parent must resolve a bounded archive-PR execution route or confirm another inactive private home before this sequence can finish. This is a concrete destination-delivery blocker, not a reason to repeat host selection or resume the parked tokens trial.

@@ -2,7 +2,7 @@
 
 Originally prepared November 10, 2026 for a private TypeScript/Bun bootstrap. Matt selected public source reuse on November 11; [public-readiness preparation](public-readiness.md) supersedes the original private-distribution constraint. Visibility remains unchanged pending separate authorization. No production migration is authorized by this handoff.
 
-The operational sections below remain preserved pending verified archival in the private pilot repository. Their machine/session/process observations are historical. Buildkite execution host is explicit configuration; Studio was one qualified pilot host, not Forge’s sole or permanent host. FOR-9 is on hold pending owner review-provider policy; no provider-policy implementation is selected here. The tokens artifact shadow trial and further loader/sandbox diagnosis are parked.
+The operational sections below remain preserved pending verified archival in the private pilot repository. Their machine/session/process observations are historical. Buildkite execution host is explicit configuration; Studio was one qualified pilot host, not Forge’s sole or permanent host. FOR-26 owns the current optional-provider/versioned-evidence policy work and the narrowing of FOR-9; no provider-policy implementation or live provider qualification is selected here. The tokens artifact shadow trial and further loader/sandbox diagnosis are parked.
 
 For the complete originating-session record, including worker recovery details and superseded decisions, read [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md).
 
