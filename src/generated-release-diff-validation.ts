@@ -18,9 +18,7 @@ const text = (value: unknown): value is string =>
   value.length > 0 &&
   value.length <= 512 &&
   !/\s/u.test(value) &&
-  [...value].every(
-    (char) => (char.codePointAt(0) ?? 0) > 31 && char.codePointAt(0) !== 127
-  );
+  !/\p{Cc}/u.test(value);
 const path = (value: unknown): value is string =>
   text(value) &&
   !value.includes("\\") &&
