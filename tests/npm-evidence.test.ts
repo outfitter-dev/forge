@@ -41,6 +41,24 @@ describe("npm immutable evidence", () => {
     });
   });
 
+  test("missing dist reports every known unmet artifact requirement", () => {
+    const doc = metadata();
+    const version = doc.versions["1.2.3"];
+    if (!version) {
+      throw new Error("fixture version missing");
+    }
+    Reflect.deleteProperty(version, "dist");
+    doc["dist-tags"].latest = "1.2.2";
+    expect(evaluate(doc)).toEqual({
+      reasons: [
+        "missing-integrity",
+        "missing-provenance-reference",
+        "dist-tag-mismatch",
+      ],
+      state: "incomplete",
+    });
+  });
+
   test("occupied immutable version with different artifact is a conflict", () => {
     const doc = metadata();
     fixtureDist(doc).integrity =

@@ -87,7 +87,7 @@ const versionMetadata = (
   }
   const dist = own(version, "dist");
   if (dist === undefined) {
-    return { decision: decision("incomplete", "missing-integrity") };
+    return { metadata: { dist: {}, tags } };
   }
   if (!record(dist)) {
     return { decision: decision("invalid", "malformed-metadata") };
