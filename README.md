@@ -16,6 +16,8 @@ The first operation is a [pure deterministic evidence evaluator](docs/evidence-e
 
 [Strict version/channel assessment](docs/release-version.md) checks literal version progression and product-declared destination tags. Malformed versions block; valid build metadata preserves prerelease routing and cannot alone establish a newer version.
 
+[Offline release composition](docs/release-composition.md) demonstrates explicit product mapping of diff/version/artifact/npm outcomes into required and auto-only release assessments, including manual-path blockers and the remaining minimum for a real consumer trial.
+
 ## Foundation status
 
 This is a private package, not a deployed automation platform. It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
