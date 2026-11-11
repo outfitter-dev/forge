@@ -8,6 +8,8 @@ The first operation is a [pure deterministic evidence evaluator](docs/evidence-e
 
 [Immutable npm evidence](docs/npm-evidence.md) adds registry-metadata classification and bounded read-only observation of a product-supplied publication set. It preserves integrity conflicts, partial propagation and unavailable evidence; its provenance checks validate references, not authenticated producers. It includes no publisher or network implementation.
 
+[Package artifact validation](docs/package-artifact-validation.md) evaluates actual packed-file/manifest evidence and revision-bound clean-consumer checks against an explicit product contract. Offline disposable-package tests exercise installation, runtime imports and type resolution; product owners retain their packaging and source-versus-built choices.
+
 ## Foundation status
 
 This is a private package, not a deployed automation platform. It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator, validation boundary, and evidence contract. Offline tests cover evidence evaluation and checkout bootstrap behavior.
