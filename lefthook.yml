@@ -1,0 +1,4 @@
+pre-push:
+  commands:
+    forge-check:
+      run: bun run forge check

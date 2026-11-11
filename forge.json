@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "repository": "outfitter-dev/forge",
+  "check": { "id": "check", "command": ["bun", "run", "check"] }
+}
