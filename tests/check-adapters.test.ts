@@ -41,6 +41,7 @@ test("real lefthook adapter runs the declared command once without installing ho
       "run",
       "pre-push",
       "--no-auto-install",
+      "--force",
     ],
     { cwd: root, env: { PATH: process.env.PATH } }
   );
@@ -50,7 +51,7 @@ test("real lefthook adapter runs the declared command once without installing ho
   );
   expect(existsSync(path.join(root, ".git/hooks/pre-push"))).toBe(false);
   expect(manifest.scripts["check:hook"]).toBe(
-    "lefthook run pre-push --no-auto-install"
+    "lefthook run pre-push --no-auto-install --force"
   );
 });
 

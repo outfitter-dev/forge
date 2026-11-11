@@ -64,6 +64,11 @@ const execute = (
       receipt.diagnostic = "command-start-failed";
     });
     child.once("close", (code, signal) => {
+      // A leader can exit while same-group descendants ignore cancellation.
+      // Terminate those descendants before retiring the escalation timer.
+      if (receipt.cancellation) {
+        kill("SIGKILL");
+      }
       clearTimeout(timer);
       process.off("SIGINT", interrupt);
       process.off("SIGTERM", terminate);

@@ -100,3 +100,50 @@ test("hard interruption leaves only incomplete publication, never inferred compl
     recording: { state: "persisted" },
   });
 });
+
+test("cancellation cleans up descendants even when the leader exits before escalation", async () => {
+  const root = fixture(`
+    const {spawn}=require('child_process');
+    process.on('SIGTERM',()=>process.exit(0));
+    spawn(process.execPath,['-e',\`process.on('SIGTERM',()=>{}); require('fs').writeFileSync('.git/grandchild-pid',String(process.pid)); setInterval(()=>{},1000)\`],{stdio:'ignore'});
+    setInterval(()=>{},1000);
+  `);
+  roots.push(root);
+  const child = Bun.spawn([process.execPath, cli, "check"], {
+    cwd: root,
+    env: { PATH: process.env.PATH },
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  const marker = path.join(root, ".git/grandchild-pid");
+  const deadline = Date.now() + 4000;
+  while (!existsSync(marker)) {
+    if (Date.now() > deadline) {
+      child.kill();
+      throw new Error("Grandchild did not start");
+    }
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    await Bun.sleep(10);
+  }
+  const grandchild = Number(readFileSync(marker, "utf-8"));
+  try {
+    child.kill("SIGTERM");
+    const receipt = JSON.parse(
+      await new Response(child.stdout).text()
+    ) as CheckReceipt;
+    expect(await child.exited).toBe(130);
+    expect(receipt).toMatchObject({
+      cancellation: "SIGTERM",
+      exitCode: 0,
+      outcome: "canceled",
+    });
+    await Bun.sleep(100);
+    expect(() => process.kill(grandchild, 0)).toThrow();
+  } finally {
+    try {
+      process.kill(grandchild, "SIGKILL");
+    } catch {
+      /* Already terminated. */
+    }
+  }
+});
