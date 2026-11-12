@@ -1,11 +1,20 @@
 import type { HumanReviewEvidence } from "./evidence-types.ts";
+import { GITHUB_GHOST_LOGIN } from "./github-pull-request-types.ts";
 import type {
+  GitHubBaseChange,
   GitHubPullRequest,
   GitHubReview,
   GitHubReviewRequest,
 } from "./github-pull-request-types.ts";
+import { wholeSecondUtc } from "./utc-instant.ts";
 
-/** A revision the trusted collector saw, and when. */
+/**
+ * A revision the trusted collector saw, and when. `observedAt` is compared
+ * with GitHub's own review times, so it must be on GitHub's clock and no
+ * earlier than the moment GitHub served this head and base: the `Date` header
+ * of the stable read, or later. A time taken before the read, or from a clock
+ * that lags GitHub, can bind an approval to a base it was not given against.
+ */
 export interface ObservedRevision {
   headSha: string;
   baseSha: string;
@@ -24,7 +33,7 @@ export interface ReviewBinding extends ObservedRevision {
  */
 export interface ReviewLedgerEntry {
   requiredReviewers: string[];
-  /** Written by the collector after a complete, stable collection. */
+  /** Replaced by the collector after each complete, stable collection. */
   observedRevision: ObservedRevision | null;
   /** Keyed by GitHub review ID. An entry is never rebound. */
   reviewBindings: Record<string, ReviewBinding>;
@@ -34,6 +43,8 @@ export interface HumanReviewInput {
   repository: string;
   pullRequest: GitHubPullRequest;
   requests: GitHubReviewRequest[];
+  /** Every retarget or force-push of the base, from the whole timeline. */
+  baseChanges: GitHubBaseChange[];
   reviews: GitHubReview[];
   ledger: ReviewLedgerEntry;
 }
@@ -41,7 +52,11 @@ export interface HumanReviewInput {
 export interface HumanReviewResult {
   assignments: { recorded: true; requiredReviewers: string[] };
   humanReviews: HumanReviewEvidence[];
-  /** The entry to persist if the collection is accepted. The input is untouched. */
+  /**
+   * The entry to persist if the collection is accepted, once the collector has
+   * replaced `observedRevision` with the revision it just read. Until then it
+   * still carries the previous snapshot. It shares no objects with the input.
+   */
   ledger: ReviewLedgerEntry;
 }
 
@@ -62,16 +77,8 @@ const isDecision = (review: GitHubReview): review is Decision =>
   review.state === "CHANGES_REQUESTED" ||
   review.state === "DISMISSED";
 
-const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u;
-
-/** Milliseconds for an explicit UTC time, or `null` when it is not one. */
-const instant = (value: string | null): number | null => {
-  if (value === null || !INSTANT.test(value)) {
-    return null;
-  }
-  const time = Date.parse(value);
-  return Number.isNaN(time) ? null : time;
-};
+const instant = (value: string | null): number | null =>
+  value === null ? null : wholeSecondUtc(value);
 
 const byText = (left: string, right: string): number =>
   Number(left > right) - Number(left < right);
@@ -85,11 +92,11 @@ const outranks = (review: Decision, chosen: Decision): boolean => {
 };
 
 /**
- * One reviewer's standing decision: the one submitted last. Review IDs are
- * allocated when a pending review is created, so they do not order decisions.
- * At the same instant a blocking decision wins over an approval.
+ * The decision submitted last. Review IDs are allocated when a pending review
+ * is created, so they do not order decisions. At the same instant a blocking
+ * decision wins over an approval.
  */
-const standing = (decisions: Decision[]): Decision => {
+const latestDecision = (decisions: Decision[]): Decision => {
   const timed = decisions.map((review) => {
     const time = instant(review.submittedAt);
     if (time === null) {
@@ -122,9 +129,26 @@ const standing = (decisions: Decision[]): Decision => {
 };
 
 /**
+ * One reviewer's standing decision. A dismissal clears only the review that
+ * was dismissed: GitHub does not say what that review was, so a change request
+ * the reviewer made and nobody dismissed still stands behind it.
+ */
+const standing = (decisions: Decision[]): Decision => {
+  const latest = latestDecision(decisions);
+  const objections = decisions.filter(
+    (review) => review.state === "CHANGES_REQUESTED"
+  );
+  return latest.state === "DISMISSED" && objections.length > 0
+    ? latestDecision(objections)
+    : latest;
+};
+
+/**
  * The base an approval counts against, or `null`. A new binding needs a
  * snapshot of this exact head and base persisted strictly before the approval
- * was submitted. `bindings` gains the new binding when one is made.
+ * was submitted, and no retarget or force-push of the base since that
+ * snapshot: a base that left and came back would otherwise look unchanged.
+ * `bindings` gains the new binding when one is made.
  */
 const boundBase = (
   review: Decision,
@@ -151,7 +175,11 @@ const boundBase = (
     review.commitId !== head.sha ||
     observed.headSha !== head.sha ||
     observed.baseSha !== base.sha ||
-    observedAt >= submittedAt
+    observedAt >= submittedAt ||
+    input.baseChanges.some((change) => {
+      const changedAt = instant(change.createdAt);
+      return changedAt === null || changedAt >= observedAt;
+    })
   ) {
     return null;
   }
@@ -199,17 +227,24 @@ export const humanReviewEvidence = (
   input: HumanReviewInput
 ): HumanReviewResult => {
   const required = requiredReviewers(input);
-  const bindings = { ...input.ledger.reviewBindings };
+  const { observedRevision, reviewBindings } = structuredClone(input.ledger);
+  const bindings = reviewBindings;
   const byReviewer = new Map<string, Decision[]>();
   for (const review of input.reviews) {
+    // Every deleted account shares one identity, so its reviews cannot be
+    // grouped into one reviewer or recognised as the author's own.
+    const deleted = review.author.login === GITHUB_GHOST_LOGIN;
     if (
       isDecision(review) &&
       review.author.type === "User" &&
-      review.author.id !== input.pullRequest.author.id
+      (deleted || review.author.id !== input.pullRequest.author.id)
     ) {
-      const decisions = byReviewer.get(review.author.login) ?? [];
+      const reviewer = deleted
+        ? `${GITHUB_GHOST_LOGIN}#${review.id}`
+        : review.author.login;
+      const decisions = byReviewer.get(reviewer) ?? [];
       decisions.push(review);
-      byReviewer.set(review.author.login, decisions);
+      byReviewer.set(reviewer, decisions);
     }
   }
   const humanReviews = [...byReviewer.keys()]
@@ -221,7 +256,11 @@ export const humanReviewEvidence = (
           review.state === "DISMISSED" ? "dismissed" : "changes_requested";
         return { reviewer, state, subject: null };
       }
-      const baseSha = boundBase(review, input, bindings);
+      // An approval nobody can be held to is recorded and never bound.
+      const baseSha =
+        review.author.login === GITHUB_GHOST_LOGIN
+          ? null
+          : boundBase(review, input, bindings);
       return {
         reviewer,
         state: "approved",
@@ -241,7 +280,7 @@ export const humanReviewEvidence = (
     assignments: { recorded: true, requiredReviewers: required },
     humanReviews,
     ledger: {
-      observedRevision: input.ledger.observedRevision,
+      observedRevision,
       requiredReviewers: required,
       reviewBindings: bindings,
     },

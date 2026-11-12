@@ -11,6 +11,7 @@ import type {
 import { evaluateEvidence } from "../src/index.ts";
 import type { HumanReviewEvidence } from "../src/index.ts";
 import {
+  parseBaseChanges,
   parsePullRequest,
   parseReviewRequests,
   parseReviews,
@@ -25,6 +26,7 @@ import {
 import {
   actorResponse,
   BASE,
+  ghostResponse,
   HEAD,
   pullRequestResponse,
   reviewRequestedEvent,
@@ -66,6 +68,7 @@ const observed = (observedAt = BEFORE, headSha = HEAD, baseSha = BASE) => ({
 
 const evidence = (input: Partial<HumanReviewInput> = {}) =>
   humanReviewEvidence({
+    baseChanges: [],
     ledger: ledger(),
     pullRequest: pullRequest(),
     repository: REPOSITORY,
@@ -237,17 +240,21 @@ test("approvals of different commits at the same time stop collection", () => {
   ).toThrow(HumanReviewError);
 });
 
+// The parser already refuses these, so this guards a caller that builds
+// reviews some other way.
 test.each([
-  { submitted_at: undefined },
-  { submitted_at: "yesterday" },
-  { submitted_at: "2026-01-01T00:10:00" },
-  { submitted_at: "2026-01-01 00:10:00Z" },
-  { submitted_at: "2026-13-01T00:10:00Z" },
+  { submittedAt: null },
+  { submittedAt: "yesterday" },
+  { submittedAt: "2026-01-01T00:10:00" },
+  { submittedAt: "2026-01-01T00:10:00.500Z" },
+  { submittedAt: "2026-02-30T00:10:00Z" },
 ])("a decision without a readable UTC time stops collection %p", (broken) => {
+  const parsed = reviews(
+    { id: 1, submitted_at: AFTER },
+    { id: 2, submitted_at: AFTER }
+  );
   expect(() =>
-    evidence({
-      reviews: reviews({ id: 1, submitted_at: AFTER }, { id: 2, ...broken }),
-    })
+    evidence({ reviews: [at(parsed, 0), { ...at(parsed, 1), ...broken }] })
   ).toThrow(HumanReviewError);
 });
 
@@ -311,7 +318,11 @@ test("a recorded binding keeps its base when the base moves", () => {
       reviewBindings: { "900": binding },
     }),
     pullRequest: pullRequest({
-      base: { ref: "main", repo: { id: 100 }, sha: OTHER },
+      base: {
+        ref: "main",
+        repo: { full_name: REPOSITORY, id: 100 },
+        sha: OTHER,
+      },
     }),
     reviews: reviews({ submitted_at: AFTER }),
   });
@@ -348,12 +359,12 @@ test("the ledger passed in is left as it was", () => {
   expect(before).toEqual(snapshot);
 });
 
-const humanGate = (result: ReturnType<typeof evidence>) => {
+const humanGate = (result: ReturnType<typeof evidence>, headSha = HEAD) => {
   const evaluated = evaluateEvidence(
     {
       ...passingFacts(),
       pullRequest: {
-        ...passingPr(12),
+        ...passingPr(12, headSha),
         assignments: result.assignments,
         humanReviews: result.humanReviews,
       },
@@ -396,4 +407,197 @@ test("the evaluator blocks an unbound approval and an approval of an old base", 
     reviews: reviews({ submitted_at: AFTER }),
   });
   expect(humanGate(moved)?.conclusion).toBe("failure");
+});
+
+const assigned = () => pullRequest({ requested_reviewers: [actorResponse()] });
+
+test("a base change after the snapshot refuses a new binding", () => {
+  const snapshot = ledger({ observedRevision: observed() });
+  const moved = evidence({
+    baseChanges: parseBaseChanges([
+      { created_at: "2026-01-01T00:05:00Z", event: "base_ref_changed" },
+    ]),
+    ledger: snapshot,
+    pullRequest: assigned(),
+    reviews: reviews({ submitted_at: AFTER }),
+  });
+  expect(at(moved.humanReviews).subject).toBeNull();
+  expect(moved.ledger.reviewBindings).toEqual({});
+  expect(humanGate(moved)?.conclusion).toBe("failure");
+});
+
+test.each([
+  {
+    at: BEFORE,
+    event: "base_ref_force_pushed",
+    name: "at the snapshot instant",
+  },
+  { at: LATER, event: "base_ref_changed", name: "after the approval" },
+])(
+  "a base change $name also refuses the binding",
+  ({ at: createdAt, event }) => {
+    const result = evidence({
+      baseChanges: parseBaseChanges([{ created_at: createdAt, event }]),
+      ledger: ledger({ observedRevision: observed() }),
+      reviews: reviews({ submitted_at: AFTER }),
+    });
+    expect(at(result.humanReviews).subject).toBeNull();
+  }
+);
+
+test("a base change before the snapshot leaves the binding rule alone", () => {
+  const result = evidence({
+    baseChanges: parseBaseChanges([
+      { created_at: "2025-12-31T23:00:00Z", event: "base_ref_changed" },
+    ]),
+    ledger: ledger({ observedRevision: observed() }),
+    reviews: reviews({ submitted_at: AFTER }),
+  });
+  expect(result.humanReviews).toEqual([approvedAt(BASE)]);
+});
+
+test("a recorded binding does not follow the head when the head moves", () => {
+  const result = evidence({
+    ledger: ledger({
+      reviewBindings: {
+        "900": {
+          baseSha: BASE,
+          headSha: HEAD,
+          observedAt: BEFORE,
+          submittedAt: AFTER,
+        },
+      },
+    }),
+    pullRequest: pullRequest({
+      head: { ref: "feature", repo: { id: 100 }, sha: OTHER },
+      requested_reviewers: [actorResponse()],
+    }),
+    reviews: reviews({ submitted_at: AFTER }),
+  });
+  expect(result.humanReviews).toEqual([approvedAt(BASE)]);
+  expect(humanGate(result, OTHER)?.conclusion).toBe("failure");
+});
+
+test("a recorded binding with another submission time binds nothing", () => {
+  const result = evidence({
+    ledger: ledger({
+      reviewBindings: {
+        "900": {
+          baseSha: BASE,
+          headSha: HEAD,
+          observedAt: BEFORE,
+          submittedAt: LATER,
+        },
+      },
+    }),
+    reviews: reviews({ submitted_at: AFTER }),
+  });
+  expect(at(result.humanReviews).subject).toBeNull();
+});
+
+test("one reviewer's approval does not hide another's change request", () => {
+  const result = evidence({
+    ledger: ledger({ observedRevision: observed() }),
+    pullRequest: assigned(),
+    reviews: reviews(
+      {
+        id: 1,
+        state: "CHANGES_REQUESTED",
+        submitted_at: AFTER,
+        user: actorResponse("zed", 8),
+      },
+      { id: 2, submitted_at: LATER }
+    ),
+  });
+  expect(result.humanReviews).toEqual([
+    approvedAt(BASE),
+    { reviewer: "zed", state: "changes_requested", subject: null },
+  ]);
+  expect(humanGate(result)?.conclusion).toBe("failure");
+});
+
+test("reviewers and requirements come out sorted whatever order they arrive in", () => {
+  const result = evidence({
+    ledger: ledger({ requiredReviewers: ["zed", "amy"] }),
+    pullRequest: pullRequest({
+      requested_reviewers: [actorResponse("mia", 9)],
+    }),
+    reviews: reviews(
+      { id: 1, submitted_at: AFTER, user: actorResponse("zed", 8) },
+      { id: 2, submitted_at: AFTER, user: actorResponse("amy", 6) }
+    ),
+  });
+  expect(result.assignments.requiredReviewers).toEqual(["amy", "mia", "zed"]);
+  expect(result.humanReviews.map((review) => review.reviewer)).toEqual([
+    "amy",
+    "zed",
+  ]);
+});
+
+test("a dismissed later review does not clear an earlier change request", () => {
+  const result = evidence({
+    reviews: reviews(
+      { id: 1, state: "CHANGES_REQUESTED", submitted_at: AFTER },
+      { id: 2, state: "DISMISSED", submitted_at: LATER }
+    ),
+  });
+  expect(result.humanReviews).toEqual([
+    { reviewer: "reviewer", state: "changes_requested", subject: null },
+  ]);
+  expect(humanGate(result)?.conclusion).toBe("failure");
+});
+
+test("a dismissed later review does not bring back an earlier approval", () => {
+  const result = evidence({
+    ledger: ledger({ observedRevision: observed() }),
+    reviews: reviews(
+      { id: 1, submitted_at: AFTER },
+      { id: 2, state: "DISMISSED", submitted_at: LATER }
+    ),
+  });
+  expect(result.humanReviews).toEqual([
+    { reviewer: "reviewer", state: "dismissed", subject: null },
+  ]);
+});
+
+test("each review by a deleted account stands alone and never approves", () => {
+  const result = evidence({
+    ledger: ledger({ observedRevision: observed() }),
+    pullRequest: pullRequest({ user: ghostResponse() }),
+    reviews: reviews(
+      {
+        id: 1,
+        state: "CHANGES_REQUESTED",
+        submitted_at: AFTER,
+        user: ghostResponse(),
+      },
+      { id: 2, submitted_at: LATER, user: ghostResponse() }
+    ),
+  });
+  expect(result.humanReviews).toEqual([
+    { reviewer: "ghost#1", state: "changes_requested", subject: null },
+    { reviewer: "ghost#2", state: "approved", subject: null },
+  ]);
+  expect(result.ledger.reviewBindings).toEqual({});
+  expect(humanGate(result)?.conclusion).toBe("failure");
+});
+
+test("the result shares no objects with the ledger passed in", () => {
+  const before = ledger({
+    observedRevision: observed(),
+    reviewBindings: {
+      "7": {
+        baseSha: BASE,
+        headSha: HEAD,
+        observedAt: BEFORE,
+        submittedAt: AFTER,
+      },
+    },
+  });
+  const result = evidence({ ledger: before });
+  expect(result.ledger.observedRevision).not.toBe(before.observedRevision);
+  expect(result.ledger.reviewBindings["7"]).not.toBe(
+    before.reviewBindings["7"]
+  );
+  expect(result.ledger).toEqual(before);
 });
