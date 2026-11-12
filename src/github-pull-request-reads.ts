@@ -7,9 +7,13 @@ const ORIGIN = "https://api.github.com";
 /** The REST API version the earlier pilot qualified live. */
 const API_VERSION = "2026-03-10";
 
-/** Every value comes in as a variable; nothing is written into this text. */
+/**
+ * Every value comes in as a variable; nothing is written into this text.
+ * GraphQL reports no redirect for a renamed repository, so `followRenames:
+ * false` asks GitHub to refuse an old name instead of answering for the new.
+ */
 const THREADS_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
-  repository(owner: $owner, name: $name) {
+  repository(owner: $owner, name: $name, followRenames: false) {
     pullRequest(number: $number) {
       reviewThreads(first: 100, after: $cursor) {
         nodes { isResolved }

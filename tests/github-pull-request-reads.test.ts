@@ -193,7 +193,7 @@ test("reviewThreads() POSTs the thread query with the repository, number and cur
     "$name: String!",
     "$number: Int!",
     "$cursor: String",
-    "repository(owner: $owner, name: $name)",
+    "repository(owner: $owner, name: $name, followRenames: false)",
     "pullRequest(number: $number)",
     "reviewThreads(first: 100, after: $cursor)",
     "nodes { isResolved }",
@@ -201,6 +201,20 @@ test("reviewThreads() POSTs the thread query with the repository, number and cur
   ]) {
     expect(sent.query).toContain(part);
   }
+});
+
+test("the thread query asks GitHub not to follow a repository rename, as a literal on the repository field", async () => {
+  const { fetch, requests } = fake(json(threadPageResponse([])));
+  await githubPullRequestReads(options(fetch)).reviewThreads("cursor-1");
+  const sent = graphql(at(requests));
+  expect(sent.query).toMatch(/\brepository\([^)]*\bfollowRenames: false\)/u);
+  expect(sent.query.match(/followRenames/gu)).toHaveLength(1);
+  expect(Object.keys(sent.variables).toSorted()).toStrictEqual([
+    "cursor",
+    "name",
+    "number",
+    "owner",
+  ]);
 });
 
 test("the thread query text is the same for every repository, number and cursor", async () => {
