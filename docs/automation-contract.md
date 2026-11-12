@@ -44,6 +44,8 @@ Share behavior only when the underlying semantics match. Adapters may translate 
 
 When a provider cannot establish a required fact, expose the limitation and keep that requirement unsatisfied. A green check without findings data is not equivalent to a completed clean review. Prefer an explicit provider-specific contract over a portable-looking abstraction that hides missing guarantees.
 
+For schema version 2, trusted collector policy may explicitly attest the independence of a named hosted reviewer under the [hosted reviewer attestation rules](hosted-reviewer-attestations.md). This exception covers independence only. The collector retains the attestation and trusted policy revision alongside the source observations so an attested `context: "none"` can be distinguished from observed clean context. Completion, exact head/base binding and all reported findings retain their collection requirements.
+
 ## Qualification precedes replacement
 
 A migration succeeds when the consuming workflow is proven, including its failure behavior. Carry forward concrete regressions and trust boundaries, then qualify the replacement in the intended environment before retiring the previous path.
