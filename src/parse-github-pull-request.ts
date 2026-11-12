@@ -27,6 +27,9 @@ const fail = (path: string, expectation: string): never => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const present = (value: unknown): boolean =>
+  value !== undefined && value !== null;
+
 const record = (value: unknown, path: string): Record<string, unknown> =>
   isRecord(value) ? value : fail(path, "an object");
 
@@ -150,13 +153,14 @@ export const parseReviewRequests = (value: unknown): GitHubReviewRequest[] =>
       return [];
     }
     const requests: GitHubReviewRequest[] = [];
-    if (event.requested_reviewer !== undefined) {
+    // GitHub may send the side a request does not use as `null` or omit it.
+    if (present(event.requested_reviewer)) {
       requests.push({
         kind: "user",
         reviewer: actor(event.requested_reviewer, `${path}.requested_reviewer`),
       });
     }
-    if (event.requested_team !== undefined) {
+    if (present(event.requested_team)) {
       requests.push({
         kind: "team",
         team: team(event.requested_team, `${path}.requested_team`),

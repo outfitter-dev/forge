@@ -149,6 +149,34 @@ test("review requests come from the timeline, for people and for teams", () => {
   ]);
 });
 
+test("a null reviewer or team on a review request means that side is absent", () => {
+  expect(
+    parseReviewRequests([
+      reviewRequestedEvent({
+        requested_reviewer: null,
+        requested_team: teamResponse(),
+      }),
+      reviewRequestedEvent({ requested_team: null }),
+    ])
+  ).toEqual([
+    { kind: "team", team: { id: 31, slug: "maintainers" } },
+    { kind: "user", reviewer: { id: 7, login: "reviewer", type: "User" } },
+  ]);
+});
+
+test("a review request naming nobody is rejected even when both sides are null", () => {
+  rejects(
+    () =>
+      parseReviewRequests([
+        reviewRequestedEvent({
+          requested_reviewer: null,
+          requested_team: null,
+        }),
+      ]),
+    "timeline[0]"
+  );
+});
+
 test.each([
   { path: "timeline", value: { event: "review_requested" } },
   { path: "timeline[0]", value: ["review_requested"] },
