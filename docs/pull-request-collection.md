@@ -109,7 +109,7 @@ The call can reject instead of returning a result when the caller breaks the req
 | `changed` | `pull-request-changed` | The second read of the pull request parsed differently from the first. |
 | `changed` | `reviews-changed` | The reviews differed between the passes. |
 | `changed` | `timeline-changed` | The review requests or base changes in the timeline differed between the passes. |
-| `changed` | `threads-changed` | The count of unresolved threads differed between the passes. |
+| `changed` | `threads-changed` | The complete ordered thread observations differed between the passes, including thread ID, resolution or first-author identity. |
 | `unreadable` | `response-unreadable` | A response did not parse. `path` is the parser's path to the field. |
 | `unreadable` | `served-at-unreadable` | A `servedAt` was not a whole-second UTC time. `path` is `servedAt`. |
 | `unreadable` | `served-at-regressed` | The second pull request read was served earlier than the first, so it is a stale or cached response. `path` is `servedAt`. |
