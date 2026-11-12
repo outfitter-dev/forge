@@ -63,15 +63,31 @@ export const reviewRequestedEvent = (
   ...overrides,
 });
 
+export const threadResponse = (
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> => ({
+  comments: {
+    nodes: [
+      { author: { __typename: "User", databaseId: 7, login: "reviewer" } },
+    ],
+  },
+  id: "thread-0",
+  isResolved: false,
+  ...overrides,
+});
+
 export const threadPageResponse = (
   resolved: unknown[],
-  pageInfo?: Record<string, unknown>
+  pageInfo?: Record<string, unknown>,
+  prefix = "thread"
 ): Record<string, unknown> => ({
   data: {
     repository: {
       pullRequest: {
         reviewThreads: {
-          nodes: resolved.map((isResolved) => ({ isResolved })),
+          nodes: resolved.map((isResolved, index) =>
+            threadResponse({ id: `${prefix}-${index}`, isResolved })
+          ),
           pageInfo: pageInfo ?? { endCursor: null, hasNextPage: false },
         },
       },

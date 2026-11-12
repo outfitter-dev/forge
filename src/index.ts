@@ -59,3 +59,9 @@ export type {
   ReviewLedgerLocation,
   ReviewLedgerReadOptions,
 } from "./review-ledger-store.ts";
+
+export type {
+  GitHubActor,
+  GitHubReviewThread,
+  GitHubReviewThreadPage,
+} from "./github-pull-request-types.ts";

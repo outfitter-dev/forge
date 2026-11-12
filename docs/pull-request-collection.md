@@ -67,7 +67,7 @@ A collection is accepted only if the second pass parses to the same values as th
 - the pull request: number, open or closed state, draft, merged, mergeable, author, head and base commit, ref and repository, labels, requested reviewers and requested teams
 - the parsed reviews
 - the review requests and the base changes parsed from the timeline
-- the count of unresolved review threads
+- the full ordered review-thread list, including stable thread ID, resolution and first-comment author identity
 
 Parsed values are compared, not response text. A field Forge does not read, such as the title, and a timeline event that is neither a review request nor a possible base change, do not count. The order of labels, reviewers, reviews and events does count. `servedAt` may differ between the passes and is not part of this comparison.
 
@@ -85,7 +85,7 @@ Each read is its own moment. Two agreeing passes show the pull request, the revi
 | `open` | `true` when the state is `open`. |
 | `draft`, `mergeable` | As parsed. `mergeable: null` stays `null`. |
 | `mergeAuthorized` | `true` only when the head branch is in the base repository and the pull request does not carry `holdLabel`; otherwise `false`. |
-| `unresolvedThreads` | The sum of unresolved threads over every page. |
+| `unresolvedThreads` | The number of unresolved entries in the same complete observed thread list. |
 
 `mergeAuthorized` reports two conditions that can be read from GitHub, and both must hold:
 
@@ -100,7 +100,7 @@ The result's `ledger` is the entry to persist. It carries every reviewer ever re
 
 ## Results
 
-Success is `{ status: "collected", evidence, ledger }`. For a request that keeps to its types, every other result has a fixed `status` and `reason` and no ledger, so the persisted entry stays as it was. No result carries a response body, a token or anything a read threw. `path` appears only on `unreadable`; it names a field, such as `reviews[0].state`, and never holds that field's value.
+Success is `{ status: "collected", evidence, ledger, reviewThreads }`. For a request that keeps to its types, every other result has a fixed `status` and `reason` and no ledger, so the persisted entry stays as it was. No result carries a response body, a token or anything a read threw. `path` appears only on `unreadable`; it names a field, such as `reviews[0].state`, and never holds that field's value.
 
 The call can reject instead of returning a result when the caller breaks the request's types, for example with a ledger that is `null`, lacks its fields or holds a value that cannot be cloned. The ledger's shape is not checked here.
 
@@ -182,7 +182,7 @@ The options are checked and copied when the reads are constructed. An option tha
 | `pullRequest()` | `GET /repos/{owner}/{name}/pulls/{number}` |
 | `timeline()` | `GET /repos/{owner}/{name}/issues/{number}/timeline?per_page=100&page=N`, for each page |
 | `reviews()` | `GET /repos/{owner}/{name}/pulls/{number}/reviews?per_page=100&page=N`, for each page |
-| `reviewThreads(cursor)` | `POST /graphql`, asking for `reviewThreads(first: 100, after: $cursor)` with `isResolved` for each thread and the page's `hasNextPage` and `endCursor` |
+| `reviewThreads(cursor)` | `POST /graphql`, asking for `reviewThreads(first: 100, after: $cursor)` with `id`, `isResolved` and the first comment’s author (`__typename`, `login`, and `databaseId` for users and bots) for each thread and the page's `hasNextPage` and `endCursor` |
 
 Every request goes to `https://api.github.com` and to nowhere else. Each address is that origin followed by a path built from the checked repository and number. Nothing from a response is ever used as an address: not a `Link` header, not a `Location` header, not a URL in a body. The GraphQL query is one fixed text; the owner, name, number and cursor travel as variables and are never written into it. The query asks GitHub not to follow a repository rename: it passes `followRenames: false` on `repository`, as a literal in that text. `reviewThreads` returns the response body as it is, so a GraphQL `errors` member reaches `parseReviewThreadPage`, which rejects it.
 
@@ -245,3 +245,11 @@ A rate limit is reported like any other failing status, as `request-failed 403` 
 - It does not show that GitHub accepts the API version, the query or the token. Offline tests cannot.
 
 Offline tests in `tests/github-pull-request-reads.test.ts` give the transport a `fetch` that records every request and answers from a script. They assert each request's address, method, headers and options, the conversion of the `Date` header, pagination and its bound, every failure and what a failure may hold, and they give these reads to the real `collectPullRequest`. No test makes a network request, and no live read of GitHub through this transport has been qualified.
+
+## Review-thread observations
+
+FOR-37 adds `reviewThreads: GitHubReviewThread[]` to a successful collection, outside evaluator facts. Each entry has `{ id, isResolved, firstAuthor }`. `firstAuthor` is a `GitHubActor` with numeric database `id`, `login` and `type` (`User` or `Bot`), or `null` when GitHub returns a null author or the deleted-account `ghost` placeholder. Unknown identity cannot attribute a thread to a reviewer. Unsupported actor types, malformed identity fields, missing first comments and missing current transport fields stop collection as unreadable.
+
+The parser retains its `unresolved` page count for existing callers and adds `threads`. Collection derives `evidence.unresolvedThreads` from the accepted full list. Existing evidence and ledger meanings are preserved. Older injected reads returning only `isResolved` must supply the widened response shape before collecting again. An incomplete old response cannot establish reviewer observations.
+
+Both passes read every thread, including resolved threads and threads from earlier heads. The complete ordered list must agree, so same-count thread substitutions, author changes and resolution swaps stop as `threads-changed`. Duplicate thread IDs within or across pages and repeated pagination cursors stop as unreadable. A list exceeding the configured page bound stays unavailable. Page boundaries may differ between passes when the resulting ordered list agrees. These observations establish no hosted-review verdict or finding-ledger entry by themselves.

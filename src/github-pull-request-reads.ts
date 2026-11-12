@@ -16,7 +16,20 @@ const THREADS_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cu
   repository(owner: $owner, name: $name, followRenames: false) {
     pullRequest(number: $number) {
       reviewThreads(first: 100, after: $cursor) {
-        nodes { isResolved }
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              author {
+                __typename
+                login
+                ... on User { databaseId }
+                ... on Bot { databaseId }
+              }
+            }
+          }
+        }
         pageInfo { hasNextPage endCursor }
       }
     }

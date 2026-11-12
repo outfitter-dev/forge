@@ -200,7 +200,12 @@ test("reviewThreads() POSTs the thread query with the repository, number and cur
     "repository(owner: $owner, name: $name, followRenames: false)",
     "pullRequest(number: $number)",
     "reviewThreads(first: 100, after: $cursor)",
-    "nodes { isResolved }",
+    "isResolved",
+    "comments(first: 1)",
+    "__typename",
+    "login",
+    "... on User { databaseId }",
+    "... on Bot { databaseId }",
     "pageInfo { hasNextPage endCursor }",
   ]) {
     expect(sent.query).toContain(part);
@@ -1105,7 +1110,7 @@ const github = (requests: string[]): Fetch => {
     [timelinePage(2)]: json([reviewRequestedEvent()]),
   };
   const threads: Record<string, Reply> = {
-    "cursor-1": json(threadPageResponse([false])),
+    "cursor-1": json(threadPageResponse([false], undefined, "second")),
     null: json(
       threadPageResponse([true, false], {
         endCursor: "cursor-1",

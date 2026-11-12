@@ -89,7 +89,16 @@ export interface GitHubReview {
   submittedAt: string | null;
 }
 
+export interface GitHubReviewThread {
+  /** GitHub GraphQL node ID, stable across resolution and reopening. */
+  id: string;
+  isResolved: boolean;
+  /** Null for a deleted or unavailable author, never an attributable identity. */
+  firstAuthor: GitHubActor | null;
+}
+
 export interface GitHubReviewThreadPage {
+  threads: GitHubReviewThread[];
   /** Threads on this page not explicitly resolved. */
   unresolved: number;
   nextCursor: string | null;
