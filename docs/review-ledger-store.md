@@ -1,6 +1,6 @@
 # Review ledger store
 
-`readReviewLedger(options)` and `replaceReviewLedger(options, expected, next)` keep one pull request's review-ledger entry in a file between collections (FOR-34). `parseReviewLedgerEntry(value)` is the strict check every entry passes on the way in and on the way out. All three are exported from `src/index.ts`. The store reads no clock, environment or network: the directory and the time come from the caller. Nothing calls it yet outside tests, and nothing here changes [`collectPullRequest`](pull-request-collection.md), `humanReviewEvidence`, the evaluator or `forge check`.
+`readReviewLedger(options)` and `replaceReviewLedger(options, expected, next)` keep one pull request's review-ledger entry in a file between collections (FOR-34). `parseReviewLedgerEntry(value)` is the strict check every entry passes on the way in and on the way out. All three are exported from `src/index.ts`. The store reads no clock, environment or network: the directory and the time come from the caller. [`forge gate`](forge-gate.md) is its one caller outside tests. Nothing here changes [`collectPullRequest`](pull-request-collection.md), `humanReviewEvidence`, the evaluator or `forge check`.
 
 ## What the entry holds and why it matters
 
@@ -39,6 +39,8 @@ if (result.status === "collected") {
 2. Collect, giving the collector that entry. No lock is held while GitHub is read, so a collection that is canceled or killed leaves nothing behind in the store.
 3. If the collection is `collected`, replace the stored entry with the one it returned, passing the entry from step 1 as `expected`. For any other status, store nothing: the stored entry stays as it was.
 4. On `"stored"`, the collection's evidence may be used. On `"conflict"`, discard the whole result and go back to step 1.
+
+[`forge gate`](forge-gate.md#flow) follows this flow with the state directory's `review-ledger` subdirectory as `directory` and the machine's clock as `now`. It does not go back to step 1 itself: on `"conflict"`, and on any `ReviewLedgerError`, it discards the result, reports that the pull request was not collected, and leaves running it again to its invoker.
 
 **Evidence from a collection whose ledger was not stored must not be used as if its bindings were recorded.** A collection binds an approval by writing the binding into the entry it returns, and it takes a new snapshot the same way. If that entry is not stored, the next collection starts without the binding and without the snapshot, and can come to a different answer for the same approval. Evidence that claims a bound approval is only as good as the stored entry that holds the binding. This applies to `"conflict"` and to every `ReviewLedgerError` from the replace.
 
