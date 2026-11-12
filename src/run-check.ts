@@ -1,19 +1,20 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { digest, readConfig } from "./check-config.ts";
 import { git, observeSource } from "./check-source.ts";
 import type { CheckReceipt } from "./check-types.ts";
+import { writePrivateFile } from "./write-private-file.ts";
 
+// A publication that fails leaves its temporary file in the receipt directory.
 const persist = async (file: string, receipt: CheckReceipt): Promise<void> => {
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(receipt)}\n`, {
-    flag: "wx",
-    mode: 0o600,
-  });
-  await rename(temporary, file);
+  await writePrivateFile(
+    file,
+    `${JSON.stringify(receipt)}\n`,
+    "leave-temporary"
+  );
 };
 
 const execute = (
