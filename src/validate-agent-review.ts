@@ -10,6 +10,7 @@ import {
   subject,
   text,
 } from "./evidence-validation-primitives.ts";
+import { wholeSecondUtc } from "./utc-instant.ts";
 
 const RUNGS = ["hosted", "local"];
 
@@ -21,13 +22,8 @@ const instructions = (value: unknown, path: string) => {
 
 /** One precision keeps `deadlineAt === startedAt + waitSeconds` exact. */
 const instant = (value: unknown, path: string): number => {
-  const result = text(value, path);
-  const time = Date.parse(result);
-  if (
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(result) ||
-    Number.isNaN(time) ||
-    new Date(time).toISOString() !== `${result.slice(0, -1)}.000Z`
-  ) {
+  const time = wholeSecondUtc(text(value, path));
+  if (time === null) {
     return invalid(
       path,
       "expected a whole-second UTC time like 2026-01-01T00:00:00Z"
