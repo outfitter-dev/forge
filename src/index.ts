@@ -27,3 +27,5 @@ export type * from "./generated-release-diff-types.ts";
 export { evaluateReleaseVersion } from "./evaluate-release-version.ts";
 export { releaseVersionPolicyDigest } from "./release-version-validation.ts";
 export type * from "./release-version-types.ts";
+export { normalizeCheckReceipts } from "./normalize-check-receipts.ts";
+export type * from "./normalize-check-receipts.ts";
