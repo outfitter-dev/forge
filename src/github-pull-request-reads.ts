@@ -116,29 +116,38 @@ const servedAt = (header: string | null): string => {
  * A `rel` that includes `next`, anywhere in the `Link` header. The target is
  * never read. A doubtful header counts as another page: asking for a page
  * that does not exist costs a request, and missing one that does loses items.
+ * A header over the limit is doubtful unread: matching takes time that grows
+ * with the square of its length, and no timeout can interrupt it.
  */
 const NEXT = /\brel\s*=\s*"?[^",;]*\bnext\b/iu;
+const LINK_LIMIT = 4096;
+const anotherPage = (link: string | null): boolean =>
+  link !== null && (link.length > LINK_LIMIT || NEXT.test(link));
 
 /**
  * The four reads `collectPullRequest` takes, bound to one pull request of one
  * repository on `https://api.github.com`. It only reads, makes one request per
  * read step and never retries: a failure is a `GitHubReadError`.
- *
  * @throws {GitHubReadError} `options-invalid`, before any request, when an option is not as described.
  */
 export const githubPullRequestReads = (
   options: GitHubPullRequestReadsOptions
 ): PullRequestReads => {
   // Taken once, so changing the caller's object later changes no request.
+  // Types are checked too: a pattern reads a missing token as `undefined`.
   const { maxPages, pullRequest: pullNumber, timeoutMs, token } = options;
   const call = options.fetch;
-  const [owner = "", name = "", ...extra] = options.repository.split("/");
+  const fullName =
+    typeof options.repository === "string" ? options.repository : "";
+  const [owner = "", name = "", ...extra] = fullName.split("/");
   if (
     extra.length > 0 ||
     !segment(owner) ||
     !segment(name) ||
     !positiveInteger(pullNumber) ||
+    typeof token !== "string" ||
     !TOKEN.test(token) ||
+    typeof call !== "function" ||
     !positiveInteger(timeoutMs) ||
     !positiveInteger(maxPages)
   ) {
@@ -211,7 +220,7 @@ export const githubPullRequestReads = (
         throw new GitHubReadError("page-not-a-list");
       }
       pages.push(response.body);
-      if (!NEXT.test(response.headers.get("link") ?? "")) {
+      if (!anotherPage(response.headers.get("link"))) {
         return pages.flat();
       }
     }
