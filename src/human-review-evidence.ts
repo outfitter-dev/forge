@@ -28,13 +28,15 @@ export interface HumanReviewInput {
    * given against. The collector must read the reviews no later than the pull
    * request, and the timeline no earlier, so that no approval submitted before
    * this time can be missing its base change. An approval submitted at or
-   * after it is left for a later collection to bind, with one exception: an
-   * approval submitted in the same second as a read that records a new
-   * snapshot never binds. A read records one at the first sight of this head
-   * and base, at the first read after a possible change of base, and when the
-   * stored one has no readable time. Its time becomes the snapshot's, the
-   * approval shares that second, and the rule needs the snapshot to be
-   * strictly earlier. The reviewer has to approve again.
+   * after it is left for a later collection to bind, with two exceptions. A
+   * read records a new snapshot at the first sight of this head and base, at
+   * the first read after a possible change of base, and when the stored one
+   * has no readable time, and its time becomes the snapshot's. An approval in
+   * that same second never binds, because the rule needs the snapshot to be
+   * strictly earlier. And when a possible change of base falls in that same
+   * second, the next read replaces the snapshot again, so an approval
+   * submitted between the two reads never binds either. In both cases the
+   * reviewer has to approve again.
    */
   pullRequestReadAt: string;
   requests: GitHubReviewRequest[];

@@ -1083,3 +1083,23 @@ test("an account named two ways in one collection gets one name in either order"
   expect(forward.ledger.requiredReviewers).toEqual([user("new-name")]);
   expect(backward).toEqual(forward);
 });
+
+test("one account reviewing under two logins is one reviewer, so a dismissal still counts", () => {
+  const result = evidence({
+    ledger: ledger({ observedRevision: observed() }),
+    pullRequest: pullRequest({ requested_reviewers: [actorResponse("aaa")] }),
+    reviews: reviews(
+      { id: 1, submitted_at: AFTER, user: actorResponse("aaa") },
+      {
+        id: 2,
+        state: "DISMISSED",
+        submitted_at: LATER,
+        user: actorResponse("zzz"),
+      }
+    ),
+  });
+  expect(result.humanReviews).toEqual([
+    { reviewer: "aaa (user 7)", state: "dismissed", subject: null },
+  ]);
+  expect(humanGate(result)?.conclusion).toBe("failure");
+});
