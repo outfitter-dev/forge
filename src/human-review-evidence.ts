@@ -9,11 +9,10 @@ import type {
 import { wholeSecondUtc } from "./utc-instant.ts";
 
 /**
- * A revision the trusted collector saw, and when. `observedAt` is compared
- * with GitHub's own review times, so it must be on GitHub's clock and no
- * earlier than the moment GitHub served this head and base: the `Date` header
- * of the stable read, or later. A time taken before the read, or from a clock
- * that lags GitHub, can bind an approval to a base it was not given against.
+ * A revision GitHub served, and when: `observedAt` is the `pullRequestReadAt`
+ * of the collection that first saw this head and base. It is kept, not
+ * refreshed, for as long as the head and base stay the same and nothing that
+ * can change the base has happened since.
  */
 export interface ObservedRevision {
   headSha: string;
@@ -33,7 +32,7 @@ export interface ReviewBinding extends ObservedRevision {
  */
 export interface ReviewLedgerEntry {
   requiredReviewers: string[];
-  /** Replaced by the collector after each complete, stable collection. */
+  /** Maintained by `humanReviewEvidence`; the collector only persists it. */
   observedRevision: ObservedRevision | null;
   /** Keyed by GitHub review ID. An entry is never rebound. */
   reviewBindings: Record<string, ReviewBinding>;
@@ -43,11 +42,14 @@ export interface HumanReviewInput {
   repository: string;
   pullRequest: GitHubPullRequest;
   /**
-   * When GitHub served `pullRequest`, on GitHub's clock. The collector must
-   * read the reviews no later than the pull request, and the timeline no
-   * earlier, so that no approval submitted before this time can be missing its
-   * base change. An approval submitted at or after it waits for the next
-   * collection.
+   * When GitHub served `pullRequest`, on GitHub's clock: the `Date` header of
+   * that response, not a local clock and not a later time. It is compared with
+   * GitHub's own review and event times, so a time taken before the read, or
+   * from a clock that lags GitHub, can bind an approval to a base it was not
+   * given against. The collector must read the reviews no later than the pull
+   * request, and the timeline no earlier, so that no approval submitted before
+   * this time can be missing its base change. An approval submitted at or
+   * after it binds at a later collection.
    */
   pullRequestReadAt: string;
   requests: GitHubReviewRequest[];
@@ -61,9 +63,8 @@ export interface HumanReviewResult {
   assignments: { recorded: true; requiredReviewers: string[] };
   humanReviews: HumanReviewEvidence[];
   /**
-   * The entry to persist if the collection is accepted, once the collector has
-   * replaced `observedRevision` with the revision it just read. Until then it
-   * still carries the previous snapshot. It shares no objects with the input.
+   * The entry to persist, as it is, if the collection is accepted. It shares
+   * no objects with the input.
    */
   ledger: ReviewLedgerEntry;
 }
@@ -151,6 +152,45 @@ const standing = (decisions: Decision[]): Decision => {
     : latest;
 };
 
+/** Whether anything that can change the base happened at or after `time`. */
+const baseMayHaveChangedSince = (
+  input: HumanReviewInput,
+  time: number
+): boolean =>
+  input.baseChanges.some((change) => {
+    const changedAt = instant(change.createdAt);
+    return changedAt === null || changedAt >= time;
+  });
+
+/**
+ * The snapshot to keep for the next collection. An existing snapshot stays
+ * while it still describes the head and base and the base cannot have changed
+ * since: refreshing it on every collection would put it later than an approval
+ * submitted during that collection, and that approval could then never bind.
+ * Otherwise the revision just read becomes the snapshot, at the read time.
+ */
+const nextSnapshot = (input: HumanReviewInput): ObservedRevision | null => {
+  const { head, base } = input.pullRequest;
+  const current = input.ledger.observedRevision;
+  const currentAt = current === null ? null : instant(current.observedAt);
+  if (
+    current !== null &&
+    currentAt !== null &&
+    current.headSha === head.sha &&
+    current.baseSha === base.sha &&
+    !baseMayHaveChangedSince(input, currentAt)
+  ) {
+    return { ...current };
+  }
+  return instant(input.pullRequestReadAt) === null
+    ? null
+    : {
+        baseSha: base.sha,
+        headSha: head.sha,
+        observedAt: input.pullRequestReadAt,
+      };
+};
+
 /**
  * The base an approval counts against, or `null`. A new binding needs a
  * snapshot of this exact head and base persisted strictly before the approval
@@ -188,10 +228,7 @@ const boundBase = (
     observed.headSha !== head.sha ||
     observed.baseSha !== base.sha ||
     observedAt >= submittedAt ||
-    input.baseChanges.some((change) => {
-      const changedAt = instant(change.createdAt);
-      return changedAt === null || changedAt >= observedAt;
-    })
+    baseMayHaveChangedSince(input, observedAt)
   ) {
     return null;
   }
@@ -239,8 +276,7 @@ export const humanReviewEvidence = (
   input: HumanReviewInput
 ): HumanReviewResult => {
   const required = requiredReviewers(input);
-  const { observedRevision, reviewBindings } = structuredClone(input.ledger);
-  const bindings = reviewBindings;
+  const bindings = structuredClone(input.ledger.reviewBindings);
   const byReviewer = new Map<string, Decision[]>();
   for (const review of input.reviews) {
     // Every deleted account shares one identity, so its reviews cannot be
@@ -292,7 +328,7 @@ export const humanReviewEvidence = (
     assignments: { recorded: true, requiredReviewers: required },
     humanReviews,
     ledger: {
-      observedRevision,
+      observedRevision: nextSnapshot(input),
       requiredReviewers: required,
       reviewBindings: bindings,
     },

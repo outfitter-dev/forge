@@ -669,3 +669,96 @@ test("a requested reviewer whose account was deleted stays required and unmet", 
   ]);
   expect(humanGate(result)?.conclusion).toBe("failure");
 });
+
+test("the first collection records the revision it read, at the time it read it", () => {
+  expect(evidence().ledger.observedRevision).toEqual(observed(READ));
+});
+
+test("an unchanged revision keeps its earlier snapshot", () => {
+  const result = evidence({ ledger: ledger({ observedRevision: observed() }) });
+  expect(result.ledger.observedRevision).toEqual(observed(BEFORE));
+});
+
+test.each([
+  {
+    expected: observed(READ, OTHER),
+    input: {
+      pullRequest: pullRequest({
+        head: { ref: "feature", repo: { id: 100 }, sha: OTHER },
+      }),
+    },
+    name: "the head moved",
+  },
+  {
+    expected: observed(READ, HEAD, OTHER),
+    input: {
+      pullRequest: pullRequest({
+        base: {
+          ref: "main",
+          repo: { full_name: REPOSITORY, id: 100 },
+          sha: OTHER,
+        },
+      }),
+    },
+    name: "the base moved",
+  },
+  {
+    expected: observed(READ),
+    input: {
+      baseChanges: parseBaseChanges([
+        { created_at: AFTER, event: "base_ref_force_pushed" },
+      ]),
+    },
+    name: "the base may have changed since",
+  },
+  {
+    expected: observed(READ),
+    input: { ledger: ledger({ observedRevision: observed("long ago") }) },
+    name: "its own time is unreadable",
+  },
+])("a snapshot is replaced when $name", ({ expected, input }) => {
+  const result = evidence({
+    ledger: ledger({ observedRevision: observed() }),
+    ...input,
+  });
+  expect(result.ledger.observedRevision).toEqual(expected);
+});
+
+test("an unreadable read time records no new snapshot", () => {
+  const result = evidence({ pullRequestReadAt: "just now" });
+  expect(result.ledger.observedRevision).toBeNull();
+});
+
+test("an approval in the same second as a read binds at the next collection", () => {
+  const approval = reviews({ submitted_at: AFTER });
+  const first = evidence({
+    ledger: ledger({ observedRevision: observed() }),
+    pullRequest: assigned(),
+    pullRequestReadAt: AFTER,
+    reviews: approval,
+  });
+  expect(at(first.humanReviews).subject).toBeNull();
+  const second = evidence({
+    ledger: first.ledger,
+    pullRequest: assigned(),
+    pullRequestReadAt: LATER,
+    reviews: approval,
+  });
+  expect(second.humanReviews).toEqual([approvedAt(BASE)]);
+  expect(humanGate(second)?.conclusion).toBe("success");
+});
+
+test("an approval one collection did not see binds at the next", () => {
+  const first = evidence({
+    ledger: ledger({ observedRevision: observed() }),
+    pullRequest: assigned(),
+    pullRequestReadAt: LATER,
+  });
+  const second = evidence({
+    ledger: first.ledger,
+    pullRequest: assigned(),
+    reviews: reviews({ submitted_at: AFTER }),
+  });
+  expect(second.humanReviews).toEqual([approvedAt(BASE)]);
+  expect(humanGate(second)?.conclusion).toBe("success");
+});
