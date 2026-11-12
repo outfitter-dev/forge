@@ -65,7 +65,7 @@ The passing conditions are all of:
 - `recording.state` is `persisted`, `admission` is `started`, `completion` is `observed`, `outcome` is `passed` and `exitCode` is 0.
 - `evidence` is `stable`, `cancellation` is null and `finishedAt` is not null.
 - `sourceBefore` and `sourceAfter` agree on `head`, `tree`, `base`, `worktreeDigest` and `indexDigest`.
-- `sourceAfter.dirty` is false and `sourceAfter.untracked` is 0. A dirty tree means the checked bytes are not the commit's.
+- `dirty` is false and `untracked` is 0 in both `sourceBefore` and `sourceAfter`. A dirty tree means the checked bytes are not the commit's.
 
 So a command that exits 0 while the source or config changed (`evidence: "changed"`) is `incomplete`, never `passed`. The evaluator passes a gate only on `passed`.
 
@@ -73,7 +73,7 @@ So a command that exits 0 while the source or config changed (`evidence: "change
 
 A project keeps declaring its commands in `forge.json`, which stays at schema version 1 with one aggregate `check`. Which declared check ID satisfies each verification gate is an explicit expectation from the trusted caller. For Forge itself all three gates map to the check ID `check`.
 
-The mapping is not read from `forge.json` because that file lives in the proposed checkout, and [proposed code cannot govern its own acceptance](automation-contract.md#proposed-code-cannot-govern-its-own-acceptance). A change could otherwise point a gate at a check it finds easier to pass.
+The mapping is not read from `forge.json` because that file lives in the proposed checkout, and [proposed code cannot govern its own acceptance](automation-contract.md#proposed-code-cannot-govern-its-own-acceptance). A change could otherwise choose which of its declared checks answers for a gate. With one check per `forge.json` this fixes a name and nothing more: the command behind that name is still the proposed checkout's own, as the limits below say.
 
 The alternative considered was to let evaluator policy declare which verification checks are required. It was rejected because it changes the evaluator's contract, and the November 12, 2026 [lead handoff](https://linear.app/outfitter/document/forge-lead-handoff-delivered-foundations-ranger-boundary-and-next-ae5e1fc7e398) names a rewrite of the delivered evaluator as work not to take on. The evaluator still requires exactly one result for each of `lint`, `test` and `build`.
 
@@ -82,8 +82,10 @@ The consequence is that with one aggregate check, a failing run fails all three 
 ## What this does not establish
 
 - It does not authenticate the receipt's producer. A receipt is a shape-valid claim. The trusted caller must obtain receipts from a build it trusts, and the `provenance` it supplies is its own statement about that build, not something read from the receipt. The receipt's recorded `runtime` is not compared with the fingerprint.
-- It fixes which check ID satisfies a gate, not which command ran under that ID. The command behind an ID is declared in the proposed checkout's `forge.json`. This operation does not compare `check.commandDigest`, `configBefore` or `configAfter` with any expectation; a caller that needs that comparison must make it before supplying the receipt.
+- It fixes which check ID satisfies a gate, not which command ran under that ID. The command behind an ID is declared in the proposed checkout's `forge.json`. This operation does not compare `check.commandDigest`, `configBefore`, `configAfter` or `runtime` with any expectation, and it stamps the caller's fingerprint on every result. The [evaluator's contract](evidence-evaluator.md#input-and-provenance) requires that fingerprint to cover the task and the machinery that ran it, so the caller must establish that before supplying a receipt. The automation contract lets proposed code supply the tasks under evaluation, so a receipt for a rewritten command is a true observation of what that checkout declares; whether such a change is acceptable is for review, not for this step. Pinning the digest here would not settle it either: `["bun", "run", "check"]` keeps its digest while the script it names is rewritten.
 - It re-checks the source fields listed above, and otherwise takes `evidence: "stable"` as the receipt's own claim that config and source did not change.
+- It trusts the receipt's `dirty` and `untracked` observation. `forge check` derives it from Git's status, which reports nothing for a tracked file marked `assume-unchanged` or `skip-worktree`, as a sparse checkout does. A run over such a tree can be `passed` for a head whose bytes were not the ones checked. A caller must produce receipts from a full, unflagged checkout until `forge check` refuses or records those flags.
+- It does not rank receipts for one check. A run that was interrupted before its record was completed is rejected as `source-missing`, so a later passing run stands alone. A failed run followed by a passing run yields two results, and the evaluator blocks on the duplicate. The caller chooses the one authoritative receipt.
 - It emits PR subjects only. It does not produce the `merge_group` candidate checks a merge-group evaluation needs.
 - It adds no collector, CLI, transport, signing or receipt reuse. Reading receipts from a trusted build and assembling the remaining PR facts remain the caller's work.
 

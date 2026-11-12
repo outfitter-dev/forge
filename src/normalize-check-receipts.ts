@@ -135,6 +135,8 @@ const stateOf = (
     receipt.finishedAt !== null &&
     SOURCE_IDENTITY.every((key) => before[key] === after[key]) &&
     // A dirty tree means the checked bytes are not the commit's.
+    !before.dirty &&
+    before.untracked === 0 &&
     !after.dirty &&
     after.untracked === 0
   ) {
@@ -187,7 +189,13 @@ const normalize = (
   // foreign receipt instead of this step relabelling it as current.
   return gates.map((name) => ({
     name,
-    provenance: { ...expectation.provenance, runId: receiptId },
+    // Built field by field: a wider object from the caller must not leak keys
+    // the evaluator would reject the whole evaluation for.
+    provenance: {
+      producer: expectation.provenance.producer,
+      runId: receiptId,
+      runtimeFingerprint: expectation.provenance.runtimeFingerprint,
+    },
     state,
     subject: {
       baseSha: base,

@@ -399,3 +399,89 @@ test("a mapping with separate check IDs routes each receipt to its gates", () =>
     ["build", "success"],
   ]);
 });
+
+// The outcome decides on its own. A receipt that says the command did not pass
+// is not passed because its exit code and cancellation look clean.
+test.each<[CheckReceipt["outcome"], CheckState]>([
+  ["failed", "failed"],
+  ["canceled", "canceled"],
+  ["not-run", "incomplete"],
+  ["unknown", "unknown"],
+])(
+  "a %s outcome with exit 0 and no cancellation is still %s",
+  (outcome, state) => {
+    expect(states(receipt({ outcome }))).toEqual([state, state, state]);
+  }
+);
+
+test.each<[string, Partial<CheckReceipt>]>([
+  ["a dirty tree before the run", { sourceBefore: source({ dirty: true }) }],
+  [
+    "untracked files before the run",
+    { sourceBefore: source({ untracked: 3 }) },
+  ],
+])("%s makes a passed outcome incomplete", (_name, overrides) => {
+  expect(states(receipt(overrides))).toEqual([
+    "incomplete",
+    "incomplete",
+    "incomplete",
+  ]);
+});
+
+const sourceWithout = (key: keyof CheckSource): unknown =>
+  Object.fromEntries(Object.entries(source()).filter(([name]) => name !== key));
+
+test.each<keyof CheckSource>([
+  "tree",
+  "base",
+  "worktreeDigest",
+  "indexDigest",
+  "untracked",
+])("a receipt whose sources both lack %s is malformed", (key) => {
+  const broken = sourceWithout(key);
+  expect(
+    normalize({ ...receipt(), sourceAfter: broken, sourceBefore: broken })
+  ).toEqual({
+    checks: [],
+    rejected: [{ code: "malformed-receipt", index: 0 }],
+  });
+});
+
+test("a receipt with no finish time field is malformed", () => {
+  expect(normalize(without("finishedAt"))).toEqual({
+    checks: [],
+    rejected: [{ code: "malformed-receipt", index: 0 }],
+  });
+});
+
+test("a malformed source before the run is reported, not thrown", () => {
+  expect(normalize({ ...receipt(), sourceBefore: "clean" })).toEqual({
+    checks: [],
+    rejected: [{ code: "malformed-receipt", index: 0 }],
+  });
+});
+
+test("results carry the pull request and provenance the caller supplied, and nothing else", () => {
+  const wide = {
+    producer: "verification:fixture",
+    reviewer: "not-part-of-provenance",
+    runId: "caller-run",
+    runtimeFingerprint: "2".repeat(64),
+  };
+  const { checks } = normalizeCheckReceipts([receipt()], {
+    checks: { build: "check", lint: "check", test: "check" },
+    provenance: wide,
+    pullRequest: 77,
+  });
+  expect(checks).toHaveLength(3);
+  expect(
+    checks.every(
+      (item) => item.subject.kind === "pull_request" && item.subject.id === 77
+    )
+  ).toBe(true);
+  expect(at(checks).provenance).toEqual({
+    producer: "verification:fixture",
+    runId: "receipt-1",
+    runtimeFingerprint: "2".repeat(64),
+  });
+});
