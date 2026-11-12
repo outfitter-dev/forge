@@ -93,7 +93,7 @@ export interface GitHubReviewThread {
   /** GitHub GraphQL node ID, stable across resolution and reopening. */
   id: string;
   isResolved: boolean;
-  /** Null for a deleted or unavailable author, never an attributable identity. */
+  /** Null for a deleted, migrated or unavailable author, never an attributable identity. */
   firstAuthor: GitHubActor | null;
 }
 

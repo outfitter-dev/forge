@@ -257,6 +257,9 @@ const reviewThread = (value: unknown, path: string): GitHubReviewThread => {
   }
   const author = record(comment.author, authorPath);
   const type = text(author.__typename, `${authorPath}.__typename`);
+  if (type === "Mannequin") {
+    return { firstAuthor: null, id, isResolved };
+  }
   if (type !== "User" && type !== "Bot") {
     fail(`${authorPath}.__typename`, "User or Bot");
   }

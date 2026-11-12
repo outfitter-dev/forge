@@ -563,8 +563,12 @@ test.each([
   ]);
 });
 
-test.each([null, { __typename: "User", databaseId: 10_137, login: "ghost" }])(
-  "deleted or unavailable first author is explicit unknown",
+test.each([
+  null,
+  { __typename: "User", databaseId: 10_137, login: "ghost" },
+  { __typename: "Mannequin", login: "imported-reviewer" },
+])(
+  "deleted, migrated or unavailable first author is explicit unknown",
   (author) => {
     const result = parseReviewThreadPage(
       threadObservationPage([

@@ -1002,6 +1002,30 @@ test("collected thread observations retain identity and derive the evaluator cou
   expect(result.evidence.unresolvedThreads).toBe(1);
 });
 
+test("migrated comment authors keep thread identity and unresolved counts without attribution", async () => {
+  const result = collected(
+    await collect(
+      pass({
+        threads: [
+          observedPage([
+            threadResponse({
+              comments: {
+                nodes: [
+                  { author: { __typename: "Mannequin", login: "imported" } },
+                ],
+              },
+            }),
+          ]),
+        ],
+      })
+    )
+  );
+  expect(result.reviewThreads).toEqual([
+    { firstAuthor: null, id: "thread-0", isResolved: false },
+  ]);
+  expect(result.evidence.unresolvedThreads).toBe(1);
+});
+
 test("duplicate thread identities across pages cannot establish complete collection", async () => {
   expect(
     await collect(

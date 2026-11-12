@@ -248,7 +248,7 @@ Offline tests in `tests/github-pull-request-reads.test.ts` give the transport a 
 
 ## Review-thread observations
 
-FOR-37 adds `reviewThreads: GitHubReviewThread[]` to a successful collection, outside evaluator facts. Each entry has `{ id, isResolved, firstAuthor }`. `firstAuthor` is a `GitHubActor` with numeric database `id`, `login` and `type` (`User` or `Bot`), or `null` when GitHub returns a null author or the deleted-account `ghost` placeholder. Unknown identity cannot attribute a thread to a reviewer. Unsupported actor types, malformed identity fields, missing first comments and missing current transport fields stop collection as unreadable.
+FOR-37 adds `reviewThreads: GitHubReviewThread[]` to a successful collection, outside evaluator facts. Each entry has `{ id, isResolved, firstAuthor }`. `firstAuthor` is a `GitHubActor` with numeric database `id`, `login` and `type` (`User` or `Bot`), or `null` when GitHub returns a null author, the deleted-account `ghost` placeholder or a migrated `Mannequin` actor. Those threads retain their identity and resolution while their authors remain unattributable. Unknown identity cannot attribute a thread to a reviewer. Other unsupported actor types, malformed user or bot identity fields, missing first comments and missing current transport fields stop collection as unreadable.
 
 The parser retains its `unresolved` page count for existing callers and adds `threads`. Collection derives `evidence.unresolvedThreads` from the accepted full list. Existing evidence and ledger meanings are preserved. Older injected reads returning only `isResolved` must supply the widened response shape before collecting again. An incomplete old response cannot establish reviewer observations.
 
