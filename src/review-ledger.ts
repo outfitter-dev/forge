@@ -1,3 +1,4 @@
+import type { ReviewFindingLedger } from "./evidence-types.ts";
 import type {
   GitHubBaseChange,
   GitHubPullRequest,
@@ -43,6 +44,13 @@ export interface ReviewLedgerEntry {
   observedRevision: ObservedRevision | null;
   /** Keyed by GitHub review ID. An entry is never rebound. */
   reviewBindings: Record<string, ReviewBinding>;
+  /** Omitted only by legacy callers. Missing finding history is unknown, never recorded empty. */
+  reviewFindings?: ReviewFindingLedger;
+}
+
+/** The store and parser always return an explicit finding history. */
+export interface CanonicalReviewLedgerEntry extends ReviewLedgerEntry {
+  reviewFindings: ReviewFindingLedger;
 }
 
 /**

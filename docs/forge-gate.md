@@ -10,7 +10,7 @@ It composes operations that already exist, in one fixed order:
 - [collects the pull request](pull-request-collection.md) from GitHub's API, read-only
 - stores the ledger entry the collection returned
 - turns the `forge check` receipts it was given into [verification evidence](verification-evidence.md)
-- joins the agent-review evidence it was given
+- joins the agent-review evidence it was given with accepted persisted findings
 - calls the [evidence evaluator](evidence-evaluator.md) and prints its result
 
 It reports. It does not post a status, a comment or a label, it does not merge, and it does not enforce anything. It makes no request that writes to GitHub. It runs no check and no review: receipts come from `forge check` runs and review evidence comes from Ranger, and both reach this command as files. It writes one thing, the ledger entry in the state directory. It has no retry, cache, daemon or scheduler.
@@ -42,7 +42,7 @@ Every flag takes one value. A missing required flag, an unknown flag, a repeated
 | `--receipt` | A file holding one [`forge check` receipt](forge-check.md) as JSON. Give it once per receipt, or not at all. |
 | `--review-evidence` | A file holding `{ "agentReviews": [...], "reviewFindings": {...}, "reviewLadder": ... }`: exactly the three [agent-review fields](evidence-evaluator.md#agent-review-under-schema-version-2) of a version 2 pull request, and no other key. The evaluator validates the content. |
 
-Without `--review-evidence` the command evaluates `agentReviews: []`, `reviewFindings: { "recorded": false, "findings": [] }` and `reviewLadder: null`, so the `agent-review` gate fails for lack of evidence. Without any `--receipt` the three verification gates fail the same way.
+Without `--review-evidence` the command supplies no agent attempts or ladder, starts from unknown finding evidence and includes accepted persisted findings, so the `agent-review` gate fails. Without any `--receipt` the three verification gates fail the same way.
 
 ### The token
 
@@ -129,7 +129,7 @@ Forge's own policy will be `forge-gate.json` at the root of the trusted revision
 5. If the collection did not end as `collected`, stop: not collected. Nothing is stored.
 6. Store the entry the collection returned, in place of the one read in step 3. If another run stored an entry in between (`conflict`), the lock file exists (`ledger-busy`) or the store refuses for any other reason, stop: not collected. Evidence from a collection whose ledger was not stored is never evaluated, because the bindings and snapshot it relies on would be recorded nowhere.
 7. Normalize the receipts under the policy's `checks` mapping and `evidence.verification` identity.
-8. Assemble version 2 pull request facts from the collected evidence, the normalized checks and the review evidence, and evaluate them under `policy.evidence`.
+8. Assemble version 2 pull request facts from the collected evidence, the normalized checks and the review evidence. Combine supplied finding entries with accepted persisted entries under the [finding-history rules](review-ledger-store.md#finding-history-and-compatibility), then evaluate under `policy.evidence`.
 9. If the evaluator answers `invalid`, report invalid input with its issues. Otherwise report its result.
 
 Nothing is retried. On `conflict` or `ledger-busy` the invoker runs the command again; see [the lock](review-ledger-store.md#the-lock) for a lock a stopped process left behind.

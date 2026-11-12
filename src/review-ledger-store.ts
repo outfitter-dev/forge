@@ -16,7 +16,11 @@ import {
   unavailable,
 } from "./review-ledger-files.ts";
 import type { ReviewLedgerLocation } from "./review-ledger-files.ts";
-import type { ReviewLedgerEntry } from "./review-ledger.ts";
+import { retainsFindings } from "./review-ledger-findings.ts";
+import type {
+  CanonicalReviewLedgerEntry,
+  ReviewLedgerEntry,
+} from "./review-ledger.ts";
 import { wholeSecondUtc } from "./utc-instant.ts";
 
 export type { ReviewLedgerLocation } from "./review-ledger-files.ts";
@@ -32,7 +36,7 @@ export interface ReviewLedgerReadOptions extends ReviewLedgerLocation {
 const checked = (
   value: unknown,
   origin: "stored entry" | "expected entry" | "new entry"
-): ReviewLedgerEntry => {
+): CanonicalReviewLedgerEntry => {
   try {
     return parseReviewLedgerEntry(value);
   } catch (error) {
@@ -43,7 +47,7 @@ const checked = (
 };
 
 /** The stored entry in canonical form; the empty entry when there is no file. */
-const current = async (file: string): Promise<ReviewLedgerEntry> => {
+const current = async (file: string): Promise<CanonicalReviewLedgerEntry> => {
   const bytes = await storedBytes(file);
   if (bytes === null) {
     return emptyReviewLedgerEntry();
@@ -89,7 +93,7 @@ const refuseAhead = (entry: ReviewLedgerEntry, now: number): void => {
  */
 export const readReviewLedger = async (
   options: ReviewLedgerReadOptions
-): Promise<ReviewLedgerEntry> => {
+): Promise<CanonicalReviewLedgerEntry> => {
   const files = locate(options);
   const now = wholeSecondUtc(options.now);
   if (now === null) {
@@ -129,6 +133,15 @@ export const replaceReviewLedger = async (
   const files = locate(options);
   const wanted = checked(expected, "expected entry");
   const replacement = checked(next, "new entry");
+  if (!Object.hasOwn(next, "reviewFindings")) {
+    replacement.reviewFindings = structuredClone(wanted.reviewFindings);
+  }
+  if (!retainsFindings(wanted.reviewFindings, replacement.reviewFindings)) {
+    refuse(
+      "entry-invalid",
+      "new entry: reviewFindings: accepted findings must retain their identity and reporting source"
+    );
+  }
   try {
     await mkdir(files.directory, { mode: 0o700, recursive: true });
   } catch (error) {

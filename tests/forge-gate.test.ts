@@ -19,7 +19,12 @@ import {
   VERIFICATION_GATES,
 } from "../src/index.ts";
 import type { GateName } from "../src/index.ts";
-import { finding, policyV2 } from "./agent-review-fixtures.ts";
+import {
+  finding,
+  HOSTED,
+  nativeResolution,
+  policyV2,
+} from "./agent-review-fixtures.ts";
 import { BASE, HEAD, REPOSITORY } from "./evidence-fixtures.ts";
 import {
   APPROVED_AT,
@@ -385,6 +390,7 @@ test("a pull request that passes every gate is eligible and exits 0", () => {
     },
     requiredReviewers: [],
     reviewBindings: {},
+    reviewFindings: { findings: [], recorded: false },
   });
   expect(readdirSync(ws.state)).toEqual(["review-ledger"]);
   expect(readdirSync(ws.ledgerDirectory)).toEqual([`${LEDGER_NAME}.json`]);
@@ -1252,5 +1258,159 @@ test("invalid forge check arguments still print the forge check usage", () => {
     diagnostic: "Usage: forge check [--config <file>] [--base <commit-oid>]",
     kind: "forge-check-input-error",
     schemaVersion: 1,
+  });
+});
+
+const seedFindings = (ws: Workspace, findings: unknown[], recorded = true) => {
+  seedLedger(ws);
+  const ledger = JSON.parse(ledgerText(ws));
+  writeFileSync(
+    ws.ledgerFile,
+    JSON.stringify({ ...ledger, reviewFindings: { findings, recorded } })
+  );
+};
+
+test.each([
+  { name: "omitted review evidence", review: null },
+  { name: "supplied clean empty ledger", review: cleanReview() },
+  {
+    name: "supplied resolution override",
+    review: {
+      ...cleanReview(),
+      reviewFindings: {
+        findings: [finding({ resolution: nativeResolution() })],
+        recorded: true,
+      },
+    },
+  },
+])("persisted unresolved findings block with $name", ({ review }) => {
+  const ws = workspace();
+  seedFindings(ws, [finding()]);
+  const ran = run(ws, gateArgs(ws, { review }));
+  expect(ran.exitCode).toBe(1);
+  expect(gate(ran, "agent-review").codes).toContain("blocking-findings");
+  expect(JSON.parse(ledgerText(ws)).reviewFindings).toEqual({
+    findings: [finding()],
+    recorded: true,
+  });
+});
+
+test("persisted native resolution becomes blocking when its eligible reviewer is removed", () => {
+  const ws = workspace();
+  seedFindings(ws, [
+    finding({ resolution: nativeResolution(), reviewer: HOSTED }),
+  ]);
+  const policy = policyV2();
+  policy.agentReview.reviewers = policy.agentReview.reviewers.filter(
+    (reviewer) => reviewer.reviewer !== HOSTED
+  );
+  const ran = run(
+    ws,
+    gateArgs(ws, { policy: gatePolicy({ evidence: policy }) })
+  );
+  expect(ran.exitCode).toBe(1);
+  expect(gate(ran, "agent-review").codes).toContain("blocking-findings");
+});
+
+test("an external resolution downgrade stays conflicting and cannot replace persisted resolution", () => {
+  const ws = workspace();
+  const resolved = finding({
+    resolution: nativeResolution(),
+    reviewer: HOSTED,
+  });
+  seedFindings(ws, [resolved]);
+  const review = {
+    ...cleanReview(),
+    reviewFindings: {
+      findings: [{ ...resolved, resolution: null }],
+      recorded: true,
+    },
+  };
+  const ran = run(ws, gateArgs(ws, { review }));
+  expect(ran.exitCode).toBe(1);
+  expect(gate(ran, "agent-review").codes).toContain("duplicate-evidence");
+  expect(gate(ran, "agent-review").codes).toContain("blocking-findings");
+  expect(JSON.parse(ledgerText(ws)).reviewFindings.findings).toEqual([
+    resolved,
+  ]);
+});
+
+test("identical externally supplied persisted findings are deduplicated once", () => {
+  const ws = workspace();
+  const resolved = finding({
+    resolution: nativeResolution(),
+    reviewer: HOSTED,
+  });
+  seedFindings(ws, [resolved]);
+  const review = {
+    ...cleanReview(),
+    reviewFindings: { findings: [resolved], recorded: true },
+  };
+  const ran = run(ws, gateArgs(ws, { review }));
+  expect(ran.exitCode).toBe(0);
+  expect(evaluated(ran).eligible).toBe(true);
+});
+
+test("duplicate external copies cannot be hidden by deduplication against persisted entries", () => {
+  const ws = workspace();
+  const resolved = finding({
+    resolution: nativeResolution(),
+    reviewer: HOSTED,
+  });
+  seedFindings(ws, [resolved]);
+  const ran = run(
+    ws,
+    gateArgs(ws, {
+      review: {
+        ...cleanReview(),
+        reviewFindings: { findings: [resolved, resolved], recorded: true },
+      },
+    })
+  );
+  expect(ran.exitCode).toBe(1);
+  expect(gate(ran, "agent-review").codes).toContain("duplicate-evidence");
+});
+
+test("malformed external finding content keeps the ordinary invalid-input outcome", () => {
+  const ws = workspace();
+  seedFindings(ws, [finding()]);
+  const ran = run(
+    ws,
+    gateArgs(ws, {
+      review: {
+        ...cleanReview(),
+        reviewFindings: { findings: null, recorded: true },
+      },
+    })
+  );
+  expect(ran.exitCode).toBe(2);
+  expect(issues(ran)[0]?.path).toBe(
+    "facts.pullRequest.reviewFindings.findings"
+  );
+});
+
+test("accepted findings survive a changed head and absent supplied evidence", () => {
+  const ws = workspace();
+  seedFindings(ws, [finding()], false);
+  const changed = "d".repeat(40);
+  const ran = run(ws, gateArgs(ws, { review: null }), {
+    script: {
+      passes: [
+        pass({
+          pullRequest: {
+            body: pullRequest({
+              head: { ref: "feature", repo: { id: 100 }, sha: changed },
+            }),
+            date: SERVED,
+          },
+        }),
+      ],
+    },
+  });
+  expect(gate(ran, "agent-review").codes).toContain("blocking-findings");
+  expect(gate(ran, "agent-review").codes).toContain("findings-unknown");
+  expect(JSON.parse(ledgerText(ws)).reviewFindings).toEqual({
+    findings: [finding()],
+    recorded: false,
   });
 });

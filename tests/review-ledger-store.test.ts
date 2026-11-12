@@ -28,6 +28,7 @@ import {
   ReviewLedgerError,
 } from "../src/index.ts";
 import type {
+  CanonicalReviewLedgerEntry,
   PullRequestReads,
   ReviewLedgerEntry,
   ReviewLedgerLocation,
@@ -119,8 +120,8 @@ const replace = (
   replaceReviewLedger(location(directory, overrides), expected, next);
 
 const entry = (
-  overrides: Partial<ReviewLedgerEntry> = {}
-): ReviewLedgerEntry => ({
+  overrides: Partial<CanonicalReviewLedgerEntry> = {}
+): CanonicalReviewLedgerEntry => ({
   observedRevision: { baseSha: BASE, headSha: HEAD, observedAt: SNAPSHOT_AT },
   requiredReviewers: [
     { id: 31, kind: "team", slug: "maintainers" },
@@ -134,10 +135,11 @@ const entry = (
       submittedAt: SUBMITTED_AT,
     },
   },
+  reviewFindings: { findings: [], recorded: false },
   ...overrides,
 });
 
-const other = (): ReviewLedgerEntry =>
+const other = (): CanonicalReviewLedgerEntry =>
   entry({ requiredReviewers: [{ id: 5, kind: "user", login: "earlier" }] });
 
 const boundAt = (observedAt: string, submittedAt: string) => ({

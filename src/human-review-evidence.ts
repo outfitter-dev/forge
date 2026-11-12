@@ -7,6 +7,11 @@ import type {
   GitHubReview,
   GitHubReviewRequest,
 } from "./github-pull-request-types.ts";
+import type {
+  CanonicalReviewLedgerEntry,
+  RequiredReviewer,
+  ReviewLedgerEntry,
+} from "./review-ledger.ts";
 import {
   boundBase,
   nextSnapshot,
@@ -14,7 +19,6 @@ import {
   reviewerLabel,
   reviewerNaming,
 } from "./review-ledger.ts";
-import type { RequiredReviewer, ReviewLedgerEntry } from "./review-ledger.ts";
 import { wholeSecondUtc } from "./utc-instant.ts";
 
 export interface HumanReviewInput {
@@ -57,7 +61,7 @@ export interface HumanReviewResult {
    * The entry to persist, as it is, if the collection is accepted. It shares
    * no objects with the input.
    */
-  ledger: ReviewLedgerEntry;
+  ledger: CanonicalReviewLedgerEntry;
 }
 
 /** The review history is ambiguous. Collection must stop, not guess. */
@@ -253,6 +257,9 @@ export const humanReviewEvidence = (
       observedRevision: nextSnapshot(input),
       requiredReviewers,
       reviewBindings: bindings,
+      reviewFindings: structuredClone(
+        input.ledger.reviewFindings ?? { findings: [], recorded: false }
+      ),
     },
   };
 };

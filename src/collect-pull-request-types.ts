@@ -1,6 +1,9 @@
 import type { Provenance, PullRequestEvidenceOf } from "./evidence-types.ts";
 import type { GitHubReviewThread } from "./github-pull-request-types.ts";
-import type { ReviewLedgerEntry } from "./review-ledger.ts";
+import type {
+  CanonicalReviewLedgerEntry,
+  ReviewLedgerEntry,
+} from "./review-ledger.ts";
 
 /**
  * The reads of one pull request, already bound to its repository and number by
@@ -88,6 +91,6 @@ export type PullRequestCollectionResult =
       /** Stable full-list source observations, outside evaluator facts. */
       reviewThreads: GitHubReviewThread[];
       /** The entry to persist in place of the one in the request. */
-      ledger: ReviewLedgerEntry;
+      ledger: CanonicalReviewLedgerEntry;
     }
   | PullRequestCollectionFailure;

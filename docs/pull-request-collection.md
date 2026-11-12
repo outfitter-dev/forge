@@ -96,7 +96,7 @@ Each read is its own moment. Two agreeing passes show the pull request, the revi
 
 A label never grants authorization; the hold label only withholds it. The caller must collect only for a repository whose trusted configuration adopts "head branch in the base repository and not held" as the GitHub-readable part of its rule. Supplying a `holdLabel` does not make that choice. A repository that needs a narrower rule must not take this field as that rule.
 
-The result's `ledger` is the entry to persist. It carries every reviewer ever requested, the snapshot of the head and base, and the base each bound approval was bound to.
+The result’s `ledger` is the entry to persist. It carries every reviewer ever requested, the snapshot of the head and base, the base each bound approval was bound to, and the accepted finding history preserved from the request. A legacy missing finding history becomes explicit unknown. Collection returns the canonical four-field entry and preserves findings through revision changes.
 
 ## Results
 
