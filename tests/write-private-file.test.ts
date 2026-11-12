@@ -128,19 +128,21 @@ test("the temporary file is created exclusively, so nothing already at its name 
   writeFileSync(elsewhere, "kept\n");
   symlinkSync(elsewhere, `${file}.${fixed}.tmp`);
   const preload = path.join(directory, "fixed-uuid.ts");
+  // Both scripts are fixed text. What varies reaches them through the
+  // environment, so no value is ever written into code.
   writeFileSync(
     preload,
-    `import {mock} from "bun:test"; import * as actual from "node:crypto"; const original = {...actual}; mock.module("node:crypto", () => ({...original, randomUUID: () => ${JSON.stringify(fixed)}}));`
+    'import {mock} from "bun:test"; import * as actual from "node:crypto"; const original = {...actual}; mock.module("node:crypto", () => ({...original, randomUUID: () => process.env.FIXED_UUID}));'
   );
   const script = path.join(directory, "write.ts");
   writeFileSync(
     script,
-    `import {writePrivateFile} from ${JSON.stringify(helper)}; try { await writePrivateFile(${JSON.stringify(file)}, "new\\n", "leave-temporary"); console.log("written"); } catch (error) { console.log(error.code); }`
+    'const {writePrivateFile} = await import(process.env.HELPER); try { await writePrivateFile(process.env.TARGET, "new\\n", "leave-temporary"); console.log("written"); } catch (error) { console.log(error.code); }'
   );
   const child = Bun.spawnSync(
     [process.execPath, "--preload", preload, script],
     {
-      env: {},
+      env: { FIXED_UUID: fixed, HELPER: helper, TARGET: file },
     }
   );
   expect(child.stdout.toString().trim()).toBe("EEXIST");
