@@ -98,3 +98,41 @@ export const threadPageResponse = (
 /** How GitHub returns any deleted account, author or reviewer alike. */
 export const ghostResponse = (): Record<string, unknown> =>
   actorResponse("ghost", 10_137);
+
+export const issueCommentResponse = (
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> => ({
+  author: {
+    __typename: "Bot",
+    databaseId: 199_175_422,
+    login: "review-bot[bot]",
+  },
+  body: "ordinary issue comment",
+  databaseId: 500,
+  editor: {
+    __typename: "Bot",
+    databaseId: 199_175_422,
+    login: "review-bot[bot]",
+  },
+  id: "IC_500",
+  lastEditedAt: "2026-01-01T00:10:00Z",
+  updatedAt: "2026-01-01T00:10:00Z",
+  url: "https://github.com/example/project/pull/12#issuecomment-500",
+  ...overrides,
+});
+
+export const commentPageResponse = (
+  nodes: unknown[],
+  pageInfo?: Record<string, unknown>
+): Record<string, unknown> => ({
+  data: {
+    repository: {
+      pullRequest: {
+        comments: {
+          nodes,
+          pageInfo: pageInfo ?? { endCursor: null, hasNextPage: false },
+        },
+      },
+    },
+  },
+});

@@ -1,7 +1,4 @@
-import {
-  GITHUB_GHOST_LOGIN,
-  GITHUB_REVIEW_STATES,
-} from "./github-pull-request-types.ts";
+import { GITHUB_REVIEW_STATES } from "./github-pull-request-types.ts";
 import type {
   GitHubActor,
   GitHubBaseChange,
@@ -13,62 +10,21 @@ import type {
   GitHubReviewThreadPage,
   GitHubTeam,
 } from "./github-pull-request-types.ts";
-import { wholeSecondUtc } from "./utc-instant.ts";
+import {
+  commit,
+  each,
+  fail,
+  flag,
+  graphQLActor,
+  identifier,
+  instant,
+  present,
+  record,
+  list,
+  text,
+} from "./github-response.ts";
 
-/** Names the field and what was expected. Never carries response content. */
-export class GitHubResponseError extends Error {
-  readonly path: string;
-
-  constructor(path: string, expectation: string) {
-    super(`${path}: expected ${expectation}`);
-    this.name = "GitHubResponseError";
-    this.path = path;
-  }
-}
-
-const fail = (path: string, expectation: string): never => {
-  throw new GitHubResponseError(path, expectation);
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const present = (value: unknown): boolean =>
-  value !== undefined && value !== null;
-
-const record = (value: unknown, path: string): Record<string, unknown> =>
-  isRecord(value) ? value : fail(path, "an object");
-
-const list = (value: unknown, path: string): unknown[] =>
-  Array.isArray(value) ? value : fail(path, "an array");
-
-// `text` here and `identifier`, `commit` and `instant` below decide what a
-// collection can put into a ledger entry. The validator's field rules in
-// `review-ledger-entry.ts` (`name`, `identifier`, `commit`, `instant`) repeat
-// them and must stay at least as wide: widening one of these requires widening
-// the validator's too, or every ledger replace fails `entry-invalid`.
-const text = (value: unknown, path: string): string =>
-  typeof value === "string" && value !== ""
-    ? value
-    : fail(path, "a nonempty string");
-
-const flag = (value: unknown, path: string): boolean =>
-  typeof value === "boolean" ? value : fail(path, "a boolean");
-
-const identifier = (value: unknown, path: string): number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value > 0
-    ? value
-    : fail(path, "a positive integer");
-
-const commit = (value: unknown, path: string): string =>
-  typeof value === "string" && /^[\da-f]{40}$/u.test(value)
-    ? value
-    : fail(path, "a full lowercase commit ID");
-
-const instant = (value: unknown, path: string): string =>
-  typeof value === "string" && wholeSecondUtc(value) !== null
-    ? value
-    : fail(path, "a whole-second UTC time");
+export { GitHubResponseError } from "./github-response.ts";
 
 const actor = (value: unknown, path: string): GitHubActor => {
   const source = record(value, path);
@@ -86,13 +42,6 @@ const team = (value: unknown, path: string): GitHubTeam => {
     slug: text(source.slug, `${path}.slug`),
   };
 };
-
-const each = <T>(
-  value: unknown,
-  path: string,
-  parse: (item: unknown, itemPath: string) => T
-): T[] =>
-  list(value, path).map((item, index) => parse(item, `${path}[${index}]`));
 
 const revision = (value: unknown, path: string) => {
   const source = record(value, path);
@@ -252,24 +201,8 @@ const reviewThread = (value: unknown, path: string): GitHubReviewThread => {
   }
   const authorPath = `${commentsPath}.nodes[0].author`;
   const comment = record(nodes[0], `${commentsPath}.nodes[0]`);
-  if (comment.author === null) {
-    return { firstAuthor: null, id, isResolved };
-  }
-  const author = record(comment.author, authorPath);
-  const type = text(author.__typename, `${authorPath}.__typename`);
-  if (type === "Mannequin") {
-    return { firstAuthor: null, id, isResolved };
-  }
-  if (type !== "User" && type !== "Bot") {
-    fail(`${authorPath}.__typename`, "User or Bot");
-  }
-  const firstAuthor = {
-    id: identifier(author.databaseId, `${authorPath}.databaseId`),
-    login: text(author.login, `${authorPath}.login`),
-    type,
-  };
   return {
-    firstAuthor: firstAuthor.login === GITHUB_GHOST_LOGIN ? null : firstAuthor,
+    firstAuthor: graphQLActor(comment.author, authorPath),
     id,
     isResolved,
   };

@@ -13,6 +13,8 @@ import type {
 import { at, provenance, REPOSITORY, subject } from "./evidence-fixtures.ts";
 import {
   BASE,
+  commentPageResponse,
+  issueCommentResponse,
   HEAD,
   pullRequestResponse,
   reviewRequestedEvent,
@@ -929,6 +931,7 @@ test("valid options make no request until a read is called", () => {
   const { fetch, requests } = fake();
   const reads = githubPullRequestReads(options(fetch));
   expect(Object.keys(reads).toSorted()).toStrictEqual([
+    "issueComments",
     "pullRequest",
     "reviewThreads",
     "reviews",
@@ -1186,4 +1189,61 @@ test("the real collector reports a list cut off by maxPages as unavailable, neve
     reason: "read-failed",
     status: "unavailable",
   });
+});
+
+test("issueComments posts a fixed GraphQL query with complete comment identity and current editor", async () => {
+  const body = commentPageResponse([issueCommentResponse()]);
+  const fixture = fake(json(body), json(body));
+  const reads = githubPullRequestReads(options(fixture.fetch));
+  expect(await reads.issueComments(null)).toEqual(body);
+  await reads.issueComments("cursor with $hostile syntax");
+  const first = at(fixture.requests);
+  const next = at(fixture.requests, 1);
+  expect(first).toMatchObject({
+    cache: "no-store",
+    method: "POST",
+    redirect: "error",
+    url: GRAPHQL,
+  });
+  expect(first.headers.get("Authorization")).toBe(`Bearer ${TOKEN}`);
+  expect(first.headers.get("Content-Type")).toBe("application/json");
+  expect(graphql(first).variables).toEqual({
+    cursor: null,
+    name: "project",
+    number: 12,
+    owner: "example",
+  });
+  expect(graphql(next).variables.cursor).toBe("cursor with $hostile syntax");
+  expect(graphql(first).query).toBe(graphql(next).query);
+  for (const field of [
+    "followRenames: false",
+    "comments(first: 100, after: $cursor)",
+    "id databaseId url body updatedAt lastEditedAt",
+    "author {",
+    "editor {",
+    "__typename login",
+    "... on User { databaseId }",
+    "... on Bot { databaseId }",
+    "pageInfo { hasNextPage endCursor }",
+  ]) {
+    expect(graphql(first).query).toContain(field);
+  }
+  expect(first.body).not.toContain(TOKEN);
+  expect(first.url).not.toContain(TOKEN);
+});
+
+test("comment GraphQL errors reach the parser while transport failures sanitize response content", async () => {
+  const body = { errors: [{ message: BODY_MARKER }] };
+  const first = fake(json(body));
+  expect(
+    await githubPullRequestReads(options(first.fetch)).issueComments(null)
+  ).toEqual(body);
+  const second = fake(raw(BODY_MARKER, {}, 500));
+  const error = await failure(() =>
+    githubPullRequestReads(options(second.fetch)).issueComments(null)
+  );
+  expect(error.code).toBe("request-failed");
+  expect(error.status).toBe(500);
+  expect(JSON.stringify(error)).not.toContain(BODY_MARKER);
+  expect(JSON.stringify(error)).not.toContain(TOKEN);
 });

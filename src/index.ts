@@ -65,3 +65,21 @@ export type {
   GitHubReviewThread,
   GitHubReviewThreadPage,
 } from "./github-pull-request-types.ts";
+
+export {
+  parseIssueCommentPage,
+  readIssueComments,
+} from "./github-issue-comments.ts";
+export { parseCodexSummary } from "./codex-summary.ts";
+export type {
+  CodexReviewSection,
+  CodexSummaryState,
+  CodexSummaryReason,
+  CodexSummaryObservation,
+} from "./codex-summary.ts";
+export type {
+  GitHubIssueComment,
+  GitHubIssueCommentPage,
+} from "./github-pull-request-types.ts";
+
+export { GitHubResponseError } from "./github-response.ts";

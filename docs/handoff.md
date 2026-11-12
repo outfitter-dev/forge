@@ -6,6 +6,12 @@ The seven original operational documents are verified in the [machine-local arch
 
 For the complete originating-session record, including worker recovery details and superseded decisions, read [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md).
 
+## FOR-37 comment and summary increment
+
+The `for-37-codex-summary` branch starts at `c02650cebe9e4928bbce46a4cb1abcdf538f5c60`. It adds optional GraphQL issue-comment reads, normalized complete comment pagination and the strict pure [Codex summary parser](codex-summary-observations.md). New modules are `src/github-response.ts`, `src/github-issue-comments.ts` and `src/codex-summary.ts`. Shared response validation was extracted from `src/parse-github-pull-request.ts`, retaining its error-class export. The transport, public types/exports, shared fixtures and comment/summary/transport tests carry the integration changes.
+
+Bootstrap and frozen dependency installation pass. Targeted offline tests and the full `bun run check` qualify the local implementation. The Forge lead owns lower-branch integration, fresh independent review and hosted CI after the author commit, then the findings-ledger increment. The lower thread branch's migrated `Mannequin` handling must be preserved through integration into the shared `graphQLActor` helper. This increment maps migrated author/editor/thread identity to explicit unknown. Head/base/time qualification, stable summary collection, persisted findings, evaluator attempts and policy adoption remain pending.
+
 ## FOR-37 thread-observation increment
 
 The `for-37-thread-observations` branch starts at `e28f2fd5193349147c1c2f48d5d358882a6c34a0`. This increment widens the fixed GraphQL thread query and parser, preserves stable IDs, first-author identity and resolution, compares the complete ordered list across collection passes, and returns `reviewThreads` outside evaluator facts. The source changes are in `src/github-pull-request-reads.ts`, `src/github-pull-request-types.ts`, `src/parse-github-pull-request.ts`, `src/collect-pull-request.ts`, `src/collect-pull-request-types.ts` and `src/index.ts`. The three corresponding test suites, shared `tests/github-fixtures.ts` and [collection contract](pull-request-collection.md#review-thread-observations) describe compatibility and failure handling.

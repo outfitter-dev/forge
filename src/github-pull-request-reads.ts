@@ -1,4 +1,7 @@
-import type { PullRequestReads } from "./collect-pull-request-types.ts";
+import type {
+  PullRequestCommentReads,
+  PullRequestReads,
+} from "./collect-pull-request-types.ts";
 import { wholeSecondUtc } from "./utc-instant.ts";
 
 /** The only origin a request is ever made to. */
@@ -28,6 +31,29 @@ const THREADS_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cu
                 ... on Bot { databaseId }
               }
             }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`;
+
+const COMMENTS_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name, followRenames: false) {
+    pullRequest(number: $number) {
+      comments(first: 100, after: $cursor) {
+        nodes {
+          id databaseId url body updatedAt lastEditedAt
+          author {
+            __typename login
+            ... on User { databaseId }
+            ... on Bot { databaseId }
+          }
+          editor {
+            __typename login
+            ... on User { databaseId }
+            ... on Bot { databaseId }
           }
         }
         pageInfo { hasNextPage endCursor }
@@ -138,14 +164,14 @@ const anotherPage = (link: string | null): boolean =>
   link !== null && (link.length > LINK_LIMIT || NEXT.test(link));
 
 /**
- * The four reads `collectPullRequest` takes, bound to one pull request of one
+ * The pull-request reads and optional comment-page read, bound to one pull request of one
  * repository on `https://api.github.com`. It only reads, makes one request per
  * read step and never retries: a failure is a `GitHubReadError`.
  * @throws {GitHubReadError} `options-invalid`, before any request, when an option is not as described.
  */
 export const githubPullRequestReads = (
   options: GitHubPullRequestReadsOptions
-): PullRequestReads => {
+): PullRequestReads & PullRequestCommentReads => {
   // Taken once, so changing the caller's object later changes no request.
   // Types are checked too: a pattern reads a missing token as `undefined`.
   const {
@@ -245,7 +271,20 @@ export const githubPullRequestReads = (
     throw new GitHubReadError("pages-exceeded");
   };
 
+  const graphQL = async (
+    query: string,
+    cursor: string | null
+  ): Promise<unknown> => {
+    const variables = { cursor, name, number: pullNumber, owner };
+    const response = await request(
+      "/graphql",
+      JSON.stringify({ query, variables })
+    );
+    return response.body;
+  };
+
   return {
+    issueComments: (cursor) => graphQL(COMMENTS_QUERY, cursor),
     pullRequest: async () => {
       const response = await request(`${repository}/pulls/${pullNumber}`);
       return {
@@ -253,14 +292,7 @@ export const githubPullRequestReads = (
         servedAt: servedAt(response.headers.get("date")),
       };
     },
-    reviewThreads: async (cursor) => {
-      const variables = { cursor, name, number: pullNumber, owner };
-      const response = await request(
-        "/graphql",
-        JSON.stringify({ query: THREADS_QUERY, variables })
-      );
-      return response.body;
-    },
+    reviewThreads: (cursor) => graphQL(THREADS_QUERY, cursor),
     reviews: () => list(`${repository}/pulls/${pullNumber}/reviews`),
     timeline: () => list(`${repository}/issues/${pullNumber}/timeline`),
   };
