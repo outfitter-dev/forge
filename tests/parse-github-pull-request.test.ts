@@ -19,6 +19,7 @@ import {
   reviewResponse,
   teamResponse,
   threadPageResponse,
+  threadResponse,
 } from "./github-fixtures.ts";
 
 const rejects = (parse: () => unknown, path: string) => {
@@ -253,13 +254,18 @@ test("a thread page counts everything not explicitly resolved", () => {
     parseReviewThreadPage(threadPageResponse([true, false, false]))
   ).toEqual({
     nextCursor: null,
+    threads: [true, false, false].map((isResolved, index) => ({
+      firstAuthor: { id: 7, login: "reviewer", type: "User" },
+      id: `thread-${index}`,
+      isResolved,
+    })),
     unresolved: 2,
   });
   expect(
     parseReviewThreadPage(
       threadPageResponse([true], { endCursor: "cursor-2", hasNextPage: true })
     )
-  ).toEqual({ nextCursor: "cursor-2", unresolved: 0 });
+  ).toMatchObject({ nextCursor: "cursor-2", unresolved: 0 });
 });
 
 test.each([
@@ -519,4 +525,119 @@ test("a null state, thread connection or timeline is rejected, never read as emp
     "threads.data.repository.pullRequest.reviewThreads"
   );
   rejects(() => parseReviewRequests(null), "timeline");
+});
+
+const threadObservationPage = (nodes: readonly unknown[]) => ({
+  data: {
+    repository: {
+      pullRequest: {
+        reviewThreads: {
+          nodes,
+          pageInfo: { endCursor: null, hasNextPage: false },
+        },
+      },
+    },
+  },
+});
+
+test.each([
+  { __typename: "Bot", databaseId: 199_175_422, login: "review-bot[bot]" },
+  { __typename: "User", databaseId: 7, login: "reviewer" },
+])("thread first author preserves $__typename identity", (author) => {
+  expect(
+    parseReviewThreadPage(
+      threadObservationPage([
+        threadResponse({ comments: { nodes: [{ author }] } }),
+      ])
+    ).threads
+  ).toEqual([
+    {
+      firstAuthor: {
+        id: author.databaseId,
+        login: author.login,
+        type: author.__typename,
+      },
+      id: "thread-0",
+      isResolved: false,
+    },
+  ]);
+});
+
+test.each([
+  null,
+  { __typename: "User", databaseId: 10_137, login: "ghost" },
+  { __typename: "Mannequin", login: "imported-reviewer" },
+])(
+  "deleted, migrated or unavailable first author is explicit unknown",
+  (author) => {
+    const result = parseReviewThreadPage(
+      threadObservationPage([
+        threadResponse({ comments: { nodes: [{ author }] } }),
+      ])
+    );
+    expect(result.threads[0]?.firstAuthor).toBeNull();
+    expect(result.unresolved).toBe(1);
+  }
+);
+
+test.each([
+  { field: "id", overrides: { id: undefined } },
+  { field: "id", overrides: { id: "" } },
+  { field: "comments", overrides: { comments: undefined } },
+  { field: "comments.nodes", overrides: { comments: { nodes: [] } } },
+  {
+    field: "comments.nodes",
+    overrides: { comments: { nodes: [{ author: null }, { author: null }] } },
+  },
+  ...[
+    { author: undefined, field: "" },
+    { author: { __typename: "Bot", login: "bot" }, field: ".databaseId" },
+    {
+      author: { __typename: "Bot", databaseId: -1, login: "bot" },
+      field: ".databaseId",
+    },
+    {
+      author: { __typename: "Bot", databaseId: 1.5, login: "bot" },
+      field: ".databaseId",
+    },
+    {
+      author: { __typename: "Bot", databaseId: 1, login: "" },
+      field: ".login",
+    },
+    {
+      author: { __typename: "Organization", databaseId: 1, login: "org" },
+      field: ".__typename",
+    },
+  ].map(({ author, field }) => ({
+    field: `comments.nodes[0].author${field}`,
+    overrides: { comments: { nodes: [{ author }] } },
+  })),
+])(
+  "incomplete thread observations fail closed at $field",
+  ({ overrides, field }) => {
+    rejects(
+      () =>
+        parseReviewThreadPage(
+          threadObservationPage([threadResponse(overrides)])
+        ),
+      `threads.data.repository.pullRequest.reviewThreads.nodes[0].${field}`
+    );
+  }
+);
+
+test("duplicate thread IDs on one page fail closed", () => {
+  rejects(
+    () =>
+      parseReviewThreadPage(
+        threadObservationPage([threadResponse(), threadResponse()])
+      ),
+    "threads.data.repository.pullRequest.reviewThreads.nodes[1].id"
+  );
+});
+
+test("legacy count-only thread responses cannot become complete observations", () => {
+  rejects(
+    () => parseReviewThreadPage(threadObservationPage([{ isResolved: true }])),
+    "threads.data.repository.pullRequest.reviewThreads.nodes[0].id"
+  );
 });

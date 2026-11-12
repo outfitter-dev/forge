@@ -10,6 +10,7 @@ import { provenance, repository } from "./evidence-validation-primitives.ts";
 import type {
   GitHubPullRequest,
   GitHubReview,
+  GitHubReviewThread,
 } from "./github-pull-request-types.ts";
 import {
   HumanReviewError,
@@ -122,22 +123,40 @@ const readTimeline = async (reads: PullRequestReads) => {
   };
 };
 
-/** The unresolved threads on every page. A list that outruns the bound stops the collection. */
+/** Every thread on every page. A repeated identity or cursor cannot establish completeness. */
 const readThreads = async (
   reads: PullRequestReads,
   maxThreadPages: number
-): Promise<number> => {
+): Promise<GitHubReviewThread[]> => {
   let cursor: string | null = null;
-  let unresolved = 0;
+  const threads: GitHubReviewThread[] = [];
+  const ids = new Set<string>();
+  const cursors = new Set<string>();
   for (let read = 0; read < maxThreadPages; read += 1) {
     const after = cursor;
     // oxlint-disable-next-line no-await-in-loop -- Each page is asked for with the cursor the page before it returned.
     const response = await attempt(() => reads.reviewThreads(after));
     const page = parseReviewThreadPage(response);
-    unresolved += page.unresolved;
-    if (page.nextCursor === null) {
-      return unresolved;
+    for (const [index, thread] of page.threads.entries()) {
+      if (ids.has(thread.id)) {
+        throw new GitHubResponseError(
+          `threads.data.repository.pullRequest.reviewThreads.nodes[${index}].id`,
+          "a unique thread ID across all pages"
+        );
+      }
+      ids.add(thread.id);
+      threads.push(thread);
     }
+    if (page.nextCursor === null) {
+      return threads;
+    }
+    if (cursors.has(page.nextCursor)) {
+      throw new GitHubResponseError(
+        "threads.data.repository.pullRequest.reviewThreads.pageInfo.endCursor",
+        "a new pagination cursor"
+      );
+    }
+    cursors.add(page.nextCursor);
     cursor = page.nextCursor;
   }
   return stop({ reason: "thread-pages-exceeded", status: "unavailable" });
@@ -177,7 +196,7 @@ export const collectPullRequest = async (
       request
     );
     const timeline = await readTimeline(reads);
-    const unresolvedThreads = await readThreads(reads, request.maxThreadPages);
+    const reviewThreads = await readThreads(reads, request.maxThreadPages);
 
     const again = await readPullRequest(reads, request);
     // GitHub's clock does not run backwards between two reads, so an earlier
@@ -199,7 +218,7 @@ export const collectPullRequest = async (
       return { reason: "timeline-changed", status: "changed" };
     }
     const threadsAgain = await readThreads(reads, request.maxThreadPages);
-    if (unresolvedThreads !== threadsAgain) {
+    if (!isDeepStrictEqual(reviewThreads, threadsAgain)) {
       return { reason: "threads-changed", status: "changed" };
     }
 
@@ -233,9 +252,11 @@ export const collectPullRequest = async (
           kind: "pull_request",
           repository: request.repository,
         },
-        unresolvedThreads,
+        unresolvedThreads: reviewThreads.filter((thread) => !thread.isResolved)
+          .length,
       },
       ledger,
+      reviewThreads,
       status: "collected",
     };
   } catch (error) {

@@ -20,6 +20,7 @@ import {
   reviewResponse,
   teamResponse,
   threadPageResponse,
+  threadResponse,
 } from "./github-fixtures.ts";
 
 const OTHER = "c".repeat(40);
@@ -62,7 +63,8 @@ const pages = (...resolved: unknown[][]): unknown[] =>
       page,
       index + 1 < resolved.length
         ? { endCursor: `cursor-${index + 1}`, hasNextPage: true }
-        : { endCursor: null, hasNextPage: false }
+        : { endCursor: null, hasNextPage: false },
+      `page-${index}`
     )
   );
 
@@ -916,4 +918,170 @@ test.each<Partial<PullRequestCollectionRequest>>([
     status: "invalid-request",
   });
   expect(fixture.calls).toEqual([]);
+});
+
+/** Preserve the ordinary connection envelope while varying thread observations. */
+const observedPage = (
+  nodes: readonly unknown[],
+  pageInfo?: Record<string, unknown>
+) => ({
+  data: {
+    repository: {
+      pullRequest: {
+        reviewThreads: {
+          nodes,
+          pageInfo: pageInfo ?? { endCursor: null, hasNextPage: false },
+        },
+      },
+    },
+  },
+});
+
+test.each([
+  {
+    name: "same-count thread substitution",
+    second: [threadResponse({ id: "other" })],
+  },
+  {
+    name: "author substitution",
+    second: [
+      threadResponse({
+        comments: {
+          nodes: [
+            { author: { __typename: "Bot", databaseId: 99, login: "bot" } },
+          ],
+        },
+      }),
+    ],
+  },
+  {
+    name: "same-count resolution swap",
+    second: [
+      threadResponse({ isResolved: true }),
+      threadResponse({ id: "other", isResolved: false }),
+    ],
+  },
+])("full thread stability rejects $name", async ({ name, second }) => {
+  const first =
+    name === "same-count resolution swap"
+      ? [threadResponse(), threadResponse({ id: "other", isResolved: true })]
+      : [threadResponse()];
+  expect(
+    await collect(
+      pass({ threads: [observedPage(first)] }),
+      pass({ threads: [observedPage(second)] })
+    )
+  ).toEqual({ reason: "threads-changed", status: "changed" });
+});
+
+test("collected thread observations retain identity and derive the evaluator count", async () => {
+  const result = collected(
+    await collect(
+      pass({
+        threads: [
+          observedPage([
+            threadResponse(),
+            threadResponse({ id: "resolved", isResolved: true }),
+          ]),
+        ],
+      })
+    )
+  );
+  expect(result.reviewThreads).toEqual([
+    {
+      firstAuthor: { id: 7, login: "reviewer", type: "User" },
+      id: "thread-0",
+      isResolved: false,
+    },
+    {
+      firstAuthor: { id: 7, login: "reviewer", type: "User" },
+      id: "resolved",
+      isResolved: true,
+    },
+  ]);
+  expect(result.evidence.unresolvedThreads).toBe(1);
+});
+
+test("migrated comment authors keep thread identity and unresolved counts without attribution", async () => {
+  const result = collected(
+    await collect(
+      pass({
+        threads: [
+          observedPage([
+            threadResponse({
+              comments: {
+                nodes: [
+                  { author: { __typename: "Mannequin", login: "imported" } },
+                ],
+              },
+            }),
+          ]),
+        ],
+      })
+    )
+  );
+  expect(result.reviewThreads).toEqual([
+    { firstAuthor: null, id: "thread-0", isResolved: false },
+  ]);
+  expect(result.evidence.unresolvedThreads).toBe(1);
+});
+
+test("duplicate thread identities across pages cannot establish complete collection", async () => {
+  expect(
+    await collect(
+      pass({
+        threads: [
+          observedPage([threadResponse()], {
+            endCursor: "cursor-1",
+            hasNextPage: true,
+          }),
+          observedPage([threadResponse()]),
+        ],
+      })
+    )
+  ).toMatchObject({
+    path: "threads.data.repository.pullRequest.reviewThreads.nodes[0].id",
+    reason: "response-unreadable",
+    status: "unreadable",
+  });
+});
+
+test("repeated pagination cursors cannot establish complete collection", async () => {
+  expect(
+    await collect(
+      pass({
+        threads: [
+          observedPage([threadResponse()], {
+            endCursor: "cursor-1",
+            hasNextPage: true,
+          }),
+          observedPage([threadResponse({ id: "other" })], {
+            endCursor: "cursor-1",
+            hasNextPage: true,
+          }),
+        ],
+      })
+    )
+  ).toMatchObject({
+    path: "threads.data.repository.pullRequest.reviewThreads.pageInfo.endCursor",
+    status: "unreadable",
+  });
+});
+
+test("pagination boundaries may change when the complete ordered observations agree", async () => {
+  const first = threadResponse();
+  const second = threadResponse({ id: "other", isResolved: true });
+  const result = collected(
+    await collect(
+      pass({ threads: [observedPage([first, second])] }),
+      pass({
+        threads: [
+          observedPage([first], { endCursor: "cursor-1", hasNextPage: true }),
+          observedPage([second]),
+        ],
+      })
+    )
+  );
+  expect(result.reviewThreads).toHaveLength(2);
+  expect(result.evidence.unresolvedThreads).toBe(1);
 });

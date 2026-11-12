@@ -6,6 +6,12 @@ The seven original operational documents are verified in the [machine-local arch
 
 For the complete originating-session record, including worker recovery details and superseded decisions, read [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md).
 
+## FOR-37 thread-observation increment
+
+The `for-37-thread-observations` branch starts at `e28f2fd5193349147c1c2f48d5d358882a6c34a0`. This increment widens the fixed GraphQL thread query and parser, preserves stable IDs, first-author identity and resolution, compares the complete ordered list across collection passes, and returns `reviewThreads` outside evaluator facts. The source changes are in `src/github-pull-request-reads.ts`, `src/github-pull-request-types.ts`, `src/parse-github-pull-request.ts`, `src/collect-pull-request.ts`, `src/collect-pull-request-types.ts` and `src/index.ts`. The three corresponding test suites, shared `tests/github-fixtures.ts` and [collection contract](pull-request-collection.md#review-thread-observations) describe compatibility and failure handling.
+
+Local bootstrap, frozen dependency installation, targeted offline tests and `bun run check` qualify the implementation. Hosted CI, independent review and live GitHub query acceptance remain subsequent delivery evidence. The Forge lead owns integration, fresh checks/review and delivery after the author’s commit. The next implementation increment reads summary comments and adds their strict parser. Current observations establish no hosted-review verdict, policy entry or finding-ledger entry. Null and deleted first authors remain explicitly unknown, and count-only injected responses must adopt the wider response before collecting again.
+
 ## Intended scope
 
 [Forge’s design tenets](tenets.md) govern construction principles; the [automation contract](automation-contract.md) governs evidence, authority, trust boundaries, and migration. This handoff records current scope and evidence; it does not override those principles. The initial principles and behavioral guarantees were compared with the proposed [Ranger tenets in PR #3](https://github.com/outfitter-dev/ranger/pull/3) at revision `626baab`, then reviewed against the construction/operating-contract split at `b815e01`. The shared principles align on contracts, evidence, explicit authority, and faithful provider semantics. Ranger owns agent workflows; Forge owns engineering automation; execution hosts enforce permissions and isolation. This alignment does not establish a cross-project API.

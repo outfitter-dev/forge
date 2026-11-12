@@ -1,4 +1,7 @@
-import { GITHUB_REVIEW_STATES } from "./github-pull-request-types.ts";
+import {
+  GITHUB_GHOST_LOGIN,
+  GITHUB_REVIEW_STATES,
+} from "./github-pull-request-types.ts";
 import type {
   GitHubActor,
   GitHubBaseChange,
@@ -6,6 +9,7 @@ import type {
   GitHubReview,
   GitHubReviewRequest,
   GitHubReviewState,
+  GitHubReviewThread,
   GitHubReviewThreadPage,
   GitHubTeam,
 } from "./github-pull-request-types.ts";
@@ -235,6 +239,42 @@ export const parseReviews = (value: unknown): GitHubReview[] =>
     };
   });
 
+/** A first comment is required even when GitHub cannot supply its author. */
+const reviewThread = (value: unknown, path: string): GitHubReviewThread => {
+  const source = record(value, path);
+  const id = text(source.id, `${path}.id`);
+  const isResolved = flag(source.isResolved, `${path}.isResolved`);
+  const commentsPath = `${path}.comments`;
+  const comments = record(source.comments, commentsPath);
+  const nodes = list(comments.nodes, `${commentsPath}.nodes`);
+  if (nodes.length !== 1) {
+    fail(`${commentsPath}.nodes`, "exactly one first comment");
+  }
+  const authorPath = `${commentsPath}.nodes[0].author`;
+  const comment = record(nodes[0], `${commentsPath}.nodes[0]`);
+  if (comment.author === null) {
+    return { firstAuthor: null, id, isResolved };
+  }
+  const author = record(comment.author, authorPath);
+  const type = text(author.__typename, `${authorPath}.__typename`);
+  if (type === "Mannequin") {
+    return { firstAuthor: null, id, isResolved };
+  }
+  if (type !== "User" && type !== "Bot") {
+    fail(`${authorPath}.__typename`, "User or Bot");
+  }
+  const firstAuthor = {
+    id: identifier(author.databaseId, `${authorPath}.databaseId`),
+    login: text(author.login, `${authorPath}.login`),
+    type,
+  };
+  return {
+    firstAuthor: firstAuthor.login === GITHUB_GHOST_LOGIN ? null : firstAuthor,
+    id,
+    isResolved,
+  };
+};
+
 /** One page of the GraphQL `reviewThreads` connection for a pull request. */
 export const parseReviewThreadPage = (
   value: unknown
@@ -249,9 +289,18 @@ export const parseReviewThreadPage = (
   const pullRequest = record(repository.pullRequest, pullRequestPath);
   const threadsPath = `${pullRequestPath}.reviewThreads`;
   const threads = record(pullRequest.reviewThreads, threadsPath);
-  const resolved = each(threads.nodes, `${threadsPath}.nodes`, (item, path) =>
-    flag(record(item, path).isResolved, `${path}.isResolved`)
+  const observations = each(
+    threads.nodes,
+    `${threadsPath}.nodes`,
+    reviewThread
   );
+  const ids = new Set<string>();
+  for (const [index, thread] of observations.entries()) {
+    if (ids.has(thread.id)) {
+      fail(`${threadsPath}.nodes[${index}].id`, "a unique thread ID");
+    }
+    ids.add(thread.id);
+  }
   const pageInfo = record(threads.pageInfo, `${threadsPath}.pageInfo`);
   const more = flag(
     pageInfo.hasNextPage,
@@ -261,6 +310,7 @@ export const parseReviewThreadPage = (
     nextCursor: more
       ? text(pageInfo.endCursor, `${threadsPath}.pageInfo.endCursor`)
       : null,
-    unresolved: resolved.filter((isResolved) => !isResolved).length,
+    threads: observations,
+    unresolved: observations.filter((thread) => !thread.isResolved).length,
   };
 };

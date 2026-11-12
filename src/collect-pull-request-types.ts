@@ -1,4 +1,5 @@
 import type { Provenance, PullRequestEvidenceOf } from "./evidence-types.ts";
+import type { GitHubReviewThread } from "./github-pull-request-types.ts";
 import type { ReviewLedgerEntry } from "./review-ledger.ts";
 
 /**
@@ -78,6 +79,8 @@ export type PullRequestCollectionResult =
   | {
       status: "collected";
       evidence: CollectedPullRequestEvidence;
+      /** Stable full-list source observations, outside evaluator facts. */
+      reviewThreads: GitHubReviewThread[];
       /** The entry to persist in place of the one in the request. */
       ledger: ReviewLedgerEntry;
     }
