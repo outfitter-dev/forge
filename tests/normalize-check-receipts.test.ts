@@ -437,6 +437,8 @@ test.each<keyof CheckSource>([
   "worktreeDigest",
   "indexDigest",
   "untracked",
+  // The one field whose absence would read as a clean tree.
+  "dirty",
 ])("a receipt whose sources both lack %s is malformed", (key) => {
   const broken = sourceWithout(key);
   expect(
@@ -463,10 +465,10 @@ test("a malformed source before the run is reported, not thrown", () => {
 
 test("results carry the pull request and provenance the caller supplied, and nothing else", () => {
   const wide = {
-    producer: "verification:fixture",
+    producer: "verification:another-lane",
     reviewer: "not-part-of-provenance",
     runId: "caller-run",
-    runtimeFingerprint: "2".repeat(64),
+    runtimeFingerprint: "5".repeat(64),
   };
   const { checks } = normalizeCheckReceipts([receipt()], {
     checks: { build: "check", lint: "check", test: "check" },
@@ -480,8 +482,18 @@ test("results carry the pull request and provenance the caller supplied, and not
     )
   ).toBe(true);
   expect(at(checks).provenance).toEqual({
-    producer: "verification:fixture",
+    producer: "verification:another-lane",
     runId: "receipt-1",
-    runtimeFingerprint: "2".repeat(64),
+    runtimeFingerprint: "5".repeat(64),
+  });
+});
+
+test("a source with a null dirty flag is malformed, not clean", () => {
+  const broken = { ...source(), dirty: null };
+  expect(
+    normalize({ ...receipt(), sourceAfter: broken, sourceBefore: broken })
+  ).toEqual({
+    checks: [],
+    rejected: [{ code: "malformed-receipt", index: 0 }],
   });
 });
