@@ -23,7 +23,7 @@ if (result.status === "collected") {
 }
 ```
 
-`storedEntry` and `persist` stand for the review ledger store's `readReviewLedger` and `replaceReviewLedger`. [Its page](review-ledger-store.md#the-callers-flow) shows the whole flow, including what to do when another collection stored an entry in between.
+`storedEntry` and `persist` stand for the review ledger store's `readReviewLedger` and `replaceReviewLedger`. [Its page](review-ledger-store.md#the-callers-flow) shows the whole flow, including what to do when another collection stored an entry in between. [`forge gate`](forge-gate.md#flow) is the command that runs that flow.
 
 ## Request and reads
 
@@ -216,7 +216,7 @@ If `maxPages` pages have been read and the last one still names a next page, the
 
 For a caller that keeps to the types for the cursor, everything this transport throws is a `GitHubReadError`. A cursor that is not a string or `null` can throw something else. The error's message is one of the codes below, followed by the HTTP status for a response with a failing status. `code` and `status` carry the same two facts. The error never holds the token, an address or its query, a response body or header, or anything an underlying error said, and it has no `cause`. The class and its code type, `GitHubReadFailure`, are exported from `src/index.ts`.
 
-`collectPullRequest` discards what a read threw and reports `unavailable`, `read-failed`. A caller that wants the code in its logs must wrap the reads to record it. Otherwise `pages-exceeded` from a `maxPages` that is too small cannot be told from an outage in the collected result.
+`collectPullRequest` discards what a read threw and reports `unavailable`, `read-failed`. A caller that wants the code in its logs must wrap the reads to record it, as [`forge gate`](forge-gate.md#not-collected) does for its output. Otherwise `pages-exceeded` from a `maxPages` that is too small cannot be told from an outage in the collected result.
 
 | Message | Meaning |
 | --- | --- |
