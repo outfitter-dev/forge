@@ -144,6 +144,10 @@ export const readGateInputs = async (
   env: Record<string, string | undefined>,
   cwd: string
 ): Promise<GateInputsResult> => {
+  // Bun can log Authorization headers before the transport can redact them.
+  if (Object.keys(env).includes("BUN_CONFIG_VERBOSE_FETCH")) {
+    return refused("BUN_CONFIG_VERBOSE_FETCH", "must be unset");
+  }
   const token = env[TOKEN_VARIABLE];
   if (token === undefined || !TOKEN.test(token)) {
     return refused(TOKEN_VARIABLE, "expected a token of visible ASCII");

@@ -48,7 +48,7 @@ Without `--review-evidence` the command evaluates `agentReviews: []`, `reviewFin
 
 The GitHub token is read from the environment variable `FORGE_GITHUB_TOKEN` and from nowhere else: not from `GITHUB_TOKEN`, `GH_TOKEN`, a flag or a file. A missing or empty token, or one that is not visible ASCII with no spaces, is invalid input. The token is sent only as the `Authorization` header of requests to `https://api.github.com`. The command never writes it: not in a document, an issue or an error. It needs read access to the pull request and nothing more.
 
-The runtime is outside that promise. Bun prints each request to stderr, with the `Authorization` header in the clear, when `BUN_CONFIG_VERBOSE_FETCH` is set in the environment. The command neither detects nor clears that variable, so the invoker must not set it.
+Bun's verbose fetch logging can print the `Authorization` header to stderr. The command refuses any invocation where `BUN_CONFIG_VERBOSE_FETCH` is set, including an empty value, before reading the token, collecting GitHub state or opening the ledger. Unset the variable before invoking the command.
 
 ## The gate policy file
 
@@ -282,6 +282,7 @@ An issue's `path` names where the problem is:
 | A flag, such as `--state` | That flag: missing, repeated, without a value, or with a value of the wrong form. `--repository` is also the path when the repository differs from the policy's. |
 | `arguments[N]` | The argument at position N after `gate`, which is not a known flag. The argument is not repeated: a stray argument can be anything, a credential included. |
 | `FORGE_GITHUB_TOKEN` | The token. |
+| `BUN_CONFIG_VERBOSE_FETCH` | Verbose fetch logging must be unset to keep the token out of runtime logs. |
 | `--policy`, `--receipt[N]`, `--review-evidence` | That file could not be read or is not JSON. N is the position of the `--receipt` flag. |
 | `gatePolicy…` | A field of the policy file, as the gate policy format reads it. |
 | `reviewEvidence…` | A key of the review-evidence file. |
@@ -321,7 +322,7 @@ They are constants in [run-gate.ts](../src/run-gate.ts), not flags. A list that 
 - **That the working directory is the checkout.** The state directory is checked against the working directory only. A state directory inside some other checkout or job workspace is not caught.
 - **That the facts still hold.** The answer describes the pull request when it was read. A push, a label or a review after that is not seen. The [automation contract](automation-contract.md#decisions-leave-usable-evidence) requires a fresh evaluation before a consequential action.
 - **That the clock is right.** The time given to the ledger store is the machine's. A clock behind GitHub's stops the run with `entry-ahead-of-clock`; a clock far ahead lets a future-dated ledger entry through. See [`now` and `entry-ahead-of-clock`](review-ledger-store.md#now-and-entry-ahead-of-clock).
-- **That the runtime's environment is clean.** The requests are made by Bun's own `fetch`, which the invoker's environment configures. A proxy, or a setting that turns off certificate verification, removes the assurance that a response is GitHub's, as the [transport's limits](pull-request-collection.md#what-the-transport-does-not-establish) say, and `BUN_CONFIG_VERBOSE_FETCH` prints [the token](#the-token) to stderr.
+- **That the runtime's environment is clean.** The requests are made by Bun's own `fetch`, which the invoker's environment configures. A proxy, or a setting that turns off certificate verification, removes the assurance that a response is GitHub's, as the [transport's limits](pull-request-collection.md#what-the-transport-does-not-establish) say. The command refuses `BUN_CONFIG_VERBOSE_FETCH` as described under [the token](#the-token).
 - **Anything about a live GitHub.** No live run against GitHub is qualified. The API version, the GraphQL query, the token's access and GitHub's actual responses are untested outside fixtures, as the [transport's own limits](pull-request-collection.md#what-the-transport-does-not-establish) say.
 - **Any enforcement.** Nothing here posts a status, and no repository rule requires one. Until a lane reports the exit code as a required status, a pull request this command calls not eligible can still be merged.
 

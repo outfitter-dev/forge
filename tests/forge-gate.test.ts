@@ -907,9 +907,16 @@ test.each([
     const thrower = path.join(ws.harness, "thrower.ts");
     writeFileSync(
       thrower,
-      `import { mock } from "bun:test"; mock.module(${JSON.stringify(path.join(root, module))}, () => ({ ${name}: () => { throw new Error(${JSON.stringify(MARKER)}); } }));`
+      'import { mock } from "bun:test"; mock.module(process.env.FORGE_TEST_THROW_MODULE, () => ({ [process.env.FORGE_TEST_THROW_EXPORT]: () => { throw new Error(process.env.FORGE_TEST_THROW_MESSAGE); } }));'
     );
-    const ran = run(ws, gateArgs(ws), { preloads: [thrower] });
+    const ran = run(ws, gateArgs(ws), {
+      env: {
+        FORGE_TEST_THROW_EXPORT: name,
+        FORGE_TEST_THROW_MESSAGE: MARKER,
+        FORGE_TEST_THROW_MODULE: path.join(root, module),
+      },
+      preloads: [thrower],
+    });
     expect(ran.exitCode).toBe(3);
     expect(notCollected(ran)).toStrictEqual({
       kind: "forge-gate",
@@ -1078,6 +1085,20 @@ test.each<[string, RunOptions]>([
   expect(ran.stdout).not.toContain("ghp_");
   expect(ran.document).not.toHaveProperty("usage");
 });
+
+test.each(["1", "true", "curl", "0", ""])(
+  "verbose fetch set to %p is refused before any authenticated request",
+  (value) => {
+    const ws = workspace();
+    const ran = run(ws, gateArgs(ws), {
+      env: { BUN_CONFIG_VERBOSE_FETCH: value },
+    });
+    expectRefused(ws, ran, "BUN_CONFIG_VERBOSE_FETCH");
+    expect(issues(ran)).toEqual([
+      { message: "must be unset", path: "BUN_CONFIG_VERBOSE_FETCH" },
+    ]);
+  }
+);
 
 test.each<[string, string, (ws: Workspace) => string]>([
   ["--policy", "--policy", (ws) => path.join(ws.inputs, "missing.json")],
