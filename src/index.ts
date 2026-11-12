@@ -45,3 +45,17 @@ export type {
   GitHubPullRequestReadsOptions,
   GitHubReadFailure,
 } from "./github-pull-request-reads.ts";
+export {
+  emptyReviewLedgerEntry,
+  parseReviewLedgerEntry,
+  ReviewLedgerError,
+} from "./review-ledger-entry.ts";
+export type { ReviewLedgerErrorCode } from "./review-ledger-entry.ts";
+export {
+  readReviewLedger,
+  replaceReviewLedger,
+} from "./review-ledger-store.ts";
+export type {
+  ReviewLedgerLocation,
+  ReviewLedgerReadOptions,
+} from "./review-ledger-store.ts";

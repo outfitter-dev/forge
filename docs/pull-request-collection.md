@@ -2,7 +2,7 @@
 
 `collectPullRequest(request, reads)` reads one pull request's live state and returns the pull-request part of the [evidence evaluator](evidence-evaluator.md)'s input (FOR-34). It is exported from `src/index.ts` with its types. Everything it learns comes through the four injected reads: it performs no network, filesystem, clock or environment access, and it never writes to GitHub.
 
-It supplies `subject`, `provenance`, `assignments`, `humanReviews`, `open`, `draft`, `mergeable`, `mergeAuthorized` and `unresolvedThreads`, typed from `PullRequestEvidenceOf` in [evidence-types.ts](../src/evidence-types.ts). It does not supply `checks`, `agentReviews`, `reviewFindings` or `reviewLadder`; [verification evidence](verification-evidence.md) and other operations do. It contains no GitHub client, pagination, token handling, ledger store or command, and it collects no merge group. The [GitHub read transport](#github-read-transport) is a separate operation that supplies the four reads.
+It supplies `subject`, `provenance`, `assignments`, `humanReviews`, `open`, `draft`, `mergeable`, `mergeAuthorized` and `unresolvedThreads`, typed from `PullRequestEvidenceOf` in [evidence-types.ts](../src/evidence-types.ts). It does not supply `checks`, `agentReviews`, `reviewFindings` or `reviewLadder`; [verification evidence](verification-evidence.md) and other operations do. It contains no GitHub client, pagination, token handling, ledger store or command, and it collects no merge group. The [GitHub read transport](#github-read-transport) is a separate operation that supplies the four reads, and the [review ledger store](review-ledger-store.md) is a separate operation that supplies the ledger entry and persists the one returned.
 
 ```ts
 import { collectPullRequest } from "./src/index.ts";
@@ -22,6 +22,8 @@ if (result.status === "collected") {
   await persist(result.ledger);
 }
 ```
+
+`storedEntry` and `persist` stand for the review ledger store's `readReviewLedger` and `replaceReviewLedger`. [Its page](review-ledger-store.md#the-callers-flow) shows the whole flow, including what to do when another collection stored an entry in between.
 
 ## Request and reads
 
@@ -127,7 +129,7 @@ A stopped collection is not evidence. The caller collects again or reports the s
 - A fresh read on every call. A response replayed from a cache makes the second pass agree with the first without showing anything. The only replay caught here is a second pull request read whose `servedAt` is earlier than the first's. A replay carrying the same time, and a replayed reviews, timeline or thread response, are not caught.
 - The repository's hold label, spelled as it is there apart from the case of ASCII letters. It must be printable ASCII, so a repository whose hold label holds any other character cannot be collected with it. A mistyped hold label holds nothing: the operation cannot tell whether a label of that name exists, and every unheld-looking pull request from the base repository is then authorized.
 - `servedAt` from the `Date` header of the pull request response itself, converted to a whole-second UTC time such as `2026-01-01T01:00:00Z`. It must not be a local clock or a time taken before the request. `HumanReviewInput.pullRequestReadAt` in [human-review-evidence.ts](../src/human-review-evidence.ts) says what a wrong time can do.
-- The stored ledger entry for this pull request, and persistence of the returned entry only when the status is `collected`. The ledger must be an entry validated by its store: its shape is not checked here, and a malformed one can make the call reject or bind an approval it should not.
+- The stored ledger entry for this pull request, and persistence of the returned entry only when the status is `collected`. The ledger must be an entry validated by its store, the [review ledger store](review-ledger-store.md): its shape is not checked here, and a malformed one can make the call reject or bind an approval it should not. The collection's evidence must not be used as if its bindings were recorded until that store has stored the returned entry.
 - A `maxThreadPages` large enough for the pull request. Too small a bound gives `unavailable`, never a short count.
 - A collector identity in `provenance` that it can vouch for.
 
