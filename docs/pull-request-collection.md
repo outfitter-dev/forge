@@ -71,7 +71,7 @@ Parsed values are compared, not response text. A field Forge does not read, such
 
 The comparison follows the second pass and stops at the first difference, so a collection reported as changed made no further reads. GitHub computes `mergeable` after it is first asked: a collection that sees `null` and then a value is `changed`, and the caller collects again. A `mergeable` that is `null` in both passes is collected as `null`, which the evaluator blocks.
 
-Each of the eight reads is its own moment. Two agreeing passes show the pull request, the reviews, the timeline and the threads each agreeing at two moments; they do not show that nothing changed and changed back between those two. The pull request is last observed at the start of the second pass. A label, push or close after that read is not seen, including one made while the second pass is still reading the reviews, timeline and threads. The [automation contract](automation-contract.md#decisions-leave-usable-evidence) requires a fresh collection before a consequential action.
+Each read is its own moment. Two agreeing passes show the pull request, the reviews, the timeline and the threads each agreeing at two moments; they do not show that nothing changed and changed back between those two. The pull request is last observed at the start of the second pass. A label, push or close after that read is not seen, including one made while the second pass is still reading the reviews, timeline and threads. The [automation contract](automation-contract.md#decisions-leave-usable-evidence) requires a fresh collection before a consequential action.
 
 ## Evidence
 

@@ -447,6 +447,9 @@ test.each([
   { hold: HOLD, labels: ["docs", "FORGE:HOLD", "bug"] },
   { hold: OTHER_HOLD, labels: [OTHER_HOLD] },
   { hold: OTHER_HOLD, labels: ["Do Not Land", "docs"] },
+  // Capitals on the request side: both names are folded, not only GitHub's.
+  { hold: "Forge:Hold", labels: [HOLD] },
+  { hold: "DO NOT LAND", labels: ["docs", OTHER_HOLD] },
 ])(
   "labels $labels hold a pull request under the hold label $hold",
   async ({ hold, labels }) => {
@@ -543,16 +546,30 @@ test.each([
   }
 );
 
-test("a repository name that matches only by a Unicode case mapping is a mismatch", async () => {
-  const result = await collect(
-    pass({ pullRequest: pr({ base: baseAt(BASE, `example/${KELVIN}it`) }) }),
-    undefined,
-    { repository: "example/kit" }
+test.each([
+  { how: "a Unicode lower-casing", served: `example/${KELVIN}it` },
+  { how: "a Unicode upper-casing", served: "example/k\u0131t" },
+  { how: "dropping a zero-width space", served: "example/k\u200Bit" },
+])(
+  "a repository name that matches only by $how is a mismatch",
+  async ({ served }) => {
+    const result = await collect(
+      pass({ pullRequest: pr({ base: baseAt(BASE, served) }) }),
+      undefined,
+      { repository: "example/kit" }
+    );
+    expect(result).toStrictEqual({
+      reason: "repository-mismatch",
+      status: "mismatch",
+    });
+  }
+);
+
+test("a requested repository name with capitals matches GitHub's lower-case name", async () => {
+  const result = collected(
+    await collect(pass(), undefined, { repository: "Example/Project" })
   );
-  expect(result).toStrictEqual({
-    reason: "repository-mismatch",
-    status: "mismatch",
-  });
+  expect(result.evidence.subject.repository).toBe("Example/Project");
 });
 
 test("a repository name that differs only in case is the requested repository", async () => {
