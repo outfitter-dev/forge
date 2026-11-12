@@ -37,3 +37,11 @@ export type {
   ReviewBinding,
   ReviewLedgerEntry,
 } from "./review-ledger.ts";
+export {
+  GitHubReadError,
+  githubPullRequestReads,
+} from "./github-pull-request-reads.ts";
+export type {
+  GitHubPullRequestReadsOptions,
+  GitHubReadFailure,
+} from "./github-pull-request-reads.ts";
