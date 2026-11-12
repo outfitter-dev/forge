@@ -3,6 +3,14 @@
  * of a mutable service: parsing establishes their shape, not who produced them
  * or that they still hold.
  */
+/** Every deleted account is returned under this login. */
+export const GITHUB_GHOST_LOGIN = "ghost";
+
+/**
+ * An account as GitHub names it now. Deleted accounts all come back as the
+ * same placeholder, so that one identity can stand for several people. A login
+ * can also change; `id` is the stable key for an account that still exists.
+ */
 export interface GitHubActor {
   id: number;
   login: string;
@@ -20,12 +28,21 @@ export interface GitHubPullRequest {
   state: "open" | "closed";
   draft: boolean;
   merged: boolean;
-  /** `null` while GitHub has not computed it. Unknown, never mergeable. */
+  /**
+   * `null` while GitHub has not computed it: unknown, never mergeable. `true`
+   * is GitHub's merge computation only, not a statement that rules allow landing.
+   */
   mergeable: boolean | null;
   author: GitHubActor;
   /** A head whose fork was deleted has no repository. */
   head: { sha: string; ref: string; repositoryId: number | null };
-  base: { sha: string; ref: string; repositoryId: number };
+  /** `repositoryName` is `owner/name` as GitHub reports it now, after any rename. */
+  base: {
+    sha: string;
+    ref: string;
+    repositoryId: number;
+    repositoryName: string;
+  };
   labels: { id: number; name: string }[];
   requestedReviewers: GitHubActor[];
   requestedTeams: GitHubTeam[];
@@ -35,6 +52,12 @@ export interface GitHubPullRequest {
 export type GitHubReviewRequest =
   | { kind: "user"; reviewer: GitHubActor }
   | { kind: "team"; team: GitHubTeam };
+
+/** A timeline event after which the pull request's base is not what it was. */
+export interface GitHubBaseChange {
+  event: "base_ref_changed" | "base_ref_force_pushed";
+  createdAt: string;
+}
 
 export const GITHUB_REVIEW_STATES = [
   "APPROVED",
@@ -52,7 +75,7 @@ export interface GitHubReview {
   state: GitHubReviewState;
   /** The commit reviewed. GitHub records no base for a review. */
   commitId: string | null;
-  /** As GitHub sent it; a pending review has none. Not yet checked as a time. */
+  /** A whole-second UTC time. `null` only for a pending review. */
   submittedAt: string | null;
 }
 

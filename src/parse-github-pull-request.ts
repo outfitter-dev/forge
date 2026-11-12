@@ -1,6 +1,7 @@
 import { GITHUB_REVIEW_STATES } from "./github-pull-request-types.ts";
 import type {
   GitHubActor,
+  GitHubBaseChange,
   GitHubPullRequest,
   GitHubReview,
   GitHubReviewRequest,
@@ -8,6 +9,7 @@ import type {
   GitHubReviewThreadPage,
   GitHubTeam,
 } from "./github-pull-request-types.ts";
+import { wholeSecondUtc } from "./utc-instant.ts";
 
 /** Names the field and what was expected. Never carries response content. */
 export class GitHubResponseError extends Error {
@@ -53,6 +55,11 @@ const commit = (value: unknown, path: string): string =>
   typeof value === "string" && /^[\da-f]{40}$/u.test(value)
     ? value
     : fail(path, "a full lowercase commit ID");
+
+const instant = (value: unknown, path: string): string =>
+  typeof value === "string" && wholeSecondUtc(value) !== null
+    ? value
+    : fail(path, "a whole-second UTC time");
 
 const actor = (value: unknown, path: string): GitHubActor => {
   const source = record(value, path);
@@ -103,6 +110,10 @@ export const parsePullRequest = (value: unknown): GitHubPullRequest => {
     base: {
       ref: base.ref,
       repositoryId: repositoryId(base.repository, `${path}.base.repo`),
+      repositoryName: text(
+        record(base.repository, `${path}.base.repo`).full_name,
+        `${path}.base.repo.full_name`
+      ),
       sha: base.sha,
     },
     draft: flag(source.draft, `${path}.draft`),
@@ -142,9 +153,10 @@ export const parsePullRequest = (value: unknown): GitHubPullRequest => {
 };
 
 /**
- * Every `review_requested` event in a pull request's timeline. An event that
- * names neither a person nor a team is rejected: the requirement it records
- * cannot be established.
+ * Every `review_requested` event among the timeline items given. The caller
+ * must supply the whole timeline: one page of it is not the timeline, and
+ * nothing here can tell. An event that names neither a person nor a team is
+ * rejected, because the requirement it records cannot be established.
  */
 export const parseReviewRequests = (value: unknown): GitHubReviewRequest[] =>
   each(value, "timeline", (item, path): GitHubReviewRequest[] => {
@@ -171,6 +183,27 @@ export const parseReviewRequests = (value: unknown): GitHubReviewRequest[] =>
       : fail(path, "a requested reviewer or team");
   }).flat();
 
+const BASE_CHANGES = ["base_ref_changed", "base_ref_force_pushed"] as const;
+
+/**
+ * Every retarget or force-push of the base among the timeline items given,
+ * with when it happened. The same completeness rule applies as for requests.
+ */
+export const parseBaseChanges = (value: unknown): GitHubBaseChange[] =>
+  each(value, "timeline", (item, path): GitHubBaseChange[] => {
+    const source = record(item, path);
+    const name = text(source.event, `${path}.event`);
+    const event = BASE_CHANGES.find((kind) => kind === name);
+    return event === undefined
+      ? []
+      : [
+          {
+            createdAt: instant(source.created_at, `${path}.created_at`),
+            event,
+          },
+        ];
+  }).flat();
+
 const reviewState = (value: unknown, path: string): GitHubReviewState =>
   GITHUB_REVIEW_STATES.find((state) => state === value) ??
   fail(path, "a known review state");
@@ -178,6 +211,7 @@ const reviewState = (value: unknown, path: string): GitHubReviewState =>
 export const parseReviews = (value: unknown): GitHubReview[] =>
   each(value, "reviews", (item, path) => {
     const review = record(item, path);
+    const state = reviewState(review.state, `${path}.state`);
     return {
       author: actor(review.user, `${path}.user`),
       commitId:
@@ -185,11 +219,13 @@ export const parseReviews = (value: unknown): GitHubReview[] =>
           ? null
           : commit(review.commit_id, `${path}.commit_id`),
       id: identifier(review.id, `${path}.id`),
-      state: reviewState(review.state, `${path}.state`),
+      state,
+      // Only a review not yet submitted may lack a time. Decisions are
+      // ordered by it, so an undated or unreadable one stops collection.
       submittedAt:
-        review.submitted_at === null || review.submitted_at === undefined
+        state === "PENDING" && !present(review.submitted_at)
           ? null
-          : text(review.submitted_at, `${path}.submitted_at`),
+          : instant(review.submitted_at, `${path}.submitted_at`),
     };
   });
 

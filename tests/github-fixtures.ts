@@ -22,7 +22,11 @@ export const teamResponse = (
 export const pullRequestResponse = (
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> => ({
-  base: { ref: "main", repo: { id: 100, name: "project" }, sha: BASE },
+  base: {
+    ref: "main",
+    repo: { full_name: "example/project", id: 100, name: "project" },
+    sha: BASE,
+  },
   draft: false,
   head: { ref: "feature", repo: { id: 100, name: "project" }, sha: HEAD },
   labels: [{ color: "ededed", id: 5, name: "docs" }],
@@ -74,3 +78,7 @@ export const threadPageResponse = (
     },
   },
 });
+
+/** How GitHub returns any deleted account, author or reviewer alike. */
+export const ghostResponse = (): Record<string, unknown> =>
+  actorResponse("ghost", 10_137);
