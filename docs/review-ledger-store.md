@@ -107,7 +107,7 @@ A malformed directory, repository or number is refused with `request-invalid` be
 
 A replace creates the directory if it is missing, with every missing parent, for its owner only (`0700`). The entry and the lock are created for their owner only (`0600`). An existing directory is used as it is: its permissions and owner are not checked or changed. `directory` must be absolute and must not itself be a symlink, for a read as for a replace; its parent directories are the caller's responsibility and are not examined.
 
-The entry is opened without following a symlink, so a symlink at the entry's name is refused (`ledger-unavailable`, typically with `ELOOP`), whether or not it points at anything.
+The entry is opened without following a symlink, so a symlink at the entry's name is refused (`ledger-unavailable`, typically with `ELOOP`), whether or not it points at anything. It is also opened without waiting, so a named pipe at the entry's name is refused at once as not a regular file; an open that waited for a writer would hang a read, and would leave a replace holding its lock.
 
 ## Writing
 
@@ -127,9 +127,11 @@ One replace at a time per pull request. A replace creates the lock file exclusiv
 
 The entry file itself needs no repair after a stale lock: it is the last entry that was fully published.
 
+If the store cannot remove its own lock, the replace throws `ledger-unavailable` with the message `could not release the lock: <system error name>`, in place of whatever it would have returned or thrown. The lock file is then still there and has to be cleared as above. The entry may already be the new one: the release comes after the write, so read the entry again to learn which it is, and treat the collection as not stored until that read shows its entry.
+
 ## Errors
 
-Every refusal is a `ReviewLedgerError` with a fixed `code`.
+Every refusal is a `ReviewLedgerError` with a fixed `code`. A message can hold a field path, which may include a review ID; the lock file's name, built from the validated repository and number; and the system's short name for a failure, such as `EACCES`. It never holds a field's value, an unknown field's name, text from a file, the state directory's path or a system error's own message.
 
 | `code` | Meaning | What changed |
 | --- | --- | --- |
@@ -137,7 +139,7 @@ Every refusal is a `ReviewLedgerError` with a fixed `code`.
 | `entry-invalid` | The stored entry (`stored entry: …`), `expected` (`expected entry: …`) or `next` (`new entry: …`) breaks a rule, or the file is not UTF-8 JSON. | The file is as it was. |
 | `entry-ahead-of-clock` | Reads only. The stored entry is well formed but holds a time later than `now`: the clock is behind GitHub's, or the entry is corrupted or forged. | Nothing. Do not delete the file. |
 | `ledger-busy` | Replaces only. The lock file exists: another replace is running, or a stale lock was left. | Nothing. |
-| `ledger-unavailable` | The filesystem refused, or a path is not what it must be: an unreadable entry, a symlink, a state directory that is not a real directory, a failed write. The message carries the system's error name, such as `EACCES`. | The file is as it was. |
+| `ledger-unavailable` | The filesystem refused, or a path is not what it must be: an unreadable entry, a symlink, a named pipe, a state directory that is not a real directory, a failed write, a lock that could not be released. The message carries the system's error name, such as `EACCES`. | The file is as it was, with one exception: after `could not release the lock`, the entry may already be the new one, and the lock file is still there. |
 
 ## What a caller must do
 
@@ -160,4 +162,4 @@ Every refusal is a `ReviewLedgerError` with a fixed `code`.
 
 ## Verification scope
 
-`bun test tests/review-ledger-entry.test.ts tests/review-ledger-store.test.ts` exercises the validator and the store offline in temporary directories that the tests remove. That includes the whole flow with the real `collectPullRequest` over scripted reads, with a collection served later than the `now` of the read it started from, and replaces started together in one process. The mode assertions are skipped on Windows, and the unreadable-file case is also skipped for an administrator, who can read a file whatever its mode. Removal of the temporary file after a failed rename is exercised on macOS only, where an ordinary user can make a file that cannot be renamed over. No test covers a crash, replaces from separate processes or hosts, or a live collection.
+`bun test tests/review-ledger-entry.test.ts tests/review-ledger-store.test.ts` exercises the validator and the store offline in temporary directories that the tests remove. That includes the whole flow with the real `collectPullRequest` over scripted reads, with a collection served later than the `now` of the read it started from, replaces started together in one process, and eight loops that read and replace at once, where every entry reported `"stored"` must still be there at the end. The mode assertions are skipped on Windows, and the unreadable-file and unsearchable-directory cases are also skipped for an administrator, who can read a file whatever its mode. The named-pipe case is skipped where there is no `mkfifo` command. Removal of the temporary file after a failed rename is exercised on macOS only, where an ordinary user can make a file that cannot be renamed over. The lock-release failure is produced by swapping the lock for a directory while the replace reads a padded entry, which depends on the replace still being at that read when the test looks. No test covers a crash, replaces from separate processes or hosts, or a live collection.

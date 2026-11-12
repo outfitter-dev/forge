@@ -104,9 +104,12 @@ export const directoryExists = async (directory: string): Promise<boolean> => {
 export const storedBytes = async (file: string): Promise<Uint8Array | null> => {
   let isFile = false;
   try {
-    // Without following a symlink: the open itself fails on one.
+    // Without following a symlink: the open itself fails on one. And without
+    // waiting: opening a named pipe to read otherwise blocks until something
+    // writes to it, which would hang a read and leave a replace's lock held.
+    const { O_NOFOLLOW, O_NONBLOCK, O_RDONLY } = constants;
     // oxlint-disable-next-line no-bitwise -- open flags are a bit set
-    const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const handle = await open(file, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
     try {
       const info = await handle.stat();
       isFile = info.isFile();
@@ -130,7 +133,8 @@ export const storedBytes = async (file: string): Promise<Uint8Array | null> => {
  * Replaces the file in one step: an exclusive owner-only temporary file in
  * the same directory, renamed over it. A reader sees the old text or the new.
  * Nothing is flushed to the device, so nothing is promised about what a crash
- * of the machine leaves there.
+ * of the machine leaves there. This is the same publication as `persist` in
+ * `run-check.ts`; the two are kept apart until a change makes them one helper.
  */
 export const publish = async (file: string, text: string): Promise<void> => {
   const temporary = `${file}.${randomUUID()}.tmp`;

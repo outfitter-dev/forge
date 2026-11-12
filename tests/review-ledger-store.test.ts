@@ -1,11 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   chmodSync,
+  closeSync,
+  constants,
   existsSync,
   linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -15,6 +18,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setImmediate as nextTurn } from "node:timers/promises";
 
 import {
   collectPullRequest,
@@ -47,18 +51,26 @@ const AFTER_NOW = "2026-01-01T01:00:01Z";
 const LONG_AFTER_NOW = "2026-01-01T02:00:00Z";
 /** A time no entry in these tests is ahead of. */
 const LATE = "2999-12-31T23:59:59Z";
-const MARKER = "private-ledger-marker";
+/**
+ * Stands for content that must never reach an error message. It is one token,
+ * so a parser that quotes the word it stopped at quotes all of it.
+ */
+const MARKER = "privateLedgerMarker";
 
 /** The documented names for `example/project` number 12. */
 const ENTRY = "example+project+12.json";
 const LOCK = "example+project+12.lock";
+const BUSY = `${LOCK} exists: another replace holds it, or one that stopped left it behind`;
 
 /** Owner-only modes cannot be asserted where the platform has no such modes. */
 const NO_MODES = process.platform === "win32";
 /** An administrator reads a file whatever its mode says. */
 const READS_ANYTHING = NO_MODES || process.getuid?.() === 0;
+/** A named pipe is made with the `mkfifo` command; without it those tests are skipped. */
+const NO_PIPES = Bun.which("mkfifo") === null;
 
 const roots: string[] = [];
+const pipes: string[] = [];
 /** A state directory that does not exist yet, inside a directory the test removes. */
 const state = (): string => {
   const root = mkdtempSync(path.join(tmpdir(), "forge-ledger-"));
@@ -66,6 +78,16 @@ const state = (): string => {
   return path.join(root, "state");
 };
 afterEach(() => {
+  for (const pipe of pipes.splice(0)) {
+    // If an open is still waiting on the pipe, a writer lets it finish, so a
+    // regression fails its test by timeout and does not hold the process.
+    try {
+      // oxlint-disable-next-line no-bitwise -- open flags are a bit set
+      closeSync(openSync(pipe, constants.O_WRONLY | constants.O_NONBLOCK));
+    } catch {
+      // Nothing was waiting, which is the expected case.
+    }
+  }
   for (const root of roots.splice(0)) {
     rmSync(root, { force: true, recursive: true });
   }
@@ -288,10 +310,12 @@ test.skipIf(READS_ANYTHING)(
     chmodSync(path.join(directory, ENTRY), 0o000);
     const reading = await ledgerError(read(directory));
     expect(reading.code).toBe("ledger-unavailable");
+    expect(reading.message).toBe("could not read the entry: EACCES");
     const replacing = await ledgerError(
       replace(directory, emptyReviewLedgerEntry(), other())
     );
     expect(replacing.code).toBe("ledger-unavailable");
+    expect(replacing.message).toBe("could not read the entry: EACCES");
     expect(names(directory)).toEqual([ENTRY]);
     chmodSync(path.join(directory, ENTRY), 0o600);
     expect(await read(directory)).toEqual(entry());
@@ -303,6 +327,7 @@ test("a directory where the entry should be is refused, not read as empty", asyn
   mkdirSync(path.join(directory, ENTRY), { recursive: true });
   const reading = await ledgerError(read(directory));
   expect(reading.code).toBe("ledger-unavailable");
+  expect(reading.message).toBe("the entry is not a regular file");
   const replacing = await ledgerError(
     replace(directory, emptyReviewLedgerEntry(), entry())
   );
@@ -310,6 +335,45 @@ test("a directory where the entry should be is refused, not read as empty", asyn
   expect(names(directory)).toEqual([ENTRY]);
   expect(lstatSync(path.join(directory, ENTRY)).isDirectory()).toBe(true);
 });
+
+// Opening a named pipe to read waits for a writer unless the open says not
+// to. The timeout turns a store that waits into a failed test; it is far
+// longer than the few milliseconds this takes, to leave room for a busy host.
+test.skipIf(NO_PIPES)(
+  "a named pipe where the entry should be is refused at once, and no lock is left",
+  async () => {
+    const directory = state();
+    mkdirSync(directory);
+    const pipe = path.join(directory, ENTRY);
+    expect(Bun.spawnSync(["mkfifo", pipe]).exitCode).toBe(0);
+    pipes.push(pipe);
+    const reading = await ledgerError(read(directory));
+    expect(reading.code).toBe("ledger-unavailable");
+    expect(reading.message).toBe("the entry is not a regular file");
+    const replacing = await ledgerError(
+      replace(directory, emptyReviewLedgerEntry(), entry())
+    );
+    expect(replacing.code).toBe("ledger-unavailable");
+    expect(replacing.message).toBe("the entry is not a regular file");
+    expect(names(directory)).toEqual([ENTRY]);
+    expect(lstatSync(pipe).isFIFO()).toBe(true);
+  },
+  10_000
+);
+
+test.each([`{"requiredReviewers": [${MARKER}`, MARKER, "", "{"])(
+  "a file holding %p is refused with a message that quotes none of it",
+  async (contents) => {
+    const directory = seeded(contents);
+    const reading = await ledgerError(read(directory));
+    expect(reading.message).toBe("stored entry: expected UTF-8 JSON");
+    const replacing = await ledgerError(
+      replace(directory, emptyReviewLedgerEntry(), entry())
+    );
+    expect(replacing.message).toBe("stored entry: expected UTF-8 JSON");
+    expect(replacing.code).toBe("entry-invalid");
+  }
+);
 
 test.each([
   {
@@ -391,9 +455,11 @@ test("a read refuses an entry that is a symlink, to something or to nothing", as
   symlinkSync(elsewhere, path.join(directory, ENTRY));
   const dangling = await ledgerError(read(directory));
   expect(dangling.code).toBe("ledger-unavailable");
+  expect(dangling.message).toBe("could not read the entry: ELOOP");
   writeFileSync(elsewhere, `${JSON.stringify(entry())}\n`);
   const live = await ledgerError(read(directory));
   expect(live.code).toBe("ledger-unavailable");
+  expect(live.message).toBe("could not read the entry: ELOOP");
   expect(names(directory)).toEqual([ENTRY]);
 });
 
@@ -405,12 +471,15 @@ test.each(["", path.sep, `${path.sep}.`])(
     mkdirSync(real);
     writeFileSync(path.join(real, ENTRY), `${JSON.stringify(entry())}\n`);
     symlinkSync(real, directory);
+    const refusal = "the state directory is a symlink or not a directory";
     const reading = await ledgerError(read(`${directory}${suffix}`));
     expect(reading.code).toBe("ledger-unavailable");
+    expect(reading.message).toBe(refusal);
     const replacing = await ledgerError(
       replace(`${directory}${suffix}`, entry(), other())
     );
     expect(replacing.code).toBe("ledger-unavailable");
+    expect(replacing.message).toBe(refusal);
     expect(names(real)).toEqual([ENTRY]);
     expect(JSON.parse(bytes(real).toString("utf-8"))).toEqual(entry());
   }
@@ -739,6 +808,77 @@ test("replaces started together from one entry store exactly one of them", async
   expect(names(directory)).toEqual([ENTRY]);
 });
 
+/** A replace's outcome, with a held lock counted as a round that stored nothing. */
+const attempted = async (
+  replacing: Promise<"stored" | "conflict">
+): Promise<"stored" | "conflict" | "busy"> => {
+  try {
+    return await replacing;
+  } catch (error) {
+    if (error instanceof ReviewLedgerError && error.code === "ledger-busy") {
+      return "busy";
+    }
+    throw error;
+  }
+};
+
+const WORKERS = 8;
+const ROUNDS = 150;
+
+/**
+ * One collector's loop: read, add a reviewer nobody else adds, replace. It
+ * returns the reviewers it was told were stored.
+ */
+const collecting = async (
+  directory: string,
+  worker: number
+): Promise<number[]> => {
+  const stored: number[] = [];
+  for (let round = 0; round < ROUNDS; round += 1) {
+    const id = worker * 1000 + round + 1;
+    // oxlint-disable-next-line no-await-in-loop -- each round starts from what the last one left
+    const current = await read(directory, LATE);
+    const next = {
+      ...current,
+      requiredReviewers: [
+        ...current.requiredReviewers,
+        { id, kind: "user" as const, login: "reviewer" },
+      ],
+    };
+    // oxlint-disable-next-line no-await-in-loop -- each round starts from what the last one left
+    const outcome = await attempted(replace(directory, current, next));
+    if (outcome === "stored") {
+      stored.push(id);
+    }
+  }
+  return stored;
+};
+
+// The comparison and the write must both happen under the lock. If either
+// leaves it, two loops store from one read and the second erases the first's
+// reviewer although both were told `"stored"`.
+//
+// It takes about a tenth of a second, and on an overloaded host it has taken
+// more than five. The timeout is long because a run cut short keeps going
+// while its directory is removed, and then fails in a later test's name.
+test("loops that read and replace at once never lose an entry reported stored", async () => {
+  const directory = state();
+  const workers = Array.from({ length: WORKERS }, (_, index) => index + 1);
+  const reported = await Promise.all(
+    workers.map((worker) => collecting(directory, worker))
+  );
+  const stored = reported.flat().toSorted((left, right) => left - right);
+  const final = await read(directory, LATE);
+  expect(stored.length).toBeGreaterThan(0);
+  expect(final.requiredReviewers).toHaveLength(stored.length);
+  expect(
+    final.requiredReviewers
+      .map((reviewer) => reviewer.id)
+      .toSorted((left, right) => left - right)
+  ).toEqual(stored);
+  expect(names(directory)).toEqual([ENTRY]);
+}, 120_000);
+
 test.each(CORRUPTED)(
   "a replace over a stored entry that $name is refused, and the file is not replaced",
   async ({ contents }) => {
@@ -880,7 +1020,7 @@ test("a lock left behind blocks every replace until it is removed, and is never 
   const first = await ledgerError(replace(directory, entry(), other()));
   const again = await ledgerError(replace(directory, entry(), other()));
   expect(first.code).toBe("ledger-busy");
-  expect(first.message).toContain(LOCK);
+  expect(first.message).toBe(BUSY);
   expect(again.code).toBe("ledger-busy");
   expect(names(directory)).toEqual([ENTRY, LOCK]);
   expect(bytes(directory)).toEqual(before);
@@ -923,6 +1063,73 @@ test("a lock that is a symlink is a lock, and nothing is created through it", as
   expect(bytes(directory)).toEqual(before);
   expect(lstatSync(path.join(directory, LOCK)).isSymbolicLink()).toBe(true);
 });
+
+/** Trailing space: it makes the file slow to read and changes nothing it says. */
+const PADDING = " ".repeat(8 * 1024 * 1024);
+
+/**
+ * Runs a replace whose lock cannot be removed, and returns what it threw. The
+ * lock is swapped for a directory that holds a file as soon as it appears; the
+ * stored entry is padded so that the replace is still reading it by then.
+ */
+const replaceWithStuckLock = async (
+  directory: string,
+  expected: ReviewLedgerEntry
+): Promise<unknown> => {
+  const lock = path.join(directory, LOCK);
+  const replacing = rejection(replace(directory, expected, other()));
+  while (!existsSync(lock)) {
+    // oxlint-disable-next-line no-await-in-loop -- one look per turn of the event loop
+    await nextTurn();
+  }
+  rmSync(lock);
+  mkdirSync(lock);
+  writeFileSync(path.join(lock, "held"), "");
+  return await replacing;
+};
+
+test.each([
+  {
+    contents: JSON.stringify(entry()),
+    expected: entry(),
+    name: "after the entry was stored",
+    stored: other(),
+  },
+  {
+    contents: JSON.stringify(entry()),
+    expected: other(),
+    name: "after a conflict",
+    stored: entry(),
+  },
+  {
+    contents: JSON.stringify({ ...entry(), [MARKER]: true }),
+    expected: entry(),
+    name: "after the stored entry was refused",
+    stored: null,
+  },
+])(
+  "a lock that cannot be released $name is reported as that, without a path",
+  async ({ contents, expected, stored }) => {
+    const directory = seeded(`${contents}${PADDING}`);
+    const error = await replaceWithStuckLock(directory, expected);
+    expect(error).toBeInstanceOf(ReviewLedgerError);
+    expect(error).toMatchObject({ code: "ledger-unavailable" });
+    const shown = error instanceof Error ? error : new Error("not an error");
+    expect(shown.message).toMatch(/^could not release the lock: [A-Z_]+$/u);
+    expect(shown.cause).toBeUndefined();
+    expect(JSON.stringify(Object.entries(shown))).not.toContain(
+      path.dirname(directory)
+    );
+    // The lock is still there, and the entry is whatever the replace got to.
+    expect(lstatSync(path.join(directory, LOCK)).isDirectory()).toBe(true);
+    if (stored !== null) {
+      expect(await read(directory)).toEqual(stored);
+    }
+    const next = await ledgerError(replace(directory, entry(), other()));
+    expect(next.code).toBe("ledger-busy");
+  },
+  10_000
+);
 
 // Writing
 
@@ -989,7 +1196,7 @@ test.skipIf(NO_MODES)(
       replace(directory, emptyReviewLedgerEntry(), entry(), { repository })
     );
     expect(error.code).toBe("ledger-unavailable");
-    expect(error.message).toContain("ENAMETOOLONG");
+    expect(error.message).toBe("could not write the entry: ENAMETOOLONG");
     expect(names(directory)).toEqual([]);
     expect(await read(directory, NOW, { repository })).toEqual(
       emptyReviewLedgerEntry()
@@ -1009,6 +1216,7 @@ test.skipIf(process.platform !== "darwin")(
     try {
       const error = await ledgerError(replace(directory, entry(), other()));
       expect(error.code).toBe("ledger-unavailable");
+      expect(error.message).toBe("could not write the entry: EPERM");
       expect(names(directory)).toEqual([ENTRY]);
       expect(bytes(directory)).toEqual(before);
     } finally {

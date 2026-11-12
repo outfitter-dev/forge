@@ -14,6 +14,7 @@ import {
 } from "../src/parse-github-pull-request.ts";
 import { REPOSITORY } from "./evidence-fixtures.ts";
 import {
+  actorResponse,
   BASE,
   HEAD,
   pullRequestResponse,
@@ -24,8 +25,8 @@ import {
 
 const SNAPSHOT_AT = "2026-01-01T00:00:00Z";
 const SUBMITTED_AT = "2026-01-01T00:10:00Z";
-/** Stands for content that must never reach an error message. */
-const MARKER = "private-ledger-marker";
+/** Stands for content that must never reach an error message. It is one token. */
+const MARKER = "privateLedgerMarker";
 
 const reviewer = (overrides: Record<string, unknown> = {}) => ({
   id: 7,
@@ -79,6 +80,20 @@ const hidden = (field: string): unknown => {
   const value = entry();
   Object.defineProperty(value, field, { enumerable: false, value: null });
   return value;
+};
+
+/** Holds exactly an entry's fields as its own, and is still no plain object. */
+class EntryInstance {
+  observedRevision = null;
+  requiredReviewers: unknown[] = [];
+  reviewBindings = {};
+}
+
+/** A list whose first place was never filled. */
+const holed = (): unknown[] => {
+  const list: unknown[] = [];
+  list[1] = reviewer();
+  return list;
 };
 
 test("a valid entry comes back sorted by kind and then ID", () => {
@@ -190,6 +205,26 @@ test.each([
   { name: "a string", path: "entry", value: MARKER },
   { name: "a number", path: "entry", value: 42 },
   { name: "a map", path: "entry", value: new Map(Object.entries(entry())) },
+  {
+    name: "a class instance with an entry's fields",
+    path: "entry",
+    value: new EntryInstance(),
+  },
+  {
+    name: "a reviewer list with a hole",
+    path: "requiredReviewers[0]",
+    value: entry({ requiredReviewers: holed() }),
+  },
+  {
+    name: "bindings that are an empty list",
+    path: "reviewBindings",
+    value: entry({ reviewBindings: [] }),
+  },
+  {
+    name: "a snapshot that is an empty list",
+    path: "observedRevision",
+    value: entry({ observedRevision: [] }),
+  },
   {
     name: "an object that only inherits its fields",
     path: "entry",
@@ -566,4 +601,71 @@ test("an entry the collector really produces passes unchanged", () => {
   const text = JSON.stringify(second);
   const stored: unknown = JSON.parse(text);
   expect(parseReviewLedgerEntry(stored)).toEqual(second);
+});
+
+const LARGEST = Number.MAX_SAFE_INTEGER;
+const EDGE_HEAD = "0123456789abcdef0123456789abcdef01234567";
+const EDGE_BASE = "f".repeat(40);
+const LEAP_DAY = "2028-02-29T00:00:00Z";
+const LEAP_NOON = "2028-02-29T12:00:00Z";
+const LEAP_END = "2028-02-29T23:59:59Z";
+
+// The validator repeats rules the GitHub parsers own. If a parser accepted a
+// value the validator refused, no collection holding it could ever be stored.
+test("what the GitHub parsers accept at their edges, the validator accepts", () => {
+  const collect = (
+    pullRequestReadAt: string,
+    ledger = emptyReviewLedgerEntry(),
+    reviews: unknown[] = []
+  ) =>
+    humanReviewEvidence({
+      baseChanges: [],
+      ledger,
+      pullRequest: parsePullRequest(
+        pullRequestResponse({
+          base: {
+            ref: "main",
+            repo: { full_name: REPOSITORY, id: 100 },
+            sha: EDGE_BASE,
+          },
+          head: { ref: "feature", repo: { id: 100 }, sha: EDGE_HEAD },
+          requested_reviewers: [actorResponse("r", LARGEST)],
+          requested_teams: [teamResponse("t", LARGEST)],
+        })
+      ),
+      pullRequestReadAt,
+      repository: REPOSITORY,
+      requests: [],
+      reviews: parseReviews(reviews),
+    }).ledger;
+  const first = collect(LEAP_DAY);
+  const second = collect(LEAP_END, first, [
+    reviewResponse({
+      commit_id: EDGE_HEAD,
+      id: LARGEST,
+      submitted_at: LEAP_NOON,
+      user: actorResponse("r", LARGEST),
+    }),
+  ]);
+  expect(second).toEqual({
+    observedRevision: {
+      baseSha: EDGE_BASE,
+      headSha: EDGE_HEAD,
+      observedAt: LEAP_DAY,
+    },
+    requiredReviewers: [
+      { id: LARGEST, kind: "team", slug: "t" },
+      { id: LARGEST, kind: "user", login: "r" },
+    ],
+    reviewBindings: {
+      "9007199254740991": {
+        baseSha: EDGE_BASE,
+        headSha: EDGE_HEAD,
+        observedAt: LEAP_DAY,
+        submittedAt: LEAP_NOON,
+      },
+    },
+  });
+  expect(parseReviewLedgerEntry(first)).toEqual(first);
+  expect(parseReviewLedgerEntry(second)).toEqual(second);
 });

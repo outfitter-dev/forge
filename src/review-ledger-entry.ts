@@ -27,8 +27,12 @@ export type ReviewLedgerErrorCode =
   | "request-invalid";
 
 /**
- * The message names a field or a file and what was expected. It never carries
- * a value from the entry, from a file or from an argument.
+ * The message says what was expected and where. It can hold a field path, with
+ * a validated review ID in it; the lock file's name, which is the validated
+ * repository in lower case and the pull request number; and the system's short
+ * name for a failure, such as `EACCES`. It never holds a field's value, the
+ * name of an unknown field, text from a file, the state directory's path, or a
+ * system error's own message.
  */
 export class ReviewLedgerError extends Error {
   readonly code: ReviewLedgerErrorCode;
@@ -79,6 +83,10 @@ const fields = (
     : fail(path, `exactly the fields ${keys.join(", ")}`);
 };
 
+// The next four rules repeat private ones in `parse-github-pull-request.ts`
+// (`identifier`, `text`, `commit`, `instant`), which decide what a collection
+// can put into an entry. They must stay at least as wide as those: a value a
+// parser accepts and this refuses would make every replace `entry-invalid`.
 const identifier = (value: unknown, path: string): number =>
   typeof value === "number" && Number.isSafeInteger(value) && value > 0
     ? value

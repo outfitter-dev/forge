@@ -153,6 +153,13 @@ export const replaceReviewLedger = async (
     await publish(files.entry, `${JSON.stringify(replacement)}\n`);
     return "stored";
   } finally {
-    await rm(files.lock, { force: true });
+    try {
+      await rm(files.lock, { force: true });
+    } catch (error) {
+      // This replaces whatever the body returned or threw. The lock is still
+      // there and blocks every later replace, which the caller has to be told
+      // above all; what the body found is found again once the lock is gone.
+      unavailable("release the lock", error);
+    }
   }
 };
