@@ -7,10 +7,26 @@ import { cli, fixture } from "./check-fixtures.ts";
 
 const roots: string[] = [];
 const processes: number[] = [];
+
+/**
+ * The process ID a fixture wrote, or 0 until the marker holds one. The writer
+ * creates the file before filling it, so an existing marker can still be empty.
+ */
+const markedPid = (marker: string): number => {
+  if (!existsSync(marker)) {
+    return 0;
+  }
+  const pid = Number(readFileSync(marker, "utf-8"));
+  return Number.isSafeInteger(pid) && pid > 0 ? pid : 0;
+};
+
 afterEach(() => {
   for (const pid of processes.splice(0)) {
     try {
-      process.kill(-pid, "SIGKILL");
+      // A group ID of 0 would signal this test runner's own process group.
+      if (pid > 0) {
+        process.kill(-pid, "SIGKILL");
+      }
     } catch {
       /* The test may already have reaped it. */
     }
@@ -31,8 +47,9 @@ const start = async (onSignal: string) => {
     stderr: "pipe",
     stdout: "pipe",
   });
+  const marker = path.join(root, ".git/child-pid");
   const deadline = Date.now() + 4000;
-  while (!existsSync(path.join(root, ".git/child-pid"))) {
+  while (markedPid(marker) === 0) {
     if (Date.now() > deadline) {
       child.kill();
       throw new Error("Child did not start");
@@ -41,9 +58,7 @@ const start = async (onSignal: string) => {
     // oxlint-disable-next-line eslint/no-await-in-loop
     await Bun.sleep(10);
   }
-  processes.push(
-    Number(readFileSync(path.join(root, ".git/child-pid"), "utf-8"))
-  );
+  processes.push(markedPid(marker));
   return { child, root };
 };
 
@@ -117,7 +132,7 @@ test("cancellation cleans up descendants even when the leader exits before escal
   });
   const marker = path.join(root, ".git/grandchild-pid");
   const deadline = Date.now() + 4000;
-  while (!existsSync(marker)) {
+  while (markedPid(marker) === 0) {
     if (Date.now() > deadline) {
       child.kill();
       throw new Error("Grandchild did not start");
@@ -125,7 +140,7 @@ test("cancellation cleans up descendants even when the leader exits before escal
     // oxlint-disable-next-line eslint/no-await-in-loop
     await Bun.sleep(10);
   }
-  const grandchild = Number(readFileSync(marker, "utf-8"));
+  const grandchild = markedPid(marker);
   try {
     child.kill("SIGTERM");
     const receipt = JSON.parse(
