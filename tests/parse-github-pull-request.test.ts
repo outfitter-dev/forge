@@ -391,17 +391,24 @@ test("deleted accounts all parse as one identity", () => {
   ]);
 });
 
-test("base changes come from the timeline with the time they happened", () => {
+test("events that can come with a base change are read with their time", () => {
+  const names = [
+    "base_ref_changed",
+    "base_ref_force_pushed",
+    "base_ref_deleted",
+    "automatic_base_change_succeeded",
+    "added_to_stack",
+    "removed_from_stack",
+  ];
   const timeline = [
     { created_at: "2026-01-01T00:01:00Z", event: "head_ref_force_pushed" },
-    { created_at: "2026-01-01T00:02:00Z", event: "base_ref_changed" },
     reviewRequestedEvent(),
-    { created_at: "2026-01-01T00:03:00Z", event: "base_ref_force_pushed" },
+    ...names.map((event) => ({ created_at: "2026-01-01T00:02:00Z", event })),
+    { created_at: "2026-01-01T00:03:00Z", event: "labeled" },
   ];
-  expect(parseBaseChanges(timeline)).toEqual([
-    { createdAt: "2026-01-01T00:02:00Z", event: "base_ref_changed" },
-    { createdAt: "2026-01-01T00:03:00Z", event: "base_ref_force_pushed" },
-  ]);
+  expect(parseBaseChanges(timeline)).toEqual(
+    names.map((event) => ({ createdAt: "2026-01-01T00:02:00Z", event }))
+  );
 });
 
 test.each([
@@ -467,3 +474,32 @@ test.each([
     rejects(() => parseReviewThreadPage(value), path);
   }
 );
+
+// `null` is not "no": each of these would otherwise read as a safe value.
+test.each([
+  { field: "draft", path: "pullRequest.draft" },
+  { field: "merged", path: "pullRequest.merged" },
+  { field: "labels", path: "pullRequest.labels" },
+  { field: "requested_reviewers", path: "pullRequest.requested_reviewers" },
+])("a pull request with a null $field is rejected", ({ field, path }) => {
+  rejects(() => parsePullRequest(pullRequestResponse({ [field]: null })), path);
+});
+
+test("a null thread list is rejected, never read as no threads", () => {
+  rejects(
+    () =>
+      parseReviewThreadPage({
+        data: {
+          repository: {
+            pullRequest: {
+              reviewThreads: {
+                nodes: null,
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      }),
+    "threads.data.repository.pullRequest.reviewThreads.nodes"
+  );
+});

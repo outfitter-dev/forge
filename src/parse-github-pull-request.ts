@@ -183,25 +183,25 @@ export const parseReviewRequests = (value: unknown): GitHubReviewRequest[] =>
       : fail(path, "a requested reviewer or team");
   }).flat();
 
-const BASE_CHANGES = ["base_ref_changed", "base_ref_force_pushed"] as const;
+/**
+ * Any event named for the base or for a stack. Seen in live REST timelines on
+ * November 12, 2026: `base_ref_force_pushed`, `automatic_base_change_succeeded`,
+ * `added_to_stack` and `removed_from_stack`. GitHub documents `base_ref_changed`.
+ */
+const BASE_CHANGE = /base|stack/u;
 
 /**
- * Every retarget or force-push of the base among the timeline items given,
- * with when it happened. The same completeness rule applies as for requests.
+ * Every event among the timeline items given that can come with a change of
+ * base, with when it happened. The same completeness rule applies as for
+ * requests. A base change GitHub records with no such event cannot be seen.
  */
 export const parseBaseChanges = (value: unknown): GitHubBaseChange[] =>
   each(value, "timeline", (item, path): GitHubBaseChange[] => {
     const source = record(item, path);
-    const name = text(source.event, `${path}.event`);
-    const event = BASE_CHANGES.find((kind) => kind === name);
-    return event === undefined
-      ? []
-      : [
-          {
-            createdAt: instant(source.created_at, `${path}.created_at`),
-            event,
-          },
-        ];
+    const event = text(source.event, `${path}.event`);
+    return BASE_CHANGE.test(event)
+      ? [{ createdAt: instant(source.created_at, `${path}.created_at`), event }]
+      : [];
   }).flat();
 
 const reviewState = (value: unknown, path: string): GitHubReviewState =>

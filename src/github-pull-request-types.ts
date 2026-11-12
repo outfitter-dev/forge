@@ -53,9 +53,14 @@ export type GitHubReviewRequest =
   | { kind: "user"; reviewer: GitHubActor }
   | { kind: "team"; team: GitHubTeam };
 
-/** A timeline event after which the pull request's base is not what it was. */
+/**
+ * A timeline event that can come with a change of base: a retarget, a
+ * force-push or deletion of the base branch, GitHub's automatic retarget after
+ * a merge, or a change of stack membership. Events are matched by name, so a
+ * kind GitHub adds later is caught rather than missed.
+ */
 export interface GitHubBaseChange {
-  event: "base_ref_changed" | "base_ref_force_pushed";
+  event: string;
   createdAt: string;
 }
 
