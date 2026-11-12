@@ -1,42 +1,21 @@
 import type { HumanReviewEvidence } from "./evidence-types.ts";
 import { GITHUB_GHOST_LOGIN } from "./github-pull-request-types.ts";
 import type {
+  GitHubActor,
   GitHubBaseChange,
   GitHubPullRequest,
   GitHubReview,
   GitHubReviewRequest,
 } from "./github-pull-request-types.ts";
+import {
+  boundBase,
+  nextSnapshot,
+  reviewerKey,
+  reviewerLabel,
+  reviewerNaming,
+} from "./review-ledger.ts";
+import type { RequiredReviewer, ReviewLedgerEntry } from "./review-ledger.ts";
 import { wholeSecondUtc } from "./utc-instant.ts";
-
-/**
- * A revision GitHub served, and when: `observedAt` is the `pullRequestReadAt`
- * of the collection that first saw this head and base. It is kept, not
- * refreshed, for as long as the head and base stay the same and nothing that
- * can change the base has happened since.
- */
-export interface ObservedRevision {
-  headSha: string;
-  baseSha: string;
-  observedAt: string;
-}
-
-/** The base one approval was bound to, and the facts that justified it. */
-export interface ReviewBinding extends ObservedRevision {
-  submittedAt: string;
-}
-
-/**
- * What the collector persists for one pull request between collections.
- * GitHub forgets a review request once it is answered and never records the
- * base an approval was given against, so both are kept here.
- */
-export interface ReviewLedgerEntry {
-  requiredReviewers: string[];
-  /** Maintained by `humanReviewEvidence`; the collector only persists it. */
-  observedRevision: ObservedRevision | null;
-  /** Keyed by GitHub review ID. An entry is never rebound. */
-  reviewBindings: Record<string, ReviewBinding>;
-}
 
 export interface HumanReviewInput {
   repository: string;
@@ -49,7 +28,15 @@ export interface HumanReviewInput {
    * given against. The collector must read the reviews no later than the pull
    * request, and the timeline no earlier, so that no approval submitted before
    * this time can be missing its base change. An approval submitted at or
-   * after it binds at a later collection.
+   * after it is left for a later collection to bind, with two exceptions. A
+   * read records a new snapshot at the first sight of this head and base, at
+   * the first read after a possible change of base, and when the stored one
+   * has no readable time, and its time becomes the snapshot's. An approval in
+   * that same second never binds, because the rule needs the snapshot to be
+   * strictly earlier. And when a possible change of base falls in that same
+   * second, the next read replaces the snapshot again, so an approval
+   * submitted between the two reads never binds either. In both cases the
+   * reviewer has to approve again.
    */
   pullRequestReadAt: string;
   requests: GitHubReviewRequest[];
@@ -60,6 +47,10 @@ export interface HumanReviewInput {
 }
 
 export interface HumanReviewResult {
+  /**
+   * These and each review's `reviewer` are `reviewerLabel` strings, except
+   * that a deleted account's review is `ghost#<review ID>`.
+   */
   assignments: { recorded: true; requiredReviewers: string[] };
   humanReviews: HumanReviewEvidence[];
   /**
@@ -86,9 +77,6 @@ const isDecision = (review: GitHubReview): review is Decision =>
   review.state === "CHANGES_REQUESTED" ||
   review.state === "DISMISSED";
 
-const instant = (value: string | null): number | null =>
-  value === null ? null : wholeSecondUtc(value);
-
 const byText = (left: string, right: string): number =>
   Number(left > right) - Number(left < right);
 
@@ -107,7 +95,8 @@ const outranks = (review: Decision, chosen: Decision): boolean => {
  */
 const latestDecision = (decisions: Decision[]): Decision => {
   const timed = decisions.map((review) => {
-    const time = instant(review.submittedAt);
+    const time =
+      review.submittedAt === null ? null : wholeSecondUtc(review.submittedAt);
     if (time === null) {
       throw new HumanReviewError(
         "a review decision has no readable submission time"
@@ -152,97 +141,14 @@ const standing = (decisions: Decision[]): Decision => {
     : latest;
 };
 
-/** Whether anything that can change the base happened at or after `time`. */
-const baseMayHaveChangedSince = (
-  input: HumanReviewInput,
-  time: number
-): boolean =>
-  input.baseChanges.some((change) => {
-    const changedAt = instant(change.createdAt);
-    return changedAt === null || changedAt >= time;
-  });
+const person = (actor: GitHubActor): RequiredReviewer => ({
+  id: actor.id,
+  kind: "user",
+  login: actor.login,
+});
 
-/**
- * The snapshot to keep for the next collection. An existing snapshot stays
- * while it still describes the head and base and the base cannot have changed
- * since: refreshing it on every collection would put it later than an approval
- * submitted during that collection, and that approval could then never bind.
- * Otherwise the revision just read becomes the snapshot, at the read time.
- */
-const nextSnapshot = (input: HumanReviewInput): ObservedRevision | null => {
-  const { head, base } = input.pullRequest;
-  const current = input.ledger.observedRevision;
-  const currentAt = current === null ? null : instant(current.observedAt);
-  if (
-    current !== null &&
-    currentAt !== null &&
-    current.headSha === head.sha &&
-    current.baseSha === base.sha &&
-    !baseMayHaveChangedSince(input, currentAt)
-  ) {
-    return { ...current };
-  }
-  return instant(input.pullRequestReadAt) === null
-    ? null
-    : {
-        baseSha: base.sha,
-        headSha: head.sha,
-        observedAt: input.pullRequestReadAt,
-      };
-};
-
-/**
- * The base an approval counts against, or `null`. A new binding needs a
- * snapshot of this exact head and base persisted strictly before the approval
- * was submitted, an approval submitted before this collection read the pull
- * request, and no possible change of base since that snapshot: a base that
- * left and came back would otherwise look unchanged.
- * `bindings` gains the new binding when one is made.
- */
-const boundBase = (
-  review: Decision,
-  input: HumanReviewInput,
-  bindings: Record<string, ReviewBinding>
-): string | null => {
-  const key = String(review.id);
-  const recorded = Object.hasOwn(bindings, key) ? bindings[key] : undefined;
-  if (recorded !== undefined) {
-    return recorded.headSha === review.commitId &&
-      recorded.submittedAt === review.submittedAt
-      ? recorded.baseSha
-      : null;
-  }
-  const { head, base } = input.pullRequest;
-  const observed = input.ledger.observedRevision;
-  const submittedAt = instant(review.submittedAt);
-  const observedAt = observed === null ? null : instant(observed.observedAt);
-  const readAt = instant(input.pullRequestReadAt);
-  if (
-    observed === null ||
-    observedAt === null ||
-    submittedAt === null ||
-    readAt === null ||
-    submittedAt >= readAt ||
-    review.submittedAt === null ||
-    review.commitId !== head.sha ||
-    observed.headSha !== head.sha ||
-    observed.baseSha !== base.sha ||
-    observedAt >= submittedAt ||
-    baseMayHaveChangedSince(input, observedAt)
-  ) {
-    return null;
-  }
-  bindings[key] = {
-    baseSha: base.sha,
-    headSha: head.sha,
-    observedAt: observed.observedAt,
-    submittedAt: review.submittedAt,
-  };
-  return base.sha;
-};
-
-const requiredReviewers = (input: HumanReviewInput): string[] => {
-  const required = new Set(input.ledger.requiredReviewers);
+/** Everyone this collection shows as asked to review, as GitHub names them now. */
+const requested = (input: HumanReviewInput): RequiredReviewer[] => {
   const people = [
     ...input.pullRequest.requestedReviewers,
     ...input.requests.flatMap((item) =>
@@ -255,17 +161,16 @@ const requiredReviewers = (input: HumanReviewInput): string[] => {
       item.kind === "team" ? [item.team] : []
     ),
   ];
-  for (const person of people) {
-    if (person.type === "User") {
-      required.add(person.login);
-    }
-  }
-  // No rule yet says whose approval satisfies a team, so a team request
-  // stays a requirement that no individual review can meet.
-  for (const team of teams) {
-    required.add(`team:${team.slug}`);
-  }
-  return [...required].toSorted(byText);
+  return [
+    ...people.filter((actor) => actor.type === "User").map(person),
+    // No rule yet says whose approval satisfies a team, so a team request
+    // stays a requirement that no individual review can meet.
+    ...teams.map((team): RequiredReviewer => ({
+      id: team.id,
+      kind: "team",
+      slug: team.slug,
+    })),
+  ];
 };
 
 /**
@@ -275,7 +180,20 @@ const requiredReviewers = (input: HumanReviewInput): string[] => {
 export const humanReviewEvidence = (
   input: HumanReviewInput
 ): HumanReviewResult => {
-  const required = requiredReviewers(input);
+  const asked = requested(input);
+  // Review authors are named too, so a requirement kept only in the ledger
+  // and a review by that account under a new login get one label.
+  const named = reviewerNaming([
+    ...asked,
+    ...input.reviews.map((review) => person(review.author)),
+  ]);
+  const required = new Map<string, RequiredReviewer>();
+  for (const reviewer of [...input.ledger.requiredReviewers, ...asked]) {
+    required.set(reviewerKey(reviewer), named(reviewer));
+  }
+  const requiredReviewers = [...required.values()].toSorted(
+    (left, right) => byText(left.kind, right.kind) || left.id - right.id
+  );
   const bindings = structuredClone(input.ledger.reviewBindings);
   const byReviewer = new Map<string, Decision[]>();
   for (const review of input.reviews) {
@@ -287,9 +205,10 @@ export const humanReviewEvidence = (
       review.author.type === "User" &&
       (deleted || review.author.id !== input.pullRequest.author.id)
     ) {
+      // A label holds the account ID, so grouping by it groups by account.
       const reviewer = deleted
         ? `${GITHUB_GHOST_LOGIN}#${review.id}`
-        : review.author.login;
+        : reviewerLabel(named(person(review.author)));
       const decisions = byReviewer.get(reviewer) ?? [];
       decisions.push(review);
       byReviewer.set(reviewer, decisions);
@@ -325,11 +244,14 @@ export const humanReviewEvidence = (
       };
     });
   return {
-    assignments: { recorded: true, requiredReviewers: required },
+    assignments: {
+      recorded: true,
+      requiredReviewers: requiredReviewers.map(reviewerLabel).toSorted(byText),
+    },
     humanReviews,
     ledger: {
       observedRevision: nextSnapshot(input),
-      requiredReviewers: required,
+      requiredReviewers,
       reviewBindings: bindings,
     },
   };
