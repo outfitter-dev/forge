@@ -20,7 +20,7 @@ export interface PullRequestCollectionRequest {
   /** `owner/name`, as policy names it. The evidence subject carries it as given. */
   repository: string;
   pullRequest: number;
-  /** The label that withholds landing; for Forge, `forge:hold`. */
+  /** The label that withholds landing; for Forge, `forge:hold`. Printable ASCII, matched without regard to the case of `A` to `Z`. */
   holdLabel: string;
   /** The collector's own identity, copied onto the evidence. */
   provenance: Provenance;

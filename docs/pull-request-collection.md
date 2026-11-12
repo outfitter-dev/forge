@@ -29,7 +29,7 @@ if (result.status === "collected") {
 | --- | --- |
 | `repository` | `owner/name`, as evaluator policy names it. The evidence subject carries it exactly as given. |
 | `pullRequest` | The pull request number, a positive integer. |
-| `holdLabel` | The label that withholds landing. For Forge it is `forge:hold`. |
+| `holdLabel` | The label that withholds landing. For Forge it is `forge:hold`. It must be printable ASCII (U+0020 to U+007E) with no space at either end. |
 | `provenance` | The collector's producer ID, runtime fingerprint and run ID, copied onto the evidence. Evaluator policy compares it with `policy.collector`. |
 | `ledger` | The `ReviewLedgerEntry` the last accepted collection of this pull request returned, or an empty entry for a pull request never collected. |
 | `maxThreadPages` | The most review-thread pages one pass may read, a positive integer. |
@@ -71,7 +71,7 @@ Parsed values are compared, not response text. A field Forge does not read, such
 
 The comparison follows the second pass and stops at the first difference, so a collection reported as changed made no further reads. GitHub computes `mergeable` after it is first asked: a collection that sees `null` and then a value is `changed`, and the caller collects again. A `mergeable` that is `null` in both passes is collected as `null`, which the evaluator blocks.
 
-Two agreeing passes show that state at two moments. They do not show that nothing changed and changed back in between, and they say nothing about what happens after the second pass. The [automation contract](automation-contract.md#decisions-leave-usable-evidence) requires a fresh collection before a consequential action.
+Each of the eight reads is its own moment. Two agreeing passes show the pull request, the reviews, the timeline and the threads each agreeing at two moments; they do not show that nothing changed and changed back between those two. The pull request is last observed at the start of the second pass. A label, push or close after that read is not seen, including one made while the second pass is still reading the reviews, timeline and threads. The [automation contract](automation-contract.md#decisions-leave-usable-evidence) requires a fresh collection before a consequential action.
 
 ## Evidence
 
@@ -85,18 +85,22 @@ Two agreeing passes show that state at two moments. They do not show that nothin
 | `mergeAuthorized` | `true` only when the head branch is in the base repository and the pull request does not carry `holdLabel`; otherwise `false`. |
 | `unresolvedThreads` | The sum of unresolved threads over every page. |
 
-`mergeAuthorized` applies one rule: a pull request from the trusted setup may land unless it is held. That rule is Forge's [standing delivery authority](../AGENTS.md#standing-delivery-authority), which names `forge:hold` as a landing hold. The collector applies it as two conditions, and both must hold:
+`mergeAuthorized` reports two conditions that can be read from GitHub, and both must hold:
 
 - The head branch is in the base repository: the head's repository ID is present and equals the base's. A branch there is what shows push access to that repository. A head in a fork, and a head whose fork was deleted, is never authorized, held or not.
-- The pull request does not carry `holdLabel`. GitHub does not let two labels differ only in case, so the hold label in any case holds.
+- The pull request does not carry `holdLabel`. The hold label is printable ASCII, and a label is the hold label when the two are equal after lower-casing the ASCII letters `A` to `Z` and nothing else. GitHub does not let two labels differ only in case, so `Forge:Hold` holds under `forge:hold`. A label that only looks like the hold label, or only contains it, does not hold.
 
-A label never grants authorization; the hold label only withholds it. The caller applies the standing rule to a repository by collecting with a `holdLabel`, and a repository that needs a narrower authorization rule must not take this field as that rule.
+`true` means only that neither condition withholds authorization. It is not the whole of an authorization rule. Forge's [standing delivery authority](../AGENTS.md#standing-delivery-authority) also depends on facts this operation cannot read: whether the work is inside the agreed task scope, whether its task is parked, whether an ask-first exception applies, and who opened the pull request. Those stay with the operation that lands the change. The standing delivery authority names `forge:hold` as a landing hold; it does not establish that the label exists in a repository.
+
+A label never grants authorization; the hold label only withholds it. The caller must collect only for a repository whose trusted configuration adopts "head branch in the base repository and not held" as the GitHub-readable part of its rule. Supplying a `holdLabel` does not make that choice. A repository that needs a narrower rule must not take this field as that rule.
 
 The result's `ledger` is the entry to persist. It carries every reviewer ever requested, the snapshot of the head and base, and the base each bound approval was bound to.
 
 ## Results
 
-Success is `{ status: "collected", evidence, ledger }`. Every other result has a fixed `status` and `reason` and no ledger, so the persisted entry stays as it was. No result carries a response body, a token or anything a read threw. `path` appears only on `unreadable`; it names a field, such as `reviews[0].state`, and never holds that field's value.
+Success is `{ status: "collected", evidence, ledger }`. For a request that keeps to its types, every other result has a fixed `status` and `reason` and no ledger, so the persisted entry stays as it was. No result carries a response body, a token or anything a read threw. `path` appears only on `unreadable`; it names a field, such as `reviews[0].state`, and never holds that field's value.
+
+The call can reject instead of returning a result when the caller breaks the request's types, for example with a ledger that is `null`, lacks its fields or holds a value that cannot be cloned. The ledger's shape is not checked here.
 
 | Status | Reason | Meaning |
 | --- | --- | --- |
@@ -108,11 +112,11 @@ Success is `{ status: "collected", evidence, ledger }`. Every other result has a
 | `unreadable` | `served-at-unreadable` | A `servedAt` was not a whole-second UTC time. `path` is `servedAt`. |
 | `unreadable` | `served-at-regressed` | The second pull request read was served earlier than the first, so it is a stale or cached response. `path` is `servedAt`. |
 | `ambiguous` | `review-history-ambiguous` | `humanReviewEvidence` could not decide the review history, for example two approvals of different commits submitted in the same second. |
-| `unavailable` | `read-failed` | A read rejected or threw. |
+| `unavailable` | `read-failed` | A read rejected or threw, or the pull request read resolved to `null` or `undefined` in place of its object. |
 | `unavailable` | `thread-pages-exceeded` | The review-thread list did not end within `maxThreadPages`. |
-| `mismatch` | `repository-mismatch` | The pull request's base repository is not the requested one. Names are compared without case. |
+| `mismatch` | `repository-mismatch` | The pull request's base repository is not the requested one. The whole `owner/name` is compared, and case is ignored for the ASCII letters `A` to `Z` only. |
 | `mismatch` | `pull-request-mismatch` | The pull request's number is not the requested one. |
-| `invalid-request` | `request-malformed` | The repository is not `owner/name`, the number or page bound is not a positive integer, the hold label is empty or has surrounding whitespace, or the provenance is not a producer, a 64-character fingerprint and a run ID. Nothing was read. |
+| `invalid-request` | `request-malformed` | The repository is not `owner/name`, the number or page bound is not a positive integer, the hold label is empty, starts or ends with a space or holds a character outside printable ASCII (U+0020 to U+007E), or the provenance is not a producer, a 64-character fingerprint and a run ID. Nothing was read. |
 
 A stopped collection is not evidence. The caller collects again or reports the stop; it does not fill in the missing facts.
 
@@ -121,9 +125,9 @@ A stopped collection is not evidence. The caller collects again or reports the s
 - Reads bound to the requested repository and pull request. Only the pull request response is checked for identity, by its number and base repository. Nothing read from the reviews, timeline or thread responses identifies their pull request, so the transport must bind those three reads to the same pull request. Reviews, a timeline or threads from another pull request would be collected as this one's.
 - The whole timeline and every page of reviews. One page is not the list, and nothing here can tell. A missing page can hide a review request, a base change or a change request.
 - A fresh read on every call. A response replayed from a cache makes the second pass agree with the first without showing anything. The only replay caught here is a second pull request read whose `servedAt` is earlier than the first's. A replay carrying the same time, and a replayed reviews, timeline or thread response, are not caught.
-- The repository's hold label, spelled as it is there apart from case. A mistyped hold label holds nothing: the operation cannot tell whether a label of that name exists, and every unheld-looking pull request from the base repository is then authorized.
+- The repository's hold label, spelled as it is there apart from the case of ASCII letters. It must be printable ASCII, so a repository whose hold label holds any other character cannot be collected with it. A mistyped hold label holds nothing: the operation cannot tell whether a label of that name exists, and every unheld-looking pull request from the base repository is then authorized.
 - `servedAt` from the `Date` header of the pull request response itself, converted to a whole-second UTC time such as `2026-01-01T01:00:00Z`. It must not be a local clock or a time taken before the request. `HumanReviewInput.pullRequestReadAt` in [human-review-evidence.ts](../src/human-review-evidence.ts) says what a wrong time can do.
-- The stored ledger entry for this pull request, and persistence of the returned entry only when the status is `collected`. The entry's shape is not checked here: rejecting a corrupted entry is for its store.
+- The stored ledger entry for this pull request, and persistence of the returned entry only when the status is `collected`. The ledger must be an entry validated by its store: its shape is not checked here, and a malformed one can make the call reject or bind an approval it should not.
 - A `maxThreadPages` large enough for the pull request. Too small a bound gives `unavailable`, never a short count.
 - A collector identity in `provenance` that it can vouch for.
 

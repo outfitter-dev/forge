@@ -6,11 +6,7 @@ import type {
   PullRequestCollectionResult,
   PullRequestReads,
 } from "./collect-pull-request-types.ts";
-import {
-  provenance,
-  repository,
-  text,
-} from "./evidence-validation-primitives.ts";
+import { provenance, repository } from "./evidence-validation-primitives.ts";
 import type {
   GitHubPullRequest,
   GitHubReview,
@@ -56,24 +52,32 @@ const attempt = async <T>(read: () => Promise<T>): Promise<T> => {
 const positiveInteger = (value: number): boolean =>
   Number.isSafeInteger(value) && value > 0;
 
+/** Printable ASCII with no space at either end, so one spelling means one label. */
+const HOLD_LABEL = /^[!-~](?:[ -~]*[!-~])?$/u;
+
 /** The ledger is not checked here: rejecting a corrupted entry is for its store. */
 const validRequest = (request: PullRequestCollectionRequest): boolean => {
   try {
     repository(request.repository, "repository");
-    text(request.holdLabel, "holdLabel");
     provenance(request.provenance, "provenance");
   } catch {
     return false;
   }
   return (
+    typeof request.holdLabel === "string" &&
+    HOLD_LABEL.test(request.holdLabel) &&
     positiveInteger(request.pullRequest) &&
     positiveInteger(request.maxThreadPages)
   );
 };
 
+/** Only `A` to `Z`: a Unicode case mapping would call the Kelvin sign a `k`. */
+const foldAscii = (name: string): string =>
+  name.replaceAll(/[A-Z]/gu, (letter) => letter.toLowerCase());
+
 /** GitHub tells neither repository names nor label names apart by case. */
 const sameName = (left: string, right: string): boolean =>
-  left.toLowerCase() === right.toLowerCase();
+  foldAscii(left) === foldAscii(right);
 
 const readPullRequest = async (
   reads: PullRequestReads,
@@ -83,8 +87,13 @@ const readPullRequest = async (
   servedAt: string;
   servedTime: number;
 }> => {
-  const { body, servedAt } = await attempt(() => reads.pullRequest());
-  const servedTime = wholeSecondUtc(servedAt);
+  // Inside the attempt, so a read that resolves to no object is a failed read.
+  const { body, servedAt } = await attempt(async () => {
+    const response = await reads.pullRequest();
+    return { body: response.body, servedAt: response.servedAt };
+  });
+  const servedTime =
+    typeof servedAt === "string" ? wholeSecondUtc(servedAt) : null;
   if (servedTime === null) {
     return stop({
       path: "servedAt",
@@ -207,9 +216,8 @@ export const collectPullRequest = async (
         assignments,
         draft: pullRequest.draft,
         humanReviews,
-        // A pull request from the trusted setup may land unless it is held. A
-        // head branch in the base repository is what shows push access there;
-        // a head in a fork, or one whose fork is gone, does not.
+        // The part of an authorization rule GitHub shows: the head branch is in
+        // the base repository, which takes push access there, and is not held.
         mergeAuthorized:
           pullRequest.head.repositoryId === pullRequest.base.repositoryId &&
           !pullRequest.labels.some((label) =>

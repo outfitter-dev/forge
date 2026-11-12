@@ -18,6 +18,7 @@ import {
   pullRequestResponse,
   reviewRequestedEvent,
   reviewResponse,
+  teamResponse,
   threadPageResponse,
 } from "./github-fixtures.ts";
 
@@ -324,6 +325,11 @@ test.each<{ name: string; reason: ChangedReason; first?: Pass; second: Pass }>([
     }),
   },
   {
+    name: "a team is requested on the pull request",
+    reason: "pull-request-changed",
+    second: pass({ pullRequest: pr({ requested_teams: [teamResponse()] }) }),
+  },
+  {
     name: "a review arrives",
     reason: "reviews-changed",
     second: pass({ reviews: [reviewResponse()] }),
@@ -419,6 +425,50 @@ test("a pull request from the base repository without the hold label may land", 
   expect(result.evidence.mergeAuthorized).toBe(true);
 });
 
+/** Whether a base-repository pull request carrying these labels may land under this hold label. */
+const mayLand = async (labels: readonly string[], holdLabel: string) => {
+  const labeled = pr({
+    labels: labels.map((name, index) => ({ id: index + 1, name })),
+  });
+  const result = collected(
+    await collect(pass({ pullRequest: labeled }), undefined, { holdLabel })
+  );
+  return result.evidence.mergeAuthorized;
+};
+
+const OTHER_HOLD = "do not land";
+/** The Kelvin sign, which a Unicode lower-casing turns into the letter k. */
+const KELVIN = "K";
+/** The long s, which looks like an f. */
+const LONG_S = "ſ";
+
+test.each([
+  { hold: HOLD, labels: [HOLD, "docs"] },
+  { hold: HOLD, labels: ["docs", "FORGE:HOLD", "bug"] },
+  { hold: OTHER_HOLD, labels: [OTHER_HOLD] },
+  { hold: OTHER_HOLD, labels: ["Do Not Land", "docs"] },
+])(
+  "labels $labels hold a pull request under the hold label $hold",
+  async ({ hold, labels }) => {
+    expect(await mayLand(labels, hold)).toBe(false);
+  }
+);
+
+test.each([
+  { hold: OTHER_HOLD, labels: [HOLD] },
+  { hold: HOLD, labels: [OTHER_HOLD] },
+  { hold: HOLD, labels: ["not-forge:hold"] },
+  { hold: HOLD, labels: ["forge:hold-later"] },
+  { hold: HOLD, labels: ["hold"] },
+  { hold: HOLD, labels: [`${LONG_S}orge:hold`] },
+  { hold: "blocked", labels: [`bloc${KELVIN}ed`] },
+])(
+  "labels $labels do not hold a pull request under the hold label $hold",
+  async ({ hold, labels }) => {
+    expect(await mayLand(labels, hold)).toBe(true);
+  }
+);
+
 test.each([
   { from: "a fork", labels: [], repo: { id: 200 } },
   { from: "a fork", labels: [{ id: 9, name: HOLD }], repo: { id: 200 } },
@@ -475,9 +525,29 @@ test("a thread list that does not end within the page bound is unavailable", asy
   ]);
 });
 
-test("a response for another repository is a mismatch", async () => {
+test.each([
+  { served: "example/other" },
+  { served: "other/project" },
+  { served: "example/project-2" },
+  { served: "example/proj" },
+])(
+  "a response for $served is a mismatch with the requested repository",
+  async ({ served }) => {
+    const result = await collect(
+      pass({ pullRequest: pr({ base: baseAt(BASE, served) }) })
+    );
+    expect(result).toStrictEqual({
+      reason: "repository-mismatch",
+      status: "mismatch",
+    });
+  }
+);
+
+test("a repository name that matches only by a Unicode case mapping is a mismatch", async () => {
   const result = await collect(
-    pass({ pullRequest: pr({ base: baseAt(BASE, "example/other") }) })
+    pass({ pullRequest: pr({ base: baseAt(BASE, `example/${KELVIN}it`) }) }),
+    undefined,
+    { repository: "example/kit" }
   );
   expect(result).toStrictEqual({
     reason: "repository-mismatch",
@@ -584,6 +654,44 @@ test("a read that throws before it returns a promise is unavailable", async () =
   });
 });
 
+test.each([
+  { inPass: 1, name: "undefined", resolved: undefined },
+  { inPass: 1, name: "null", resolved: null },
+  { inPass: 2, name: "undefined", resolved: undefined },
+  { inPass: 2, name: "null", resolved: null },
+])(
+  "a pull request read that resolves $name in pass $inPass is unavailable",
+  async ({ inPass, resolved }) => {
+    const { reads } = scripted(pass());
+    const answer = reads.pullRequest;
+    let made = 0;
+    // The interface forbids this answer, so the read is replaced behind its type.
+    Reflect.set(reads, "pullRequest", () => {
+      made += 1;
+      return made === inPass ? Promise.resolve(resolved) : answer();
+    });
+    const result = await collectPullRequest(request(), reads);
+    expect(result).toStrictEqual({
+      reason: "read-failed",
+      status: "unavailable",
+    });
+  }
+);
+
+test("a servedAt that is not text is unreadable even when it prints as a valid time", async () => {
+  const { reads } = scripted(pass());
+  // The interface forbids this answer, so the read is replaced behind its type.
+  Reflect.set(reads, "pullRequest", () =>
+    Promise.resolve({ body: pr(), servedAt: { toString: () => READ } })
+  );
+  const result = await collectPullRequest(request(), reads);
+  expect(result).toStrictEqual({
+    path: "servedAt",
+    reason: "served-at-unreadable",
+    status: "unreadable",
+  });
+});
+
 test("a read that rejects only in the second pass is unavailable", async () => {
   const { reads } = scripted(pass());
   let made = 0;
@@ -680,6 +788,25 @@ test("an approval first seen with no earlier snapshot is unbound", async () => {
   );
 });
 
+test("a base change after the snapshot and before an approval leaves the approval unbound", async () => {
+  const rebased = approvedPass({
+    timeline: [
+      reviewRequestedEvent(),
+      { created_at: EARLY, event: "base_ref_changed" },
+    ],
+  });
+  const result = collected(
+    await collect(rebased, undefined, { ledger: snapshot() })
+  );
+  expect(result.evidence.humanReviews).toEqual([
+    { reviewer: REVIEWER, state: "approved", subject: null },
+  ]);
+  expect(result.ledger.reviewBindings).toEqual({});
+  expect(evaluate(result.evidence).gate("human-review").conclusion).toBe(
+    "failure"
+  );
+});
+
 test("a second collection binds an approval submitted after the first one's snapshot", async () => {
   const first = collected(
     await collect(pass({ servedAt: EARLY, timeline: [reviewRequestedEvent()] }))
@@ -729,6 +856,22 @@ test("a request changed while the reads are awaited does not change what is coll
   ]);
 });
 
+test.each([{ holdLabel: 5 }, { holdLabel: [HOLD] }])(
+  "a request whose hold label is not text, $holdLabel, is refused before anything is read",
+  async ({ holdLabel }) => {
+    const broken = request();
+    // The type forbids this value, so it is set behind the type.
+    Reflect.set(broken, "holdLabel", holdLabel);
+    const fixture = scripted(pass());
+    const result = await collectPullRequest(broken, fixture.reads);
+    expect(result).toStrictEqual({
+      reason: "request-malformed",
+      status: "invalid-request",
+    });
+    expect(fixture.calls).toEqual([]);
+  }
+);
+
 test.each<Partial<PullRequestCollectionRequest>>([
   { repository: "project" },
   { repository: "example/project/extra" },
@@ -736,6 +879,13 @@ test.each<Partial<PullRequestCollectionRequest>>([
   { pullRequest: 0 },
   { pullRequest: 1.5 },
   { holdLabel: "" },
+  { holdLabel: " forge:hold" },
+  { holdLabel: "forge:hold " },
+  { holdLabel: " " },
+  { holdLabel: "forge\thold" },
+  { holdLabel: "forge:hold\u007F" },
+  { holdLabel: "straße" },
+  { holdLabel: "café" },
   { provenance: { ...provenance("collector"), runtimeFingerprint: "1" } },
   { provenance: { ...provenance("collector"), runId: "" } },
   { maxThreadPages: 0 },
