@@ -29,3 +29,11 @@ export { releaseVersionPolicyDigest } from "./release-version-validation.ts";
 export type * from "./release-version-types.ts";
 export { normalizeCheckReceipts } from "./normalize-check-receipts.ts";
 export type * from "./normalize-check-receipts.ts";
+export { collectPullRequest } from "./collect-pull-request.ts";
+export type * from "./collect-pull-request-types.ts";
+export type {
+  ObservedRevision,
+  RequiredReviewer,
+  ReviewBinding,
+  ReviewLedgerEntry,
+} from "./review-ledger.ts";
