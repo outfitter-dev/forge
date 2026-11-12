@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { publish } from "../src/review-ledger-files.ts";
 import { writePrivateFile } from "../src/write-private-file.ts";
 import { fixture, run } from "./check-fixtures.ts";
 
@@ -103,6 +104,35 @@ test("with remove-temporary, a failed rename rejects with the system's error and
   expect(names(directory)).toEqual([NAME]);
   expect(names(file)).toEqual([]);
 });
+
+test("the ledger publisher removes its temporary file after a failed rename", async () => {
+  const directory = scratch();
+  const file = path.join(directory, NAME);
+  mkdirSync(file);
+  await expect(publish(file, "text\n")).rejects.toMatchObject({
+    code: "ledger-unavailable",
+    message: "could not write the entry: EISDIR",
+  });
+  expect(names(directory)).toEqual([NAME]);
+  expect(names(file)).toEqual([]);
+});
+
+test.skipIf(NO_MODES || process.getuid?.() === 0)(
+  "with remove-temporary, a refused write preserves its error when cleanup is refused too",
+  async () => {
+    const directory = scratch();
+    const file = path.join(directory, NAME);
+    chmodSync(directory, 0o500);
+    try {
+      expect(
+        await failure(writePrivateFile(file, "text\n", "remove-temporary"))
+      ).toBe("EACCES");
+      expect(names(directory)).toEqual([]);
+    } finally {
+      chmodSync(directory, 0o700);
+    }
+  }
+);
 
 test("with leave-temporary, a failed rename rejects with the system's error and leaves the temporary file", async () => {
   const directory = scratch();
