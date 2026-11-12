@@ -38,6 +38,11 @@ const record = (value: unknown, path: string): Record<string, unknown> =>
 const list = (value: unknown, path: string): unknown[] =>
   Array.isArray(value) ? value : fail(path, "an array");
 
+// `text` here and `identifier`, `commit` and `instant` below decide what a
+// collection can put into a ledger entry. The validator's field rules in
+// `review-ledger-entry.ts` (`name`, `identifier`, `commit`, `instant`) repeat
+// them and must stay at least as wide: widening one of these requires widening
+// the validator's too, or every ledger replace fails `entry-invalid`.
 const text = (value: unknown, path: string): string =>
   typeof value === "string" && value !== ""
     ? value
