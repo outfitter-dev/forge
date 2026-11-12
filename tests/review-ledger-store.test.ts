@@ -1068,24 +1068,58 @@ test("a lock that is a symlink is a lock, and nothing is created through it", as
 const PADDING = " ".repeat(8 * 1024 * 1024);
 
 /**
- * Runs a replace whose lock cannot be removed, and returns what it threw. The
- * lock is swapped for a directory that holds a file as soon as it appears; the
- * stored entry is padded so that the replace is still reading it by then.
+ * Runs a replace whose lock cannot be removed, and returns what it threw and
+ * where. The lock is swapped for a directory that holds a file as soon as it
+ * appears; the stored entry is padded so that the replace is usually still
+ * reading it by then. An attempt that was not caught in time is made again.
  */
 const replaceWithStuckLock = async (
-  directory: string,
+  contents: string,
   expected: ReviewLedgerEntry
-): Promise<unknown> => {
-  const lock = path.join(directory, LOCK);
-  const replacing = rejection(replace(directory, expected, other()));
-  while (!existsSync(lock)) {
-    // oxlint-disable-next-line no-await-in-loop -- one look per turn of the event loop
-    await nextTurn();
+): Promise<{ directory: string; error: unknown }> => {
+  // A replace can finish before this loop is given a turn. That attempt shows
+  // nothing either way, so it is made again in a fresh directory.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const directory = seeded(contents);
+    const lock = path.join(directory, LOCK);
+    // An object, so the loop below is seen to depend on something that changes.
+    const replaced = { settled: false };
+    const replacing = (async () => {
+      try {
+        return { value: await replace(directory, expected, other()) };
+      } catch (error) {
+        return { error };
+      } finally {
+        replaced.settled = true;
+      }
+    })();
+    while (!replaced.settled && !existsSync(lock)) {
+      // oxlint-disable-next-line no-await-in-loop -- one look per turn of the event loop
+      await nextTurn();
+    }
+    let swapped = false;
+    if (!replaced.settled) {
+      try {
+        rmSync(lock);
+        mkdirSync(lock);
+        writeFileSync(path.join(lock, "held"), "");
+        swapped = true;
+      } catch {
+        // The replace removed its lock first: a missed attempt.
+      }
+    }
+    // oxlint-disable-next-line no-await-in-loop -- one attempt at a time
+    const outcome = await replacing;
+    if (swapped) {
+      if ("error" in outcome) {
+        return { directory, error: outcome.error };
+      }
+      throw new Error(
+        "the replace returned although its lock could not be removed"
+      );
+    }
   }
-  rmSync(lock);
-  mkdirSync(lock);
-  writeFileSync(path.join(lock, "held"), "");
-  return await replacing;
+  throw new Error("no replace was caught holding its lock");
 };
 
 test.each([
@@ -1110,8 +1144,10 @@ test.each([
 ])(
   "a lock that cannot be released $name is reported as that, without a path",
   async ({ contents, expected, stored }) => {
-    const directory = seeded(`${contents}${PADDING}`);
-    const error = await replaceWithStuckLock(directory, expected);
+    const { directory, error } = await replaceWithStuckLock(
+      `${contents}${PADDING}`,
+      expected
+    );
     expect(error).toBeInstanceOf(ReviewLedgerError);
     expect(error).toMatchObject({ code: "ledger-unavailable" });
     const shown = error instanceof Error ? error : new Error("not an error");
