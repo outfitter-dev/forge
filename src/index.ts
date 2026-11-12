@@ -32,6 +32,7 @@ export type * from "./normalize-check-receipts.ts";
 export { collectPullRequest } from "./collect-pull-request.ts";
 export type * from "./collect-pull-request-types.ts";
 export type {
+  CanonicalReviewLedgerEntry,
   ObservedRevision,
   RequiredReviewer,
   ReviewBinding,

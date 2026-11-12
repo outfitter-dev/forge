@@ -12,6 +12,7 @@ import {
 } from "./github-pull-request-reads.ts";
 import { normalizeCheckReceipts } from "./normalize-check-receipts.ts";
 import { ReviewLedgerError } from "./review-ledger-entry.ts";
+import { gateReviewFindings } from "./review-ledger-findings.ts";
 import {
   readReviewLedger,
   replaceReviewLedger,
@@ -182,7 +183,15 @@ const gate = async ({
   const evaluation = evaluateEvidence(
     {
       event: "pull_request",
-      pullRequest: { ...collection.evidence, ...reviewEvidence, checks },
+      pullRequest: {
+        ...collection.evidence,
+        ...reviewEvidence,
+        checks,
+        reviewFindings: gateReviewFindings(
+          collection.ledger.reviewFindings ?? { findings: [], recorded: false },
+          reviewEvidence.reviewFindings
+        ),
+      },
       schemaVersion: 2,
     },
     policy.evidence

@@ -222,6 +222,7 @@ test("a stable collection is evidence the evaluator accepts", async () => {
         submittedAt: APPROVED,
       },
     },
+    reviewFindings: { findings: [], recorded: false },
   });
   const evaluated = evaluate(result.evidence);
   expect(evaluated.gate("human-review").conclusion).toBe("success");

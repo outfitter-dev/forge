@@ -1,6 +1,6 @@
 # Review ledger store
 
-`readReviewLedger(options)` and `replaceReviewLedger(options, expected, next)` keep one pull request's review-ledger entry in a file between collections (FOR-34). `parseReviewLedgerEntry(value)` is the strict check every entry passes on the way in and on the way out. All three are exported from `src/index.ts`. The store reads no clock, environment or network: the directory and the time come from the caller. [`forge gate`](forge-gate.md) is its one caller outside tests. Nothing here changes [`collectPullRequest`](pull-request-collection.md), `humanReviewEvidence`, the evaluator or `forge check`.
+`readReviewLedger(options)` and `replaceReviewLedger(options, expected, next)` keep one pull request's review-ledger entry in a file between collections (FOR-34). `parseReviewLedgerEntry(value)` is the strict check every entry passes on the way in and on the way out. All three are exported from `src/index.ts`. The store reads no clock, environment or network: the directory and the time come from the caller. [`forge gate`](forge-gate.md) is its one caller outside tests. The collector and `humanReviewEvidence` carry persisted findings through collection, and `forge gate` includes them in evaluator input.
 
 ## What the entry holds and why it matters
 
@@ -11,6 +11,7 @@ GitHub forgets a review request once it is answered and never records the base a
 | `requiredReviewers` | Everyone who was ever asked to review, keyed by kind and account or team ID. |
 | `observedRevision` | The head and base GitHub served, and the read time of the collection that first saw them. `null` before the first collection. |
 | `reviewBindings` | For each approval that was bound, by review ID: the head and base it counts against, the snapshot time that justified it, and when it was submitted. |
+| `reviewFindings` | The evaluator’s `ReviewFindingLedger`, with its completeness flag and every accepted finding or detail-less adverse review, including its resolution or `null`. |
 
 The entry decides whether an approval counts. An entry that drops a required reviewer, or that binds an approval to a base it was not given against, can let the `human-review` gate pass. The ledger rules and the collector trust the entry's shape, so a corrupted entry has to stop here.
 
@@ -75,7 +76,7 @@ The check is only as good as `now`. A caller whose clock is too far ahead lets a
 4. The stored entry is compared with `expected`. If they are the same entry, `next` replaces the file and the result is `"stored"`. If they differ, nothing is written and the result is `"conflict"`.
 5. The lock is released, whatever happened. If the release itself fails, the replace reports that instead; see [The lock](#the-lock).
 
-**The same entry** means deep equality of the two validated, canonical forms: the same reviewers by kind, ID and name, the same snapshot or none, and the same set of review IDs with the same binding under each. The order `expected` lists its reviewers or bindings in does not matter, and neither does object identity, so the entry `readReviewLedger` returned can be passed as it is. A file that was deleted since the read is a conflict with a non-empty `expected`.
+**The same entry** means deep equality of the two validated, canonical forms: the same reviewers by kind, ID and name, the same snapshot or none, and the same set of review IDs with the same binding under each, and the same finding completeness, ordered entries and resolutions. The order `expected` lists its reviewers or bindings in does not matter, and neither does object identity, so the entry `readReviewLedger` returned can be passed as it is. A file that was deleted since the read is a conflict with a non-empty `expected`.
 
 `next` is validated for shape and internal consistency only. It is never compared with a clock and never refused for being ahead of one: it is what the collector just produced, stamped with GitHub's time, which can be later than any `now` the caller took before the collection. The stored entry is not compared with a clock here either.
 
@@ -83,12 +84,26 @@ The check is only as good as `now`. A caller whose clock is too far ahead lets a
 
 `parseReviewLedgerEntry(value)` returns a new entry in canonical form or throws `ReviewLedgerError` with `entry-invalid`. The message names a field path and what was expected, and never carries a value from the entry, an unknown field name included.
 
-- The entry is a plain object with exactly `requiredReviewers`, `observedRevision` and `reviewBindings`. At every level an unknown, missing, symbol-keyed or non-enumerable field is refused, and so is anything that is not a plain object where one is expected.
+- The entry is a plain object with `requiredReviewers`, `observedRevision` and `reviewBindings`, plus `reviewFindings` in the canonical form. Legacy three-field entries are accepted with unknown finding history. At every level an unknown, missing, symbol-keyed or non-enumerable field is refused, and so is anything that is not a plain object where one is expected.
 - `requiredReviewers` is an array of `{ kind: "user", id, login }` or `{ kind: "team", id, slug }`. `id` is a positive safe integer and the name is a nonempty string. A kind and ID that appear twice are refused, not merged. The input may list them in any order; the result is sorted by kind and then ID.
 - `observedRevision` is `null`, or exactly `{ headSha, baseSha, observedAt }`. A commit is 40 lowercase hexadecimal characters. A time is a whole-second UTC time such as `2026-01-01T00:00:00Z`: no fractional seconds, no offset, and a date that exists.
 - `reviewBindings` is a plain object. Each key is a review ID as a canonical positive safe integer: no sign, leading zero, fraction or exponent. Each value is exactly `{ headSha, baseSha, observedAt, submittedAt }` with the same commit and time forms, and `observedAt` strictly earlier than `submittedAt`. The binding rule only ever binds to an earlier snapshot, so a binding that says otherwise was never made by it.
 
+- `reviewFindings` follows the evaluator’s `ReviewFindingLedger`, `ReviewFinding` and resolution validation rules. Finding identity is the pair of reviewer and native ID. Repeated identities are refused, including a repeated ID under a different finding kind. The same ID under different reviewers remains distinct. Unknown fields, malformed resolutions and hidden or symbol fields are refused with a sanitized `entry-invalid` error.
+
 The validator compares no time with a clock. These rules establish the entry's shape and internal consistency. They do not establish who wrote it.
+
+## Finding history and compatibility
+
+`ReviewLedgerEntry.reviewFindings` is optional for existing typed callers. `parseReviewLedgerEntry`, `emptyReviewLedgerEntry`, `readReviewLedger`, `humanReviewEvidence` and successful collection return `CanonicalReviewLedgerEntry`, which always has the field. An absent legacy field becomes `{ recorded: false, findings: [] }`. This represents unknown history. Migration never invents a recorded empty history. A present malformed value, including `undefined`, is rejected.
+
+A collection preserves findings and their completeness across head/base changes and absent reviewer observations. The result shares no finding or resolution objects with its input. Snapshot, human bindings and finding history are published in the same file under one compare-and-swap. A concurrent change to findings or a resolution makes a stale replacement conflict just like a change to the snapshot.
+
+A legacy replacement caller that omits `next.reviewFindings` retains the canonical finding history in its validated `expected` entry. The comparison with current storage still covers that history, so an older expected entry cannot erase findings accepted in the meantime. An explicit update must retain every accepted finding’s kind, reviewer, native ID, original attempt and source reference. Dropping an entry or rewriting its origin is `entry-invalid`. A trusted collector can update the resolution, including restoring `null` when a native thread reopens. The store validates that shape. The evaluator remains responsible for deciding whether the resolution is accepted under policy.
+
+[`forge gate`](forge-gate.md) combines persisted findings with the supplied trusted review-evidence file. An identical entry appearing in both is included once. Conflicting resolutions or origins and repeated supplied entries remain duplicate evidence, so an external clean file cannot resolve or omit a persisted blocker. Supplied malformed content keeps the evaluator’s ordinary invalid-input result. Removing a reviewer from eligibility preserves its findings, and native resolutions requiring that reviewer’s policy identity become non-passing under the evaluator’s existing rules.
+
+When persisted history is unknown and empty, the existing supplied-evidence path retains its behavior. Otherwise combined completeness requires both persisted and supplied completeness. With no review file the placeholder remains unknown and contains no attempts, while persisted findings still reach evaluation and block as applicable. Supplied review evidence is evaluated with the persisted history and does not rewrite stored finding origins or resolutions. The later hosted collector must provide complete history before it can attest a recorded ledger.
 
 ## Files
 

@@ -52,6 +52,7 @@ const entry = (overrides: Record<string, unknown> = {}) => ({
   observedRevision: snapshot(),
   requiredReviewers: [reviewer()],
   reviewBindings: { "900": binding() },
+  reviewFindings: { findings: [], recorded: false },
   ...overrides,
 });
 
@@ -127,6 +128,7 @@ test("a valid entry comes back sorted by kind and then ID", () => {
         submittedAt: SUBMITTED_AT,
       },
     },
+    reviewFindings: { findings: [], recorded: false },
   });
 });
 
@@ -158,6 +160,7 @@ test("an entry with nothing recorded is valid, and so is the empty entry", () =>
     observedRevision: null,
     requiredReviewers: [],
     reviewBindings: {},
+    reviewFindings: { findings: [], recorded: false },
   };
   expect(parseReviewLedgerEntry(empty)).toEqual(empty);
   expect(emptyReviewLedgerEntry()).toEqual(empty);
@@ -665,6 +668,7 @@ test("what the GitHub parsers accept at their edges, the validator accepts", () 
         submittedAt: LEAP_NOON,
       },
     },
+    reviewFindings: { findings: [], recorded: false },
   });
   expect(parseReviewLedgerEntry(first)).toEqual(first);
   expect(parseReviewLedgerEntry(second)).toEqual(second);

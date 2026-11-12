@@ -1,9 +1,11 @@
+import { InvalidEvidenceError } from "./evidence-validation-primitives.ts";
+import { parseStoredFindings } from "./review-ledger-findings.ts";
 import { reviewerKey } from "./review-ledger.ts";
 import type {
+  CanonicalReviewLedgerEntry,
   ObservedRevision,
   RequiredReviewer,
   ReviewBinding,
-  ReviewLedgerEntry,
 } from "./review-ledger.ts";
 import { wholeSecondUtc } from "./utc-instant.ts";
 
@@ -197,10 +199,11 @@ const bindings = (
 };
 
 /** The entry of a pull request nothing has been recorded for. */
-export const emptyReviewLedgerEntry = (): ReviewLedgerEntry => ({
+export const emptyReviewLedgerEntry = (): CanonicalReviewLedgerEntry => ({
   observedRevision: null,
   requiredReviewers: [],
   reviewBindings: {},
+  reviewFindings: { findings: [], recorded: false },
 });
 
 /**
@@ -215,12 +218,28 @@ export const emptyReviewLedgerEntry = (): ReviewLedgerEntry => ({
  * ID, and shares no object with `value`. It establishes the entry's shape and
  * nothing about who wrote it.
  */
-export const parseReviewLedgerEntry = (value: unknown): ReviewLedgerEntry => {
-  const source = fields(value, "entry", [
-    "observedRevision",
-    "requiredReviewers",
-    "reviewBindings",
-  ]);
+export const parseReviewLedgerEntry = (
+  value: unknown
+): CanonicalReviewLedgerEntry => {
+  const keys = ["observedRevision", "requiredReviewers", "reviewBindings"];
+  if (Object.hasOwn(record(value, "entry"), "reviewFindings")) {
+    keys.push("reviewFindings");
+  }
+  const source = fields(value, "entry", keys);
+  let findings: CanonicalReviewLedgerEntry["reviewFindings"] = {
+    findings: [],
+    recorded: false,
+  };
+  if (Object.hasOwn(source, "reviewFindings")) {
+    try {
+      findings = parseStoredFindings(source.reviewFindings);
+    } catch (error) {
+      if (error instanceof InvalidEvidenceError) {
+        fail("reviewFindings", "a valid unique review finding ledger");
+      }
+      throw error;
+    }
+  }
   const snapshot = source.observedRevision;
   return {
     observedRevision:
@@ -232,5 +251,6 @@ export const parseReviewLedgerEntry = (value: unknown): ReviewLedgerEntry => {
           ),
     requiredReviewers: reviewers(source.requiredReviewers, "requiredReviewers"),
     reviewBindings: bindings(source.reviewBindings, "reviewBindings"),
+    reviewFindings: findings,
   };
 };

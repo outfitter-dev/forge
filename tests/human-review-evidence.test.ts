@@ -14,8 +14,8 @@ import {
   parseReviews,
 } from "../src/parse-github-pull-request.ts";
 import type {
+  CanonicalReviewLedgerEntry,
   RequiredReviewer,
-  ReviewLedgerEntry,
 } from "../src/review-ledger.ts";
 import {
   at,
@@ -69,11 +69,12 @@ const reviews = (...overrides: Record<string, unknown>[]) =>
   parseReviews(overrides.map((item) => reviewResponse(item)));
 
 const ledger = (
-  overrides: Partial<ReviewLedgerEntry> = {}
-): ReviewLedgerEntry => ({
+  overrides: Partial<CanonicalReviewLedgerEntry> = {}
+): CanonicalReviewLedgerEntry => ({
   observedRevision: null,
   requiredReviewers: [],
   reviewBindings: {},
+  reviewFindings: { findings: [], recorded: false },
   ...overrides,
 });
 
