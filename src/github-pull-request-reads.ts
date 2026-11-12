@@ -135,10 +135,15 @@ export const githubPullRequestReads = (
 ): PullRequestReads => {
   // Taken once, so changing the caller's object later changes no request.
   // Types are checked too: a pattern reads a missing token as `undefined`.
-  const { maxPages, pullRequest: pullNumber, timeoutMs, token } = options;
+  const {
+    maxPages,
+    pullRequest: pullNumber,
+    repository: given,
+    timeoutMs,
+    token,
+  } = options;
   const call = options.fetch;
-  const fullName =
-    typeof options.repository === "string" ? options.repository : "";
+  const fullName = typeof given === "string" ? given : "";
   const [owner = "", name = "", ...extra] = fullName.split("/");
   if (
     extra.length > 0 ||

@@ -461,6 +461,9 @@ test.each([
   `<${reviewsPage(1)}>; rel="prev", <${reviewsPage(1)}>; rel="first"`,
   `<${reviewsPage(9)}>; rel="last"`,
   `<${reviewsPage(2)}>; rel="nextish"`,
+  `<${reviewsPage(2)}>; rel="nextPage"`,
+  `<${reviewsPage(2)}>; rel="_next"`,
+  `<${reviewsPage(2)}>; rel="next_"`,
   `<${API}/repos/vercel/next.js/pulls/12/reviews?page=1>; rel="prev"`,
   // Forms the documented rule does not recognise. GitHub sends none of them.
   `<${reviewsPage(2)}>; rel="prev,next"`,
@@ -480,6 +483,9 @@ test.each([
   `<${reviewsPage(2)}>; REL="NEXT"`,
   `<${reviewsPage(2)}>;rel = "next"`,
   `<${reviewsPage(2)}>; rel="last next"`,
+  `<${reviewsPage(2)}>; rel="next-page"`,
+  // A single quote does not end the value, so this is doubtful, not the end.
+  `<${reviewsPage(2)}>; rel='next'`,
   `<${reviewsPage(2)}>; title="more"; rel="next"`,
   // A doubtful header is read as another page, never as the end of the list.
   `<${reviewsPage(2)}; rel="next", <${reviewsPage(9)}>; rel="last"`,
@@ -839,6 +845,8 @@ test.each<[string, Partial<GitHubPullRequestReadsOptions>]>([
   ["an owner with a Cyrillic letter", { repository: "\u043Ewner/repo" }],
   ["a repository with a full-width letter", { repository: "owner/\uFF52epo" }],
   ["a repository with a full-width digit", { repository: "owner/repo\uFF11" }],
+  // The Kelvin sign is a letter only to a pattern that ignores case.
+  ["a repository with a Kelvin sign", { repository: "\u212Aelvin/repo" }],
   ["pull request 0", { pullRequest: 0 }],
   ["a negative pull request", { pullRequest: -3 }],
   ["a fractional pull request", { pullRequest: 1.5 }],
@@ -977,6 +985,84 @@ test("the timeout given at construction applies after timeoutMs is changed", asy
   const error = await failure(() => reads.pullRequest());
   expect(error.message).toBe("timed-out");
   expect(requests).toHaveLength(1);
+});
+
+test.each<[string, unknown]>([
+  ["another repository", "other/repository"],
+  ["a value that is not a string", 12],
+])(
+  "a repository that reads as example/project once and as %s afterwards is read once, and every request is for example/project",
+  async (_name, afterwards) => {
+    const { fetch, requests } = fake(
+      json(pullRequestResponse()),
+      json([]),
+      json([]),
+      json(threadPageResponse([]))
+    );
+    const given = options(fetch);
+    let taken = 0;
+    Object.defineProperty(given, "repository", {
+      get: (): unknown => {
+        taken += 1;
+        return taken === 1 ? REPOSITORY : afterwards;
+      },
+    });
+    const reads = githubPullRequestReads(given);
+    await reads.pullRequest();
+    await reads.timeline();
+    await reads.reviews();
+    await reads.reviewThreads(null);
+    expect(urls(requests)).toStrictEqual([
+      PULL,
+      timelinePage(1),
+      reviewsPage(1),
+      GRAPHQL,
+    ]);
+    expect(graphql(at(requests, 3)).variables).toStrictEqual({
+      cursor: null,
+      name: "project",
+      number: 12,
+      owner: "example",
+    });
+    expect(taken).toBe(1);
+  }
+);
+
+test("every option is read exactly once, at construction, and by no read afterwards", async () => {
+  const { fetch, requests } = fake(
+    json(pullRequestResponse()),
+    json([{ id: 1 }], nextLink(timelinePage(2))),
+    json([{ id: 2 }]),
+    json([]),
+    json(threadPageResponse([]))
+  );
+  const source = options(fetch);
+  const given = options(fetch);
+  const taken: Record<string, number> = {};
+  for (const key of Object.keys(source)) {
+    Object.defineProperty(given, key, {
+      get: (): unknown => {
+        taken[key] = (taken[key] ?? 0) + 1;
+        return Reflect.get(source, key);
+      },
+    });
+  }
+  const once = {
+    fetch: 1,
+    maxPages: 1,
+    pullRequest: 1,
+    repository: 1,
+    timeoutMs: 1,
+    token: 1,
+  };
+  const reads = githubPullRequestReads(given);
+  expect(taken).toStrictEqual(once);
+  await reads.pullRequest();
+  await reads.timeline();
+  await reads.reviews();
+  await reads.reviewThreads(null);
+  expect(requests).toHaveLength(5);
+  expect(taken).toStrictEqual(once);
 });
 
 test("a failure's code is one of the exported codes", async () => {
