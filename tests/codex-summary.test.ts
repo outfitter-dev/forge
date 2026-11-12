@@ -231,6 +231,33 @@ test("malformed JSON syntax is unavailable", () => {
   ).toMatchObject({ reason: "state-invalid", status: "unavailable" });
 });
 
+test("a long unterminated state marker stays unavailable", () => {
+  expect(
+    parse(`${HEADER}\n<!-- codex-review-state:! ${" ".repeat(64_000)}`)
+  ).toMatchObject({
+    cleanCandidate: false,
+    reason: "marker-invalid",
+    status: "unavailable",
+  });
+});
+
+test("long escaped string tokens preserve duplicate-member and adverse detection", () => {
+  const json = JSON.stringify(
+    state(code({ has_any_findings: true, status: '\\"'.repeat(16_000) }))
+  ).replace(
+    '"has_any_findings":true',
+    '"has_any_findings":true,"has_any_findings":false'
+  );
+  expect(
+    parse(`${HEADER}\n<!-- codex-review-state:v1 ${json} -->`)
+  ).toMatchObject({
+    cleanCandidate: false,
+    reason: "state-invalid",
+    reportedAdverse: true,
+    status: "unavailable",
+  });
+});
+
 test("duplicate summaries remain unavailable and preserve all authenticated adverse references", () => {
   const adverse = comment({
     body: body(state(code({ has_any_findings: true }))),

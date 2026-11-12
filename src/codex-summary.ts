@@ -4,6 +4,7 @@ import type {
 } from "./github-pull-request-types.ts";
 
 const SUMMARY = "<!-- codex-pull-request-review-summary -->";
+const STATE_MARKER = "<!-- codex-review-state:";
 const SECTION_KEYS = [
   "commit_sha",
   "has_any_findings",
@@ -88,31 +89,59 @@ const stateJson = (body: string) => {
   }
   const keys: string[] = [];
   let reportedAdverse = false;
-  for (const match of body.matchAll(/"(?:[^"\\]|\\.)*"/gu)) {
-    const tail = body.slice(match.index + match[0].length);
-    if (/^\s*:/u.test(tail)) {
-      const key = JSON.parse(match[0]) as string;
-      keys.push(key);
-      if (
-        (key === "has_any_findings" || key === "has_unresolved_findings") &&
-        /^\s*:\s*true(?:\s*[,}])/u.test(tail)
-      ) {
-        reportedAdverse = true;
-      }
+  const whitespaceAfter = (start: number): number => {
+    let index = start;
+    while (index < body.length && /\s/u.test(body[index] ?? "")) {
+      index += 1;
+    }
+    return index;
+  };
+  for (let index = 0; index < body.length; index += 1) {
+    if (body[index] !== '"') {
+      continue;
+    }
+    const start = index;
+    index += 1;
+    while (index < body.length && body[index] !== '"') {
+      index += body[index] === "\\" ? 2 : 1;
+    }
+    const colon = whitespaceAfter(index + 1);
+    if (body[colon] !== ":") {
+      continue;
+    }
+    const key = JSON.parse(body.slice(start, index + 1)) as string;
+    keys.push(key);
+    if (
+      (key === "has_any_findings" || key === "has_unresolved_findings") &&
+      body.startsWith("true", whitespaceAfter(colon + 1))
+    ) {
+      reportedAdverse = true;
     }
   }
   return { keys, reportedAdverse, value };
 };
 
-const blocks = (body: string) =>
-  [
-    ...body.matchAll(
-      /<!-- codex-review-state:(?<version>[^\s]+)\s+(?<json>[\s\S]*?)-->/gu
-    ),
-  ].map((match) => ({
-    ...stateJson(match.groups?.json ?? ""),
-    version: match.groups?.version,
-  }));
+const blocks = (body: string) => {
+  const found: (ReturnType<typeof stateJson> & { version: string })[] = [];
+  let start = body.indexOf(STATE_MARKER);
+  while (start !== -1) {
+    const contentStart = start + STATE_MARKER.length;
+    const end = body.indexOf("-->", contentStart);
+    if (end === -1) {
+      break;
+    }
+    const content = body.slice(contentStart, end);
+    const separator = content.search(/\s/u);
+    if (separator > 0) {
+      found.push({
+        ...stateJson(content.slice(separator)),
+        version: content.slice(0, separator),
+      });
+    }
+    start = body.indexOf(STATE_MARKER, end + 3);
+  }
+  return found;
+};
 
 const summaryState = (
   block: ReturnType<typeof stateJson>
