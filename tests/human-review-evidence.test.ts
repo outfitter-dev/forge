@@ -38,6 +38,7 @@ const OTHER = "c".repeat(40);
 const BEFORE = "2026-01-01T00:00:00Z";
 const AFTER = "2026-01-01T00:10:00Z";
 const LATER = "2026-01-01T00:20:00Z";
+const READ = "2026-01-01T01:00:00Z";
 
 const pullRequest = (overrides: Record<string, unknown> = {}) =>
   parsePullRequest(
@@ -71,6 +72,7 @@ const evidence = (input: Partial<HumanReviewInput> = {}) =>
     baseChanges: [],
     ledger: ledger(),
     pullRequest: pullRequest(),
+    pullRequestReadAt: READ,
     repository: REPOSITORY,
     requests: [],
     reviews: [],
@@ -600,4 +602,70 @@ test("the result shares no objects with the ledger passed in", () => {
     before.reviewBindings["7"]
   );
   expect(result.ledger).toEqual(before);
+});
+
+test.each([
+  { name: "at the instant of the read", readAt: AFTER },
+  { name: "after the read", readAt: "2026-01-01T00:09:59Z" },
+  { name: "when the read time is unreadable", readAt: "just now" },
+])(
+  "an approval submitted $name is left for the next collection",
+  ({ readAt }) => {
+    const result = evidence({
+      ledger: ledger({ observedRevision: observed() }),
+      pullRequest: assigned(),
+      pullRequestReadAt: readAt,
+      reviews: reviews({ submitted_at: AFTER }),
+    });
+    expect(at(result.humanReviews).subject).toBeNull();
+    expect(result.ledger.reviewBindings).toEqual({});
+    expect(humanGate(result)?.conclusion).toBe("failure");
+  }
+);
+
+test.each([{ order: [0, 2] }, { order: [2, 0] }])(
+  "an approval and a change request submitted together block in order $order",
+  ({ order }) => {
+    const result = evidence({
+      ledger: ledger({ observedRevision: observed() }),
+      reviews: reviews(...order.map((index) => at(TIED, index))),
+    });
+    expect(result.humanReviews).toEqual([
+      { reviewer: "reviewer", state: "changes_requested", subject: null },
+    ]);
+    expect(humanGate(result)?.conclusion).toBe("failure");
+  }
+);
+
+test("a stack change after the snapshot refuses a new binding", () => {
+  const result = evidence({
+    baseChanges: parseBaseChanges([
+      { created_at: "2026-01-01T00:05:00Z", event: "removed_from_stack" },
+    ]),
+    ledger: ledger({ observedRevision: observed() }),
+    reviews: reviews({ submitted_at: AFTER }),
+  });
+  expect(at(result.humanReviews).subject).toBeNull();
+});
+
+test("a base change with an unreadable time refuses a new binding", () => {
+  const result = evidence({
+    baseChanges: [{ createdAt: "some time ago", event: "base_ref_changed" }],
+    ledger: ledger({ observedRevision: observed() }),
+    reviews: reviews({ submitted_at: AFTER }),
+  });
+  expect(at(result.humanReviews).subject).toBeNull();
+});
+
+test("a requested reviewer whose account was deleted stays required and unmet", () => {
+  const result = evidence({
+    ledger: ledger({ observedRevision: observed() }),
+    pullRequest: pullRequest({ requested_reviewers: [ghostResponse()] }),
+    reviews: reviews({ submitted_at: AFTER, user: ghostResponse() }),
+  });
+  expect(result.assignments.requiredReviewers).toEqual(["ghost"]);
+  expect(result.humanReviews).toEqual([
+    { reviewer: "ghost#900", state: "approved", subject: null },
+  ]);
+  expect(humanGate(result)?.conclusion).toBe("failure");
 });

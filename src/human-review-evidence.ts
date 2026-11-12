@@ -42,8 +42,16 @@ export interface ReviewLedgerEntry {
 export interface HumanReviewInput {
   repository: string;
   pullRequest: GitHubPullRequest;
+  /**
+   * When GitHub served `pullRequest`, on GitHub's clock. The collector must
+   * read the reviews no later than the pull request, and the timeline no
+   * earlier, so that no approval submitted before this time can be missing its
+   * base change. An approval submitted at or after it waits for the next
+   * collection.
+   */
+  pullRequestReadAt: string;
   requests: GitHubReviewRequest[];
-  /** Every retarget or force-push of the base, from the whole timeline. */
+  /** Every event that can come with a change of base, from the whole timeline. */
   baseChanges: GitHubBaseChange[];
   reviews: GitHubReview[];
   ledger: ReviewLedgerEntry;
@@ -146,8 +154,9 @@ const standing = (decisions: Decision[]): Decision => {
 /**
  * The base an approval counts against, or `null`. A new binding needs a
  * snapshot of this exact head and base persisted strictly before the approval
- * was submitted, and no retarget or force-push of the base since that
- * snapshot: a base that left and came back would otherwise look unchanged.
+ * was submitted, an approval submitted before this collection read the pull
+ * request, and no possible change of base since that snapshot: a base that
+ * left and came back would otherwise look unchanged.
  * `bindings` gains the new binding when one is made.
  */
 const boundBase = (
@@ -167,10 +176,13 @@ const boundBase = (
   const observed = input.ledger.observedRevision;
   const submittedAt = instant(review.submittedAt);
   const observedAt = observed === null ? null : instant(observed.observedAt);
+  const readAt = instant(input.pullRequestReadAt);
   if (
     observed === null ||
     observedAt === null ||
     submittedAt === null ||
+    readAt === null ||
+    submittedAt >= readAt ||
     review.submittedAt === null ||
     review.commitId !== head.sha ||
     observed.headSha !== head.sha ||
