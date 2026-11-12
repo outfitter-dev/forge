@@ -17,6 +17,12 @@ export interface PullRequestReads {
   reviewThreads: (cursor: string | null) => Promise<unknown>;
 }
 
+/** Optional capability for hosted review collection. Existing pull-request readers need not implement it. */
+export interface PullRequestCommentReads {
+  /** One page of the issue-comment connection, starting after cursor (null for the first page). */
+  issueComments: (cursor: string | null) => Promise<unknown>;
+}
+
 export interface PullRequestCollectionRequest {
   /** `owner/name`, as policy names it. The evidence subject carries it as given. */
   repository: string;

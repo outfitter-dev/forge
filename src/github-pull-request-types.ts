@@ -103,3 +103,20 @@ export interface GitHubReviewThreadPage {
   unresolved: number;
   nextCursor: string | null;
 }
+
+/** Current body and editor identity of one pull request issue comment. */
+export interface GitHubIssueComment {
+  id: number;
+  nodeId: string;
+  nativeRef: string;
+  body: string;
+  author: GitHubActor | null;
+  editor: GitHubActor | null;
+  updatedAt: string;
+  lastEditedAt: string | null;
+}
+
+export interface GitHubIssueCommentPage {
+  comments: GitHubIssueComment[];
+  nextCursor: string | null;
+}

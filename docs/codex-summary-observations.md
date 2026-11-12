@@ -1,0 +1,27 @@
+# Codex summary observations
+
+FOR-37 adds comment observations and a pure parser for Codex's observed summary format. The [approved hosted-reviewer contract](hosted-reviewer-attestations.md#codex-hosted-code-review) defines the identity and state rules. The marker format remains undocumented by the vendor.
+
+## Comment reads
+
+`githubPullRequestReads(options)` returns `PullRequestReads & PullRequestCommentReads`. The additive `issueComments(cursor)` capability returns one raw GraphQL page from the pull request's issue-comment connection. Existing `PullRequestReads` implementations keep their four required methods, and `collectPullRequest` continues to invoke those four reads. Comment collection has a separate entry point.
+
+The fixed query requests each comment's node ID, numeric database ID, URL, body, author, editor, update time and nullable last-edit time. Author and editor request `__typename`, `login` and User/Bot `databaseId`. Repository, number and cursor are variables. The read uses the transport's existing fixed origin, redirect refusal, request timeout, credential handling and sanitized failures.
+
+`parseIssueCommentPage(raw)` returns `{ comments, nextCursor }`. Each `GitHubIssueComment` has `id` (numeric database ID), `nodeId`, `nativeRef` (GitHub's comment URL), `body`, `author`, `editor`, `updatedAt` and `lastEditedAt`. An empty body is valid. Times use the existing whole-second UTC validator. Null, deleted `ghost` and migrated `Mannequin` identities normalize to `null`. Missing or malformed identity fields and unsupported concrete actor types are unreadable. A null editor never establishes bot authorship of the current body. URLs remain source references and never become request addresses.
+
+`readIssueComments(reads, maxPages)` reads all pages in order and returns `GitHubIssueComment[]`. The positive page bound is explicit. GraphQL errors, missing connections or pagination fields, duplicate database/node IDs within or across pages, and repeated cursors fail closed through `GitHubResponseError`. Exceeding the bound throws `GitHubReadError("pages-exceeded")`. Read failures preserve the transport's structured errors and sanitize other thrown content to `request-failed`. No partial list is returned after failure.
+
+## Summary parser
+
+`parseCodexSummary(comments, expectedBotAccountId)` accepts the entire normalized comment list and a configured positive numeric bot account ID. It returns `CodexSummaryObservation` with `status`, `reason`, `summary`, `state`, `cleanCandidate`, `reportedAdverse` and `adverseComments`. Account ID and `Bot` type establish attribution. Login is retained for observation and can change without changing the account.
+
+A parsed summary requires exactly one expected-bot comment starting with `<!-- codex-pull-request-review-summary -->`. Its editor must also be that bot account. It must contain exactly one `codex-review-state:v1` block, with exactly the known two section keys and four member keys per section. Duplicate markers, versions or JSON members fail closed. JSON syntax is validated by `JSON.parse`; string-token member counts detect duplicate and escaped-equivalent keys before overwritten values can hide a duplicate.
+
+The normalized `CodexSummaryState` contains `codeReview` and `securityReview`. A section has `commitSha`, `hasAnyFindings`, `hasUnresolvedFindings` and the observed `status`. Code review requires a full lowercase commit, two booleans and a nonempty status. The approved all-null security section normalizes to `null`. An active security section may be observed when it has the full section shape, and it cannot support a clean candidate in this increment. Malformed, partially null or unknown fields produce unavailable observations.
+
+`cleanCandidate` is true only for the expected author and editor, unique valid version 1 state, completed code review, inactive security review and no reported adverse flag. A noncompleted or unfamiliar nonempty provider status remains an observation with `cleanCandidate: false`. The parser preserves the commit named by the report, including an older commit. The next evidence operation must establish current head, snapshot/base binding, update-time bounds, thread consistency, attestation and finding-ledger completeness before a candidate can support a review gate.
+
+`reportedAdverse` and `adverseComments` preserve interpretable positive finding flags from JSON state blocks in authenticated bot-authored comments. They survive duplicate JSON members that overwrite `true` with `false`, unsupported marker versions, duplicate summaries or markers, missing summary prefix, unverified editor and malformed known section shape. The retained comments provide native identities and source references for later ledger entries. An impostor author's flags do not establish Codex evidence. Invalid JSON syntax cannot establish an interpretable section flag through this parser. Existing findings must persist independently of every unavailable observation.
+
+These APIs are exported from `src/index.ts`. Offline fixtures cover identity, state, adverse retention and pagination. Live query acceptance, summary stability across collection passes, evaluator attempts, persisted findings, policy adoption and the guidance-revision experiment remain later qualification work.
