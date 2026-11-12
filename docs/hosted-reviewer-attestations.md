@@ -11,13 +11,13 @@ An attestation records the policy owner's decision and its limits. Collection mu
 - A hosted reviewer without an applicable attestation stays `context: "unknown"`. A local review continues to require established clean context under its own collection contract.
 - The collector retains the attestation identifier, trusted policy revision and reviewer identity alongside its source observations and normalized result. That record lets a reader distinguish an attested `none` from observed clean context. The version 2 attempt and evaluator result alone cannot make that distinction.
 - An attestation covers independence only. Missing, stale, incomplete or adverse evidence keeps its existing meaning. Findings and detail-less adverse verdicts persist in the ledger until an accepted resolution.
-- Each entry records its basis, known weaknesses and conditions for withdrawal. Adding, changing or withdrawing an attestation changes accepted evidence and requires the policy owner's confirmation. Withdrawal restores `unknown` and preserves accepted findings.
+- Each entry records its basis, known weaknesses and conditions for withdrawal. The policy owner establishes which evidence an attestation may accept. Routine delivery within that agreed policy follows [standing delivery authority](../AGENTS.md#standing-delivery-authority). Withdrawal restores `unknown` and preserves accepted findings.
 
 The fictitious hosted reviewers in `examples/evidence/v2/` and test fixtures are supplied normalized claims for exercising the evaluator. They do not establish a real collector's attestation or qualify a hosted service.
 
 ## Codex hosted code review
 
-Status on November 12, 2026 is pending confirmation of this revised contract. Matt previously accepted the observed-format and trusted-policy-independence decisions recorded on FOR-37. This revision adds the last-editor rule and the collection clarifications found during review. A collector and an adopting policy entry still need implementation and qualification. This entry is scoped to `outfitter-dev/forge`.
+Status on November 12, 2026 is contract confirmed, awaiting collector implementation and adoption qualification. Matt confirmed the revised PR #38 contract, including the last-editor rule and inactive all-null security section, and reaffirmed standing approval for future reviewed scoped merges with green CI. The confirmation is recorded on FOR-37. A collector and an adopting policy entry still need implementation and qualification. This entry is scoped to `outfitter-dev/forge`.
 
 [FOR-37](https://linear.app/outfitter/issue/FOR-37) retains the decisions, vendor-documentation check, raw observation pointers and collector design. That check found no supported machine-readable contract for the markers below. Their format is observed. The observed clean review and adverse review came from Forge PRs 26 and 27.
 
@@ -27,7 +27,7 @@ A collection must read exactly one summary comment whose body starts with `<!-- 
 
 Both the summary's author and its last editor must be the configured Codex bot account, checked by account ID and bot type. Unknown editor identity cannot satisfy that rule. GraphQL supplies the editor identity that the REST comments response omits. The account ID is trusted configuration rather than a constant in the parser. The observed account was `chatgpt-codex-connector[bot]`, ID `199175422`.
 
-The version 1 state has exactly two section keys, `code_review` and `security_review`. Each section has exactly `commit_sha`, `has_any_findings`, `has_unresolved_findings` and `status`. For a passing code review, `code_review` has a full lowercase 40-character commit, two booleans and `status: "completed"`, with no null field. The raw samples have all four `security_review` fields null. That inactive section establishes no security review. Accepting it as inactive is part of this revised entry's confirmation, and any reported findings from either section must be retained as adverse evidence. Other section states need an explicit tested interpretation before they can support a pass.
+The version 1 state has exactly two section keys, `code_review` and `security_review`. Each section has exactly `commit_sha`, `has_any_findings`, `has_unresolved_findings` and `status`. For a passing code review, `code_review` has a full lowercase 40-character commit, two booleans and `status: "completed"`, with no null field. The raw samples have all four `security_review` fields null. Matt accepted treating that section as inactive in the PR #38 confirmation. It establishes no security review, and any reported findings from either section must be retained as adverse evidence. Other section states need an explicit tested interpretation before they can support a pass.
 
 The collector attributes review threads by the first comment's bot account ID and type, using the same identity rule. It reads all threads, including those from earlier heads, with complete pagination. The summary, its author and editor, its update time, and the full attributed thread list join collection's two-pass stability check.
 
@@ -63,7 +63,7 @@ The basis for the proposed independence attestation is a separate hosted review 
 
 ### Before adoption
 
-1. Confirm this revised entry and its independence exception with Matt, including the last-editor rule and the inactive all-null security section observed in the samples.
+1. Use the confirmed scope of this entry and its independence exception, including the last-editor rule and the inactive all-null security section observed in the samples. Further scoped PRs proceed under standing delivery authority.
 2. Implement and test the distinct collector-policy attestation, strict parser, stable collection, exact base binding and persisted findings.
 3. Record one live observation on Forge separately from offline fixtures, and identify the format as observed in policy and usage documentation.
 4. Establish which `AGENTS.md` revision Codex follows with one bounded test on an agreed disposable repository. If the proposed copy governs the review, obtain the policy owner's decision before enabling the entry.
