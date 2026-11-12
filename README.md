@@ -22,11 +22,11 @@ The first operation is a [pure deterministic evidence evaluator](docs/evidence-e
 
 [Offline release composition](docs/release-composition.md) demonstrates explicit product mapping of diff/version/artifact/npm outcomes into required and auto-only release assessments, including manual-path blockers and the remaining minimum for a real consumer trial.
 
-[Pull request collection](docs/pull-request-collection.md) reads one pull request's live state twice through injected reads and returns the pull-request part of the evaluator's evidence only when both passes agree; it includes no GitHub client, token handling or ledger store.
+[Pull request collection](docs/pull-request-collection.md) reads one pull request's live state twice through injected reads and returns the pull-request part of the evaluator's evidence only when both passes agree. A separate read-only transport supplies those reads from GitHub's API with a token and a `fetch` its caller passes. Neither includes a command, a way to obtain a token or a ledger store.
 
 ## Foundation status
 
-This is an unpublished package, not a deployed automation platform. `package.json` retains `"private": true` to prevent incidental package publication; source visibility and npm publication are separate decisions. Source licensing is MIT; see [LICENSE](LICENSE). It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator with its validation boundary and evidence contract, and the npm evidence, package artifact, release policy, generated-release diff, release version, verification evidence and pull request collection operations. Offline tests cover evidence evaluation and checkout bootstrap behavior.
+This is an unpublished package, not a deployed automation platform. `package.json` retains `"private": true` to prevent incidental package publication; source visibility and npm publication are separate decisions. Source licensing is MIT; see [LICENSE](LICENSE). It includes Bun **1.4.4** with native typechecking, oxlint **1.93.0**, oxfmt **0.78.0**, Ultracite **8.1.1**, exact dependencies with a lockfile, and CI. `src/index.ts` exports the evaluator with its validation boundary and evidence contract, and the npm evidence, package artifact, release policy, generated-release diff, release version, verification evidence, pull request collection and GitHub pull request read operations. Offline tests cover evidence evaluation and checkout bootstrap behavior.
 
 ```sh
 bun install --frozen-lockfile
