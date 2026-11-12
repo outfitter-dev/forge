@@ -184,11 +184,12 @@ export const parseReviewRequests = (value: unknown): GitHubReviewRequest[] =>
   }).flat();
 
 /**
- * Any event named for the base or for a stack. Seen in live REST timelines on
+ * Any event named for the base or for a stack, matched on whole name parts so
+ * that `auto_rebase_enabled` is not one. Seen in live REST timelines on
  * November 12, 2026: `base_ref_force_pushed`, `automatic_base_change_succeeded`,
  * `added_to_stack` and `removed_from_stack`. GitHub documents `base_ref_changed`.
  */
-const BASE_CHANGE = /base|stack/u;
+const BASE_CHANGE = /(?:^|_)base(?:_|$)|stack/u;
 
 /**
  * Every event among the timeline items given that can come with a change of

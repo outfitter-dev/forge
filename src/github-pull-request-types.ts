@@ -36,7 +36,12 @@ export interface GitHubPullRequest {
   author: GitHubActor;
   /** A head whose fork was deleted has no repository. */
   head: { sha: string; ref: string; repositoryId: number | null };
-  /** `repositoryName` is `owner/name` as GitHub reports it now, after any rename. */
+  /**
+   * `sha` is the base commit GitHub last recorded for the pull request. It can
+   * lag the base branch's tip: an ordinary push to that branch changes neither
+   * this value nor the timeline. `repositoryName` is `owner/name` as GitHub
+   * reports it now, after any rename.
+   */
   base: {
     sha: string;
     ref: string;

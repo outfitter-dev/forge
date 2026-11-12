@@ -402,6 +402,8 @@ test("events that can come with a base change are read with their time", () => {
   ];
   const timeline = [
     { created_at: "2026-01-01T00:01:00Z", event: "head_ref_force_pushed" },
+    // "rebase" contains "base"; enabling auto-merge by rebase moves no base.
+    { created_at: "2026-01-01T00:01:30Z", event: "auto_rebase_enabled" },
     reviewRequestedEvent(),
     ...names.map((event) => ({ created_at: "2026-01-01T00:02:00Z", event })),
     { created_at: "2026-01-01T00:03:00Z", event: "labeled" },
@@ -502,4 +504,19 @@ test("a null thread list is rejected, never read as no threads", () => {
       }),
     "threads.data.repository.pullRequest.reviewThreads.nodes"
   );
+});
+
+test("a null state, thread connection or timeline is rejected, never read as empty", () => {
+  rejects(
+    () => parsePullRequest(pullRequestResponse({ state: null })),
+    "pullRequest.state"
+  );
+  rejects(
+    () =>
+      parseReviewThreadPage({
+        data: { repository: { pullRequest: { reviewThreads: null } } },
+      }),
+    "threads.data.repository.pullRequest.reviewThreads"
+  );
+  rejects(() => parseReviewRequests(null), "timeline");
 });
