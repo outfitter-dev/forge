@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test";
 
-import { GitHubReadError } from "../src/github-pull-request-reads.ts";
-import { collectPullRequest, githubPullRequestReads } from "../src/index.ts";
+import {
+  collectPullRequest,
+  GitHubReadError,
+  githubPullRequestReads,
+} from "../src/index.ts";
 import type {
   GitHubPullRequestReadsOptions,
+  GitHubReadFailure,
   PullRequestReads,
 } from "../src/index.ts";
 import { at, provenance, REPOSITORY, subject } from "./evidence-fixtures.ts";
@@ -314,6 +318,13 @@ test("the token appears only in the Authorization header and never in a URL, a r
   }
 });
 
+/** Other headers that carry a time. None of them says when the response was served. */
+const OTHER_TIMES = {
+  Age: "86400",
+  Expires: "Wed, 01 Jan 2031 00:00:00 GMT",
+  "Last-Modified": "Mon, 01 Jan 2018 00:00:00 GMT",
+};
+
 test.each([
   ["Thu, 12 Nov 2026 17:07:30 GMT", "2026-11-12T17:07:30Z"],
   // The day name is read for its form and not checked against the date.
@@ -322,15 +333,23 @@ test.each([
   ["Thu, 29 Feb 2024 23:59:59 GMT", "2024-02-29T23:59:59Z"],
   ["Fri, 31 Dec 2032 12:00:01 GMT", "2032-12-31T12:00:01Z"],
 ])("a Date header of %p gives servedAt %p", async (header, servedAt) => {
-  const { fetch } = fake(json(pullRequestResponse(), { Date: header }));
+  const { fetch } = fake(
+    json(pullRequestResponse(), { ...OTHER_TIMES, Date: header })
+  );
   const result = await githubPullRequestReads(options(fetch)).pullRequest();
   expect(result.servedAt).toBe(servedAt);
 });
 
 test("servedAt is each response's own Date header, not a clock and not an earlier response's", async () => {
   const { fetch } = fake(
-    json(pullRequestResponse(), { Date: "Sat, 01 Jan 2000 00:00:00 GMT" }),
-    json(pullRequestResponse(), { Date: "Fri, 31 Dec 2032 12:00:01 GMT" })
+    json(pullRequestResponse(), {
+      ...OTHER_TIMES,
+      Date: "Sat, 01 Jan 2000 00:00:00 GMT",
+    }),
+    json(pullRequestResponse(), {
+      ...OTHER_TIMES,
+      Date: "Fri, 31 Dec 2032 12:00:01 GMT",
+    })
   );
   const reads = githubPullRequestReads(options(fetch));
   const year = new Date().getUTCFullYear();
@@ -365,19 +384,25 @@ test.each([
   "Thu Nov 12 17:07:30 2026",
   "Thu, 12 Nov 2026 17:07:30 GMT, Thu, 12 Nov 2026 17:07:31 GMT",
 ])("a Date header of %p fails the pull request read", async (header) => {
-  const { fetch } = fake(json(pullRequestResponse(), { Date: header }));
+  const { fetch } = fake(
+    json(pullRequestResponse(), { ...OTHER_TIMES, Date: header })
+  );
   const error = await failure(() =>
     githubPullRequestReads(options(fetch)).pullRequest()
   );
   expect(error.message).toBe("date-header-unreadable");
 });
 
-test("a pull request response with no Date header fails", async () => {
-  const { fetch } = fake(() => Response.json(pullRequestResponse()));
-  const error = await failure(() =>
-    githubPullRequestReads(options(fetch)).pullRequest()
+test("a pull request response with no Date header fails, whatever other times it carries", async () => {
+  const { fetch } = fake(
+    () => Response.json(pullRequestResponse()),
+    () => Response.json(pullRequestResponse(), { headers: OTHER_TIMES })
   );
-  expect(error.message).toBe("date-header-unreadable");
+  const reads = githubPullRequestReads(options(fetch));
+  const bare = await failure(() => reads.pullRequest());
+  const timed = await failure(() => reads.pullRequest());
+  expect(bare.message).toBe("date-header-unreadable");
+  expect(timed.message).toBe("date-header-unreadable");
 });
 
 test("three pages are joined in order and the list stops at the page with no next link", async () => {
@@ -437,6 +462,10 @@ test.each([
   `<${reviewsPage(9)}>; rel="last"`,
   `<${reviewsPage(2)}>; rel="nextish"`,
   `<${API}/repos/vercel/next.js/pulls/12/reviews?page=1>; rel="prev"`,
+  // Forms the documented rule does not recognise. GitHub sends none of them.
+  `<${reviewsPage(2)}>; rel="prev,next"`,
+  `<${reviewsPage(2)}>; rel="prev;next"`,
+  `<${reviewsPage(2)}>; rel*=UTF-8''next`,
   "",
 ])("a Link header of %p ends the list", async (link) => {
   const { fetch, requests } = fake(json([{ id: 1 }], { Link: link }));
@@ -463,6 +492,48 @@ test.each([
   const result = await githubPullRequestReads(options(fetch)).reviews();
   expect(result).toStrictEqual([{ id: 1 }, { id: 2 }]);
   expect(urls(requests)).toStrictEqual([reviewsPage(1), reviewsPage(2)]);
+});
+
+/** A Link header of exactly `length` characters that names no next page. */
+const longLink = (length: number): string => {
+  const start = `<${reviewsPage(1)}>; rel="prev"; title="`;
+  return `${start}${"a".repeat(length - start.length - 1)}"`;
+};
+
+test.each([
+  ["rel= repeated to 100,000 characters", "rel=".repeat(25_000)],
+  ["100,000 characters with no next in them", longLink(100_000)],
+  ["one character over the bound", longLink(4097)],
+])(
+  "a Link header that is %s counts as another page, so the list is never returned short",
+  async (_name, link) => {
+    expect(link).not.toContain("next");
+    const bounded = fake(json([{ id: 1 }], { Link: link }));
+    const error = await failure(() =>
+      githubPullRequestReads(options(bounded.fetch, { maxPages: 1 })).reviews()
+    );
+    expect(error.message).toBe("pages-exceeded");
+    expect(bounded.requests).toHaveLength(1);
+
+    const paged = fake(json([{ id: 1 }], { Link: link }), json([{ id: 2 }]));
+    const result = await githubPullRequestReads(options(paged.fetch)).reviews();
+    expect(result).toStrictEqual([{ id: 1 }, { id: 2 }]);
+    expect(urls(paged.requests)).toStrictEqual([
+      reviewsPage(1),
+      reviewsPage(2),
+    ]);
+  }
+);
+
+test("a Link header of exactly 4096 characters is still read, and ends the list when it names no next page", async () => {
+  const link = longLink(4096);
+  expect(link).toHaveLength(4096);
+  const { fetch, requests } = fake(json([{ id: 1 }], { Link: link }));
+  const result = await githubPullRequestReads(
+    options(fetch, { maxPages: 1 })
+  ).reviews();
+  expect(result).toStrictEqual([{ id: 1 }]);
+  expect(requests).toHaveLength(1);
 });
 
 test.each([1, 2, 3])(
@@ -747,8 +818,6 @@ test.each(leaky)(
   }
 );
 
-const NEVER: Fetch = () => Promise.reject(new Error("unscripted"));
-
 test.each<[string, Partial<GitHubPullRequestReadsOptions>]>([
   ["a repository with three parts", { repository: "owner/repo/extra" }],
   ["a repository that climbs", { repository: "../x" }],
@@ -766,6 +835,10 @@ test.each<[string, Partial<GitHubPullRequestReadsOptions>]>([
   ["a repository with a trailing newline", { repository: "owner/repo\n" }],
   ["a repository with a host", { repository: "evil.example@x/y:z" }],
   ["a repository with a backslash", { repository: String.raw`owner\repo/x\y` }],
+  ["a repository with a Cyrillic letter", { repository: "owner/r\u0435po" }],
+  ["an owner with a Cyrillic letter", { repository: "\u043Ewner/repo" }],
+  ["a repository with a full-width letter", { repository: "owner/\uFF52epo" }],
+  ["a repository with a full-width digit", { repository: "owner/repo\uFF11" }],
   ["pull request 0", { pullRequest: 0 }],
   ["a negative pull request", { pullRequest: -3 }],
   ["a fractional pull request", { pullRequest: 1.5 }],
@@ -801,6 +874,44 @@ test.each<[string, Partial<GitHubPullRequestReadsOptions>]>([
   }
 );
 
+test.each<[string, Record<string, unknown>]>([
+  ["a missing repository", { repository: undefined }],
+  ["a null repository", { repository: null }],
+  ["a number for the repository", { repository: 12 }],
+  ["an array for the repository", { repository: ["example/project"] }],
+  ["an object for the repository", { repository: { owner: "example" } }],
+  ["a missing token", { token: undefined }],
+  ["a null token", { token: null }],
+  ["a number for the token", { token: 123_456 }],
+  ["an array for the token", { token: [TOKEN] }],
+  ["a missing fetch", { fetch: undefined }],
+  ["a null fetch", { fetch: null }],
+  ["a string for fetch", { fetch: "fetch" }],
+  ["an object for fetch", { fetch: {} }],
+  ["a string for the pull request", { pullRequest: "12" }],
+  ["a string for timeoutMs", { timeoutMs: "1000" }],
+  ["a string for maxPages", { maxPages: "5" }],
+])(
+  "%s, from a caller that breaks the types, is rejected at construction and no request is made",
+  (_name, overrides) => {
+    const { fetch, requests } = fake();
+    // Object.assign lets a wrongly typed value in, as untyped code would.
+    const given: GitHubPullRequestReadsOptions = Object.assign(
+      options(fetch),
+      overrides
+    );
+    let thrown: unknown = null;
+    try {
+      githubPullRequestReads(given);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(GitHubReadError);
+    expect(String(thrown)).toBe("GitHubReadError: options-invalid");
+    expect(requests).toHaveLength(0);
+  }
+);
+
 test("valid options make no request until a read is called", () => {
   const { fetch, requests } = fake();
   const reads = githubPullRequestReads(options(fetch));
@@ -813,18 +924,69 @@ test("valid options make no request until a read is called", () => {
   expect(requests).toHaveLength(0);
 });
 
-test("the options are taken at construction, so changing them later changes no request", async () => {
-  const { fetch, requests } = fake(json(pullRequestResponse()), json([]));
-  const given = options(fetch);
+test("the options are taken at construction, so changing them later changes no request of any read", async () => {
+  const { fetch, requests } = fake(
+    json(pullRequestResponse()),
+    json([{ id: 1 }], nextLink(timelinePage(2))),
+    json([{ id: 2 }]),
+    json(threadPageResponse([])),
+    json([{ id: 3 }], nextLink(reviewsPage(2))),
+    json([{ id: 4 }], nextLink(reviewsPage(3))),
+    json([{ id: 5 }])
+  );
+  const later = fake(json([]), json([]), json([]), json([]));
+  const given = options(fetch, { maxPages: 2 });
   const reads = githubPullRequestReads(given);
   given.repository = "other/repository";
   given.pullRequest = 99;
   given.token = "ghp_changed";
-  given.fetch = NEVER;
+  given.fetch = later.fetch;
+  given.maxPages = 5;
+  given.timeoutMs = 1;
   await reads.pullRequest();
-  await reads.reviews();
-  expect(urls(requests)).toStrictEqual([PULL, reviewsPage(1)]);
-  expect(at(requests).headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
+  expect(await reads.timeline()).toStrictEqual([{ id: 1 }, { id: 2 }]);
+  await reads.reviewThreads(null);
+  // The bound given at construction still applies: two pages, not five.
+  const bounded = await failure(() => reads.reviews());
+  expect(bounded.message).toBe("pages-exceeded");
+  expect(urls(requests)).toStrictEqual([
+    PULL,
+    timelinePage(1),
+    timelinePage(2),
+    GRAPHQL,
+    reviewsPage(1),
+    reviewsPage(2),
+  ]);
+  expect(graphql(at(requests, 3)).variables).toStrictEqual({
+    cursor: null,
+    name: "project",
+    number: 12,
+    owner: "example",
+  });
+  for (const request of requests) {
+    expect(request.headers.get("authorization")).toBe(`Bearer ${TOKEN}`);
+  }
+  expect(later.requests).toHaveLength(0);
+});
+
+test("the timeout given at construction applies after timeoutMs is changed", async () => {
+  const { fetch, requests } = fake(stalled);
+  const given = options(fetch, { timeoutMs: 5 });
+  const reads = githubPullRequestReads(given);
+  given.timeoutMs = 3_600_000;
+  const error = await failure(() => reads.pullRequest());
+  expect(error.message).toBe("timed-out");
+  expect(requests).toHaveLength(1);
+});
+
+test("a failure's code is one of the exported codes", async () => {
+  const { fetch } = fake(json([], {}, 404));
+  const error = await failure(() =>
+    githubPullRequestReads(options(fetch)).reviews()
+  );
+  const code: GitHubReadFailure = error.code;
+  expect(code).toBe("request-failed");
+  expect(error.status).toBe(404);
 });
 
 test("the global fetch has the shape the fetch option takes", () => {

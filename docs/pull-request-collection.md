@@ -188,7 +188,7 @@ Every request goes to `https://api.github.com` and to nowhere else. Each address
 
 Each read step is one request. There is no retry, backoff, conditional request or cache, and no request writes anything.
 
-Every request carries these headers and no others, except that the GraphQL request also carries `Content-Type: application/json`:
+The transport sets these headers on every request and no others, except that it also sets `Content-Type: application/json` on the GraphQL request. The `fetch` may add its own, such as `Host` and `Accept-Encoding`:
 
 | Header | Value |
 | --- | --- |
@@ -206,13 +206,17 @@ Every request is made with `redirect: "error"`, `cache: "no-store"` and an abort
 
 ### Pagination
 
-A list is read one page at a time, starting at page 1, and the pages are joined in order. Each page must be a JSON array. There is another page when the response's `Link` header has a `rel` that includes `next`, and the next request is for the next page number at the same computed address. The target in the header is never read, so a header pointing at another host, repository or path cannot send a request there. A header that is doubtful, for example one that mentions `rel=next` inside a target, counts as another page: asking for a page that does not exist costs one request, and missing a page that exists loses items.
+A list is read one page at a time, starting at page 1, and the pages are joined in order. Each page must be a JSON array. There is another page when the response's `Link` header is longer than 4096 characters, or has a `rel` parameter whose value, read up to the first quote, comma or semicolon, contains the word `next`. The next request is for the next page number at the same computed address. The target in the header is never read, so a header pointing at another host, repository or path cannot send a request there. A header that is doubtful counts as another page: asking for a page that does not exist costs one request, and missing a page that exists loses items. One that mentions `rel=next` inside a target is doubtful. So is one over 4096 characters, which is not matched at all, because matching takes time that grows with the square of the header's length.
+
+Two forms are not recognised and end the list: a `rel` whose value has a comma or semicolon before `next`, and the extended form `rel*=`. GitHub sends neither.
 
 If `maxPages` pages have been read and the last one still names a next page, the read fails with `pages-exceeded`. A list is returned whole or not at all. The collector reports that failure as `unavailable`, `read-failed`.
 
 ### Failures
 
-Everything this transport throws is a `GitHubReadError`. Its message is one of the codes below, followed by the HTTP status for a response with a failing status. `code` and `status` carry the same two facts. The error never holds the token, an address or its query, a response body or header, or anything an underlying error said, and it has no `cause`. The class is exported from [github-pull-request-reads.ts](../src/github-pull-request-reads.ts). The collector turns any of these into `unavailable`, `read-failed`; the code is for the caller's logs.
+For a caller that keeps to the types for the cursor, everything this transport throws is a `GitHubReadError`. A cursor that is not a string or `null` can throw something else. The error's message is one of the codes below, followed by the HTTP status for a response with a failing status. `code` and `status` carry the same two facts. The error never holds the token, an address or its query, a response body or header, or anything an underlying error said, and it has no `cause`. The class and its code type, `GitHubReadFailure`, are exported from `src/index.ts`.
+
+`collectPullRequest` discards what a read threw and reports `unavailable`, `read-failed`. A caller that wants the code in its logs must wrap the reads to record it. Otherwise `pages-exceeded` from a `maxPages` that is too small cannot be told from an outage in the collected result.
 
 | Message | Meaning |
 | --- | --- |
@@ -236,7 +240,8 @@ A rate limit is reported like any other failing status, as `request-failed 403` 
 - A list is not a snapshot. Pages are asked for by number, one request after another, so an item that appears or disappears while the pages are read can be skipped or repeated. The collector's second pass is the only check for that: it catches a difference between the two passes, not an item both passes missed.
 - Only the address binds a reviews, timeline or thread response to the pull request; nothing in those responses is checked. The GraphQL read is not covered by `redirect: "error"`, so the query passes `followRenames: false` to ask GitHub to refuse an old name; GitHub accepts that argument, and that it then refuses an old name has not been qualified.
 - `servedAt` is the time GitHub's server put on the response. It does not show that the state in the response was current at that time, and it is only as fresh as the response: a response replayed by something between GitHub and the `fetch` carries the time it was first served. `Cache-Control: no-cache` and `cache: "no-store"` ask for a fresh response and cannot prove one was given.
-- `timeoutMs` bounds a request only if the `fetch` honours its abort signal, as the global one does.
+- `timeoutMs` bounds a request only if the `fetch` honours its abort signal, as the global one does. It bounds network waits only: the size of a response body is not bounded, and parsing the body and matching the `Link` header are synchronous, so no timeout can interrupt them.
+- Refusing a redirect depends on the `fetch`: it must honour `redirect: "error"` or report `redirected` on the response. A `fetch` that follows a redirect and reports neither is not caught.
 - It does not show that GitHub accepts the API version, the query or the token. Offline tests cannot.
 
 Offline tests in `tests/github-pull-request-reads.test.ts` give the transport a `fetch` that records every request and answers from a script. They assert each request's address, method, headers and options, the conversion of the `Date` header, pagination and its bound, every failure and what a failure may hold, and they give these reads to the real `collectPullRequest`. No test makes a network request, and no live read of GitHub through this transport has been qualified.
