@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 
 import { repository as repositoryRule } from "./evidence-validation-primitives.ts";
 import { ReviewLedgerError } from "./review-ledger-entry.ts";
+import { writePrivateFile } from "./write-private-file.ts";
 
 /**
  * The files behind `review-ledger-store.ts`: where an entry is, how its bytes
@@ -130,23 +130,14 @@ export const storedBytes = async (file: string): Promise<Uint8Array | null> => {
 };
 
 /**
- * Replaces the file in one step: an exclusive owner-only temporary file in
- * the same directory, renamed over it. A reader sees the old text or the new.
- * Nothing is flushed to the device, so nothing is promised about what a crash
- * of the machine leaves there. This is the same publication as `persist` in
- * `run-check.ts`; the two are kept apart until a change makes them one helper.
+ * Replaces the file in one step, as `writePrivateFile` describes: a reader
+ * sees the old text or the new. It is the same publication as `persist` in
+ * `run-check.ts`, except that a failure here leaves no temporary file.
  */
 export const publish = async (file: string, text: string): Promise<void> => {
-  const temporary = `${file}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporary, text, { flag: "wx", mode: 0o600 });
-    await rename(temporary, file);
+    await writePrivateFile(file, text, "remove-temporary");
   } catch (error) {
-    try {
-      await rm(temporary, { force: true });
-    } catch {
-      // The failure to report is the write's, not the cleanup's.
-    }
     unavailable("write the entry", error);
   }
 };
