@@ -82,6 +82,7 @@ export interface ScriptedResponse {
 
 /** What one pass of the collector's four reads is answered with. */
 export interface ScriptedPass {
+  comments?: ScriptedResponse;
   pullRequest: ScriptedResponse;
   reviews: ScriptedResponse;
   threads: ScriptedResponse;

@@ -26,7 +26,8 @@ export interface GateInputs {
   policy: GatePolicy;
   /** One decoded receipt per `--receipt` flag, in the order given. */
   receipts: unknown[];
-  reviewEvidence: ReviewEvidence;
+  /** Null means the flag was absent, distinct from explicitly unknown supplied history. */
+  reviewEvidence: ReviewEvidence | null;
   token: string;
 }
 
@@ -37,13 +38,6 @@ export type GateInputsResult =
 const refused = (path_: string, message: string): GateInputsResult => ({
   issues: [{ message, path: path_ }],
   valid: false,
-});
-
-/** No review evidence: the agent-review gate then fails for lack of it. */
-const noReviewEvidence = (): ReviewEvidence => ({
-  agentReviews: [],
-  reviewFindings: { findings: [], recorded: false },
-  reviewLadder: null,
 });
 
 /**
@@ -181,7 +175,7 @@ export const readGateInputs = async (
     }
     values.push(file.value);
   }
-  let review = noReviewEvidence();
+  let review: ReviewEvidence | null = null;
   if (args.reviewEvidence !== null) {
     const reviewFile = await readJson(cwd, args.reviewEvidence);
     if (!reviewFile.readable) {

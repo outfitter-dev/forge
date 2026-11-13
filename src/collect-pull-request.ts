@@ -15,6 +15,7 @@ import type {
 } from "./collect-pull-request-types.ts";
 import {
   InvalidEvidenceError,
+  choice,
   object,
   provenance,
   repository,
@@ -81,9 +82,16 @@ const validRequest = (request: PullRequestCollectionRequest): boolean => {
         "botAccountId",
         "attestation",
         "maxCommentPages",
+        "findingsComplete",
       ]);
       if (!positiveInteger(config.maxCommentPages as number)) {
         return false;
+      }
+      if (Object.hasOwn(config, "findingsComplete")) {
+        choice(config.findingsComplete, "codexReview.findingsComplete", [
+          true,
+          false,
+        ]);
       }
       parseCodexReviewConfiguration({
         attestation: config.attestation,

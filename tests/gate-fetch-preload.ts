@@ -31,14 +31,18 @@ const script = (): GateScript => {
 };
 
 /** Which of the collector's reads a request is, or `null` for anything else. */
-const readOf = (url: URL, method: string): keyof ScriptedPass | null => {
+const readOf = (url: URL, init: RequestInit): keyof ScriptedPass | null => {
   if (url.origin !== ORIGIN) {
     return null;
   }
   if (url.pathname === "/graphql") {
-    return method === "POST" ? "threads" : null;
+    if (init.method !== "POST" || typeof init.body !== "string") {
+      return null;
+    }
+    const body: { query?: string } = JSON.parse(init.body);
+    return body.query?.includes("reviewThreads(") ? "threads" : "comments";
   }
-  if (method !== "GET") {
+  if ((init.method ?? "GET") !== "GET") {
     return null;
   }
   if (/^\/repos\/[^/]+\/[^/]+\/pulls\/\d+$/u.test(url.pathname)) {
@@ -52,7 +56,13 @@ const readOf = (url: URL, method: string): keyof ScriptedPass | null => {
     : null;
 };
 
-const made = { pullRequest: 0, reviews: 0, threads: 0, timeline: 0 };
+const made = {
+  comments: 0,
+  pullRequest: 0,
+  reviews: 0,
+  threads: 0,
+  timeline: 0,
+};
 let requests = 0;
 
 const record = (url: string, init: RequestInit): void => {
@@ -81,7 +91,7 @@ const fake = (url: string, init: RequestInit = {}): Promise<Response> => {
     mkdirSync(path.dirname(interference.file), { recursive: true });
     writeFileSync(interference.file, interference.text);
   }
-  const read = readOf(new URL(url), init.method ?? "GET");
+  const read = readOf(new URL(url), init);
   const answer =
     read === null
       ? undefined

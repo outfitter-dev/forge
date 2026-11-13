@@ -33,6 +33,8 @@ export interface PullRequestCommentReads {
 /** Explicit optional collector capability. It does not adopt a gate policy. */
 export interface PullRequestCodexReviewConfig extends CodexReviewConfiguration {
   maxCommentPages: number;
+  /** Explicit caller claim that all owned reporting history is covered. Missing stays unknown. */
+  findingsComplete?: boolean;
 }
 
 export interface PullRequestCollectionRequest {

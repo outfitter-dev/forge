@@ -7,6 +7,8 @@ import {
   repository,
   text,
 } from "./evidence-validation-primitives.ts";
+import { parseGateCodexReviewPolicy } from "./gate-codex-policy.ts";
+import type { GateCodexReviewPolicy } from "./gate-codex-policy.ts";
 import type { CheckReceiptExpectation } from "./normalize-check-receipts.ts";
 
 /**
@@ -29,6 +31,8 @@ export interface GatePolicy {
   };
   /** For each verification gate, the declared check ID that satisfies it. */
   checks: CheckReceiptExpectation["checks"];
+  /** Explicit optional hosted collector adoption, distinct from eligible evaluator reviewers. */
+  codexReview?: GateCodexReviewPolicy;
   /**
    * How a repository adopts the collector's rule for `mergeAuthorized`: the
    * head branch is in the base repository and the pull request does not carry
@@ -97,6 +101,7 @@ export const parseGatePolicy = (value: unknown): GatePolicy => {
     "evidence",
     "checks",
     "mergeAuthorization",
+    "codexReview",
   ]);
   choice(root.schemaVersion, "gatePolicy.schemaVersion", [1]);
   choice(root.kind, "gatePolicy.kind", [KIND]);
@@ -112,13 +117,18 @@ export const parseGatePolicy = (value: unknown): GatePolicy => {
   );
   // A policy that names no rule, or another one, has not adopted this one.
   choice(authorization.rule, "gatePolicy.mergeAuthorization.rule", [RULE]);
+  const checkedEvidence = evidence(root.evidence, "gatePolicy.evidence");
+  const codexReview = Object.hasOwn(root, "codexReview")
+    ? parseGateCodexReviewPolicy(root.codexReview, checkedEvidence)
+    : undefined;
   return {
     checks: {
       build: text(checks.build, "gatePolicy.checks.build"),
       lint: text(checks.lint, "gatePolicy.checks.lint"),
       test: text(checks.test, "gatePolicy.checks.test"),
     },
-    evidence: evidence(root.evidence, "gatePolicy.evidence"),
+    ...(codexReview === undefined ? {} : { codexReview }),
+    evidence: checkedEvidence,
     kind: KIND,
     mergeAuthorization: {
       holdLabel: holdLabel(

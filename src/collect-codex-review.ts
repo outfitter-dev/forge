@@ -48,7 +48,7 @@ export const collectedCodexReview = (
     attestation: config.attestation,
     botAccountId: config.botAccountId,
     findings: input.ledger.reviewFindings,
-    findingsComplete: true,
+    findingsComplete: config.findingsComplete === true,
     issuer: config.issuer,
     reviewer: config.reviewer,
     servedAt: input.servedAt,

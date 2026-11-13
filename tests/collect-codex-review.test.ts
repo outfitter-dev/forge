@@ -109,6 +109,8 @@ test.each(
     { ...config(), maxCommentPages: 0 },
     { ...config(), maxCommentPages: 1.5 },
     { ...config(), botAccountId: 0 },
+    { ...config(), findingsComplete: "true" },
+    { ...config(), findingsComplete: undefined },
     { ...config(), attestation: undefined },
     {
       ...config(),
@@ -447,3 +449,20 @@ test("request configuration and comment capability are captured before awaited r
   expect(result.codexReview.agentReviews[0].context).toBe("none");
   expect(evaluate(result.codexReview).eligible).toBe(true);
 });
+
+test.each([undefined, false])(
+  "collection requires an explicit completeness claim rather than inferring it from reads",
+  async (complete) => {
+    const codexReview = config();
+    if (complete === undefined) {
+      delete codexReview.findingsComplete;
+    } else {
+      codexReview.findingsComplete = complete;
+    }
+    const result = collected(
+      await collectPullRequest(request({ codexReview }), scripted().reads)
+    );
+    expect(result.ledger.reviewFindings.recorded).toBe(false);
+    expect(evaluate(result.codexReview).codes).toContain("findings-unknown");
+  }
+);
