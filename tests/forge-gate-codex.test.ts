@@ -101,7 +101,7 @@ test("explicitly supplied unknown history remains a blocker alongside a clean co
   });
   expect(ran.exitCode).toBe(1);
   expect(gate(ran, "agent-review").codes).toContain("findings-unknown");
-  expect(JSON.parse(ledgerText(ws)).reviewFindings.recorded).toBe(true);
+  expect(JSON.parse(ledgerText(ws)).reviewFindings.recorded).toBe(false);
 });
 
 test("null attestation leaves completed hosted evidence unqualified for independence", () => {

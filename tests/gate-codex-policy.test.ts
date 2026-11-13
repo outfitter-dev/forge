@@ -45,6 +45,8 @@ test.each(
     {},
     adoption({ botAccountId: 0 }),
     adoption({ botAccountId: "199175422" }),
+    adoption({ findingHistory: undefined }),
+    adoption({ findingHistory: "all-eligible-reviewers" }),
     adoption({ reviewer: "unknown-reviewer" }),
     adoption({ reviewer: LOCAL }),
     adoption({ independence: undefined }),
@@ -97,4 +99,25 @@ test("adoption and eligibility remain detached from caller mutation", () => {
   const before = structuredClone(policy);
   supplied.codexReview = null;
   expect(policy).toEqual(before);
+});
+
+test("finding source ownership must be explicit and is independent of reviewer eligibility", () => {
+  const { findingHistory: _findingHistory, ...missing } = adoption();
+  expect(() => parseGatePolicy(codexPolicy({ codexReview: missing }))).toThrow(
+    InvalidEvidenceError
+  );
+  const policy = parseGatePolicy(
+    codexPolicy({
+      codexReview: adoption({ findingHistory: "supplied-global-ledger" }),
+    })
+  );
+  expect(gateCodexCollection(policy, "run", 50)?.findingsComplete).toBe(false);
+  expect(
+    gateCodexCollection(policy, "run", 50, { findings: [], recorded: false })
+      ?.findingsComplete
+  ).toBe(false);
+  expect(
+    gateCodexCollection(policy, "run", 50, { findings: [], recorded: true })
+      ?.findingsComplete
+  ).toBe(true);
 });

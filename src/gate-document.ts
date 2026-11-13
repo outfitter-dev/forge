@@ -1,6 +1,7 @@
 import type { CodexReviewEvidenceResult } from "./codex-review-evidence-types.ts";
 import type { PullRequestCollectionFailure } from "./collect-pull-request-types.ts";
 import type { EvaluationResult, ValidationIssue } from "./evidence-types.ts";
+import type { GateCodexReviewPolicy } from "./gate-codex-policy.ts";
 import type { GitHubReadFailure } from "./github-pull-request-reads.ts";
 import type { CheckReceiptNormalization } from "./normalize-check-receipts.ts";
 import type { ReviewLedgerErrorCode } from "./review-ledger-entry.ts";
@@ -9,7 +10,12 @@ import type { ReviewLedgerErrorCode } from "./review-ledger-entry.ts";
 export interface GateEvaluated {
   status: "evaluated";
   /** Source and explicit attestation provenance, outside evaluator input and without comment bodies. */
-  codexReview?: Pick<CodexReviewEvidenceResult, "diagnostics" | "observations">;
+  codexReview?: Pick<
+    CodexReviewEvidenceResult,
+    "diagnostics" | "observations"
+  > & {
+    findingHistory: GateCodexReviewPolicy["findingHistory"];
+  };
   eligible: boolean;
   /** The revision judged, as collected from GitHub. */
   subject: {

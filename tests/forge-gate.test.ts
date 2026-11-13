@@ -158,7 +158,7 @@ test("a pull request that passes every gate is eligible and exits 0", () => {
     },
     requiredReviewers: [],
     reviewBindings: {},
-    reviewFindings: { findings: [], recorded: false },
+    reviewFindings: { findings: [], recorded: true },
   });
   expect(readdirSync(ws.state)).toEqual(["review-ledger"]);
   expect(readdirSync(ws.ledgerDirectory)).toEqual([`${LEDGER_NAME}.json`]);
@@ -1080,7 +1080,7 @@ test("persisted native resolution becomes blocking when its eligible reviewer is
   expect(gate(ran, "agent-review").codes).toContain("blocking-findings");
 });
 
-test("an external resolution downgrade stays conflicting and cannot replace persisted resolution", () => {
+test("an external unresolved report reopens the persisted finding", () => {
   const ws = workspace();
   const resolved = finding({
     resolution: nativeResolution(),
@@ -1096,10 +1096,9 @@ test("an external resolution downgrade stays conflicting and cannot replace pers
   };
   const ran = run(ws, gateArgs(ws, { review }));
   expect(ran.exitCode).toBe(1);
-  expect(gate(ran, "agent-review").codes).toContain("duplicate-evidence");
   expect(gate(ran, "agent-review").codes).toContain("blocking-findings");
   expect(JSON.parse(ledgerText(ws)).reviewFindings.findings).toEqual([
-    resolved,
+    { ...resolved, resolution: null },
   ]);
 });
 

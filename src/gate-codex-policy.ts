@@ -1,7 +1,12 @@
 import type { PullRequestCodexReviewConfig } from "./collect-pull-request-types.ts";
-import type { AgentReviewPolicy, ReviewerPolicy } from "./evidence-types.ts";
+import type {
+  AgentReviewPolicy,
+  ReviewerPolicy,
+  ReviewFindingLedger,
+} from "./evidence-types.ts";
 import {
   count,
+  choice,
   invalid,
   object,
   text,
@@ -15,6 +20,7 @@ const INDEPENDENCE =
 export interface GateCodexReviewPolicy {
   reviewer: string;
   botAccountId: number;
+  findingHistory: "codex-only" | "supplied-global-ledger";
   independence: null | {
     id: string;
     policyRevision: string;
@@ -48,6 +54,7 @@ export const parseGateCodexReviewPolicy = (
     "reviewer",
     "botAccountId",
     "independence",
+    "findingHistory",
   ]);
   const reviewer = text(source.reviewer, `${path}.reviewer`);
   eligibleReviewer(reviewer, evidence);
@@ -55,6 +62,10 @@ export const parseGateCodexReviewPolicy = (
   if (source.botAccountId === 0) {
     invalid(`${path}.botAccountId`, "expected a positive account ID");
   }
+  choice(source.findingHistory, `${path}.findingHistory`, [
+    "codex-only",
+    "supplied-global-ledger",
+  ]);
   let independence: GateCodexReviewPolicy["independence"] = null;
   if (source.independence !== null) {
     const claim = object(source.independence, `${path}.independence`, [
@@ -79,6 +90,8 @@ export const parseGateCodexReviewPolicy = (
   }
   return {
     botAccountId: source.botAccountId as number,
+    findingHistory:
+      source.findingHistory as GateCodexReviewPolicy["findingHistory"],
     independence,
     reviewer,
   };
@@ -87,7 +100,8 @@ export const parseGateCodexReviewPolicy = (
 export const gateCodexCollection = (
   policy: GatePolicy,
   runId: string,
-  maxCommentPages: number
+  maxCommentPages: number,
+  supplied: ReviewFindingLedger | null = null
 ): PullRequestCodexReviewConfig | undefined => {
   const configured = policy.codexReview;
   if (configured === undefined) {
@@ -106,6 +120,8 @@ export const gateCodexCollection = (
             reviewer: configured.reviewer,
           },
     botAccountId: configured.botAccountId,
+    findingsComplete:
+      configured.findingHistory === "codex-only" || supplied?.recorded === true,
     issuer: {
       producer: reviewer.producer,
       runId,

@@ -22,6 +22,7 @@ export const config = (
   return {
     attestation: given.attestation,
     botAccountId: given.botAccountId,
+    findingsComplete: true,
     issuer: given.issuer,
     maxCommentPages: 2,
     reviewer: given.reviewer,

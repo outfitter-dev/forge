@@ -42,7 +42,7 @@ Every flag takes one value. A missing required flag, an unknown flag, a repeated
 | `--receipt` | A file holding one [`forge check` receipt](forge-check.md) as JSON. Give it once per receipt, or not at all. |
 | `--review-evidence` | A file holding `{ "agentReviews": [...], "reviewFindings": {...}, "reviewLadder": ... }`: exactly the three [agent-review fields](evidence-evaluator.md#agent-review-under-schema-version-2) of a version 2 pull request, and no other key. The evaluator validates the content. |
 
-With Codex collection disabled, an absent `--review-evidence` supplies no agent attempts or ladder and leaves finding evidence unknown, so `agent-review` fails. With Codex collection enabled, the complete accepted collector history can satisfy the gate without that flag. An explicitly supplied unknown history remains unknown during composition and blocks. Without any `--receipt` the three verification gates fail the same way.
+With Codex collection disabled, an absent `--review-evidence` supplies no agent attempts or ladder and leaves finding evidence unknown, so `agent-review` fails. With Codex collection enabled and `findingHistory: "codex-only"`, complete accepted collector history can satisfy the gate without that flag. `findingHistory: "supplied-global-ledger"` requires current complete trusted supplied history. An explicitly supplied unknown history remains unknown during composition and blocks. Without any `--receipt` the three verification gates fail the same way.
 
 ### The token
 
@@ -129,6 +129,7 @@ Forge's own policy will be `forge-gate.json` at the root of the trusted revision
 | `reviewer` | The exact key of one eligible hosted reviewer in `evidence.agentReview.reviewers`. |
 | `botAccountId` | The configured positive numeric account ID of that bot. |
 | `independence` | `null`, or exactly `{ id, policyRevision, statement }`. |
+| `findingHistory` | Required `"codex-only"` or `"supplied-global-ledger"` source-coverage claim. |
 
 An independence entry’s statement must be exactly `separate-hosted-invocation-without-inherited-author-context`. Its identifier and trusted policy revision are nonempty trimmed strings. Merely listing Codex as an eligible reviewer grants no independence attestation. A null entry collects observations with `context: "unknown"`, which cannot establish an independent completed review.
 
@@ -136,9 +137,11 @@ The policy parser rejects unknown, local or duplicate selected reviewer identiti
 
 The invoker guarantees that the entire wrapper policy, including this extension, comes from a trusted revision outside proposed code. The extension records the [approved independence meaning](hosted-reviewer-attestations.md) and the caller’s explicit adoption. It does not authenticate the file’s source or supply credentials. Forge’s own adopting policy, identity/wait selection and live adoption qualification remain separate work.
 
-When collection is enabled, an absent review-evidence flag contributes no additional completeness claim. Explicitly supplied unknown history blocks even beside a complete collected ledger. Supplied attempts are appended to collected attempts without deduplication. Duplicate IDs stay blocking, malformed attempts or findings stay invalid input, and an external clean or conflicting resolution cannot erase a persisted blocker. Supplied evidence retains its existing evaluation-only role and does not rewrite stored finding origins or resolutions.
+`findingHistory: "codex-only"` explicitly asserts that configured Codex observations plus persisted entries cover all owned reporting history. `"supplied-global-ledger"` requires a current well-formed, unique supplied finding ledger with `recorded: true` before collection can attest global completeness. A previously complete stored ledger cannot substitute for that current file. Eligible reviewers remain choices for independent review and do not define reporting-source coverage or require attempts from every reviewer.
 
-Only a stored accepted collection can reach evaluation. Comment read failures retain the transport code and HTTP status in `not-collected.read`. CAS conflicts return `not-collected` with no evaluation or source record. An evaluated enabled result adds `codexReview: { diagnostics, observations }` beside the evaluator result. That record retains scoped attestation ID/policy revision and normalized source identities, state, flags, timestamps and threads, with comment bodies stripped. The evaluator input still contains only normalized evidence.
+The invoker authenticates review-evidence files from protected trusted sources outside the proposed checkout. Accepted unique supplied findings are ingested before the same snapshot/bindings/findings CAS. New entries retain their typed resolutions. Exact existing entries deduplicate. A changed origin or resolution preserves the stored origin and sets its resolution to `null`, so external conflicts can add or reopen durable blockers but cannot clear an existing blocker or rewrite its origin. Omission on a later run preserves accepted entries. Malformed or duplicate finding histories are not ingested and remain non-passing through evaluator validation. Supplied attempts are appended without deduplication. Explicitly supplied unknown finding history remains blocking, including under `"codex-only"`. Whole native unresolved threads independently block mergeability.
+
+Only a stored accepted collection can reach evaluation. Comment read failures retain the transport code and HTTP status in `not-collected.read`. CAS conflicts return `not-collected` with no evaluation or source record. An evaluated enabled result adds `codexReview: { findingHistory, diagnostics, observations }` beside the evaluator result. That record retains scoped attestation ID/policy revision and normalized source identities, state, flags, timestamps and threads, with comment bodies stripped. The evaluator input still contains only normalized evidence.
 
 ## Flow
 
@@ -147,9 +150,9 @@ Only a stored accepted collection can reach evaluation. Comment read failures re
 3. Read the stored ledger entry for this pull request from `<state>/review-ledger`, giving the store that time. A pull request with no entry has the empty one.
 4. Collect the pull request from GitHub, giving the collector the stored entry, the policy’s hold label and collector provenance with the `--run-id`. When `codexReview` is configured, also supply its resolved hosted reviewer configuration and retain the comment-read capability. The [optional collection flow](pull-request-collection.md#optional-codex-collection) establishes complete comments, source stability, the effective snapshot and updated findings.
 5. If the collection did not end as `collected`, stop: not collected. Nothing is stored.
-6. Store the entry the collection returned, in place of the one read in step 3. If another run stored an entry in between (`conflict`), the lock file exists (`ledger-busy`) or the store refuses for any other reason, stop: not collected. Evidence from a collection whose ledger was not stored is never evaluated, because the bindings and snapshot it relies on would be recorded nowhere.
+6. Ingest accepted trusted supplied findings into the returned ledger under the conflict rules above, then store that entry, in place of the one read in step 3. If another run stored an entry in between (`conflict`), the lock file exists (`ledger-busy`) or the store refuses for any other reason, stop: not collected. Evidence from a collection whose ledger was not stored is never evaluated, because the bindings and snapshot it relies on would be recorded nowhere.
 7. Normalize the receipts under the policy's `checks` mapping and `evidence.verification` identity.
-8. Assemble version 2 pull request facts from collected evidence, normalized checks, optional collected Codex attempts and supplied review evidence. Preserve duplicate attempts and malformed supplied content for the evaluator. Combine supplied finding entries with the accepted collector ledger under the [finding-history rules](review-ledger-store.md#finding-history-and-compatibility), then evaluate under `policy.evidence`.
+8. Assemble version 2 pull request facts from collected evidence, normalized checks, optional collected Codex attempts and supplied review evidence. Preserve duplicate attempts and malformed supplied content for the evaluator. Compose findings from the stored combined ledger and preserve invalid or conflicting supplied evidence under the [finding-history rules](review-ledger-store.md#finding-history-and-compatibility), then evaluate under `policy.evidence`.
 9. If the evaluator answers `invalid`, report invalid input with its issues. Otherwise report its result.
 
 Nothing is retried. On `conflict` or `ledger-busy` the invoker runs the command again; see [the lock](review-ledger-store.md#the-lock) for a lock a stopped process left behind.
@@ -328,7 +331,8 @@ Only exit 0 is a pass. A consumer reads the exit code together with the document
 | One request to GitHub | 15 seconds |
 | Pages of one REST list (reviews, timeline), 100 items each | 50 |
 | Review-thread pages in one pass, 100 threads each | 50 |
-| Requests to GitHub for a pull request whose lists each fit one page | 8: four reads in each of two passes |
+| Issue-comment pages in one enabled pass, 100 comments each | 50 |
+| Requests to GitHub for a pull request whose lists each fit one page | 8 with Codex disabled, 10 with Codex enabled |
 | Retries | None |
 
 They are constants in [run-gate.ts](../src/run-gate.ts), not flags. A list that outruns its bound stops the run as not collected; it is never cut short. There is no deadline for the run as a whole, so the invoker bounds it with its own job timeout.

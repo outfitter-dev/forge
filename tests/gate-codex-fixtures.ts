@@ -14,6 +14,7 @@ export const STATEMENT =
 export const BODY_MARKER = "private-code-review-body";
 export const adoption = (overrides: Record<string, unknown> = {}) => ({
   botAccountId: BOT,
+  findingHistory: "codex-only",
   independence: {
     id: "fixture-independence",
     policyRevision: "f".repeat(40),

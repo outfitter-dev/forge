@@ -9,6 +9,10 @@ import { evaluateEvidence } from "./evaluate-evidence.ts";
 import { GATE_USAGE, parseGateArguments } from "./gate-arguments.ts";
 import { gateCodexCollection } from "./gate-codex-policy.ts";
 import type { GateDocument, GateLedgerStop } from "./gate-document.ts";
+import {
+  acceptedFindingHistory,
+  ingestFindingHistory,
+} from "./gate-finding-history.ts";
 import { readGateInputs } from "./gate-inputs.ts";
 import { gateReviewEvidence } from "./gate-review-evidence.ts";
 import {
@@ -137,7 +141,13 @@ const gate = async ({
       token,
     })
   );
-  const codexReview = gateCodexCollection(policy, runId, MAX_COMMENT_PAGES);
+  const suppliedFindings = acceptedFindingHistory(reviewEvidence);
+  const codexReview = gateCodexCollection(
+    policy,
+    runId,
+    MAX_COMMENT_PAGES,
+    suppliedFindings
+  );
   const collection = await collectPullRequest(
     {
       // Passing the policy's label is what adopts the collector's rule for
@@ -171,6 +181,10 @@ const gate = async ({
       status: "not-collected",
     };
   }
+  collection.ledger.reviewFindings = ingestFindingHistory(
+    collection.ledger.reviewFindings,
+    suppliedFindings
+  );
   // Evidence from a collection whose ledger was not stored must not be
   // evaluated: its bindings and its snapshot would be recorded nowhere.
   const stored = await ledgerStep("ledger-store", () =>
@@ -213,11 +227,12 @@ const gate = async ({
   const { subject } = collection.evidence;
   return {
     ...FRAME,
-    ...(collection.codexReview === undefined
+    ...(collection.codexReview === undefined || policy.codexReview === undefined
       ? {}
       : {
           codexReview: {
             diagnostics: collection.codexReview.diagnostics,
+            findingHistory: policy.codexReview.findingHistory,
             observations: collection.codexReview.observations,
           },
         }),
