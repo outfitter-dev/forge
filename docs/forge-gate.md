@@ -13,7 +13,7 @@ It composes operations that already exist, in one fixed order:
 - joins optional collected Codex evidence and supplied agent-review evidence with accepted persisted findings
 - calls the [evidence evaluator](evidence-evaluator.md) and prints its result
 
-It reports. It does not post a status, a comment or a label, it does not merge, and it does not enforce anything. It makes no request that writes to GitHub. It runs no check and no review: receipts come from `forge check` runs and review evidence comes from Ranger, and both reach this command as files. It writes one thing, the ledger entry in the state directory. It has no retry, cache, daemon or scheduler.
+It reports. It does not post a status, a comment or a label, it does not merge, and it does not enforce anything. It makes no request that writes to GitHub. It runs no check and no review. It reads `forge check` receipts and supplied review evidence as files, and optionally collects existing Codex output from GitHub. It writes the ledger entry in the state directory. It has no retry, cache, daemon or scheduler.
 
 ## Invocation
 
