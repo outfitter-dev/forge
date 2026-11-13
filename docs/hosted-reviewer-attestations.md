@@ -17,7 +17,7 @@ The fictitious hosted reviewers in `examples/evidence/v2/` and test fixtures are
 
 ## Codex hosted code review
 
-Status on November 13, 2026 is independence basis accepted by Matt, with production lane adoption pending. Matt accepted both the observed proposed-guidance influence and the source-path uncertainty recorded in PR #49. That decision satisfies the owner-decision condition below. His November 12 confirmation of the revised PR #38 contract includes the last-editor rule and inactive all-null security section. The [guidance qualification record](codex-guidance-qualification.md) preserves the experiment and its limits. This entry is scoped to `outfitter-dev/forge`. [FOR-37 decision record](https://linear.app/outfitter/issue/FOR-37)
+Status on November 13, 2026 is independence basis accepted by Matt and bounded local normal-command qualification complete, with production lane adoption pending. Matt accepted both the observed proposed-guidance influence and the source-path uncertainty recorded in PR #49. That decision satisfies the owner-decision condition below. His November 12 confirmation of the revised PR #38 contract includes the last-editor rule and inactive all-null security section. The [guidance qualification record](codex-guidance-qualification.md) preserves the experiment and its limits. The [normal-command record](codex-command-qualification.md) captures accepted hosted evidence, retained findings and coverage controls. This entry is scoped to `outfitter-dev/forge`. [FOR-37 decision record](https://linear.app/outfitter/issue/FOR-37)
 
 ### Adopted policy entry
 
