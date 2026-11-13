@@ -84,3 +84,6 @@ export type {
 } from "./github-pull-request-types.ts";
 
 export { GitHubResponseError } from "./github-response.ts";
+
+export { codexReviewEvidence } from "./codex-review-evidence.ts";
+export type * from "./codex-review-evidence-types.ts";
