@@ -6,6 +6,12 @@ The seven original operational documents are verified in the [machine-local arch
 
 For the complete originating-session record, including worker recovery details and superseded decisions, read [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md).
 
+## FOR-37 live guidance qualification
+
+The collector and gate integration are merged at `210c573e29c95e7a474146d0ca4273b324bd202c`, with 1,924 passing offline tests, hosted CI/CodeQL and independent review. The [guidance qualification record](codex-guidance-qualification.md) records the authorized disposable experiment in `outfitter-dev/forge-jj-trial`. Baseline PR #12 passed review and CI before merge. Experiment PR #13 remains draft, unmerged and deliberately red, with valid unresolved findings. Codex used the head guidance marker and explicitly cited the proposed head's `AGENTS.md`. The diff and earlier Devin finding expose the marker too, so the vendor's internal loading path remains unproven.
+
+Trusted Forge collection persisted a pre-review head/base snapshot and then a completed failed current-revision attempt plus its unresolved Codex thread. Independence and global finding completeness remain unknown. FOR-37 retains the owner-only evidence pointer. Matt owns the existing contract's adoption-basis decision on observed proposed-guidance influence. The Forge lead owns review and delivery of this qualification record, then explicit policy and production qualification after that decision. Production lane identity, wait, source coverage and authenticated collection/resolution remain pending.
+
 ## FOR-37 finding-history source coverage repair
 
 The `for-37-codex-gate` repair starts at `6888722bf66de400793606a25f418e4c44e7ab43` on base `b13dcd711b96e9e7ab96c01605f74de4f5260b96`. A normal CLI regression first reproduced a supplied non-Codex blocker disappearing from evaluation when the next identical invocation omitted its file. `src/gate-finding-history.ts` now accepts only valid unique trusted supplied histories and ingests entries before the existing CAS. Origins persist, exact entries deduplicate, and external conflicts reopen stored blockers without supplying clearance. No ledger schema changes are needed.
