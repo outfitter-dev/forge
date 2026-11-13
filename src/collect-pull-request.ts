@@ -1,12 +1,25 @@
 import { isDeepStrictEqual } from "node:util";
 
+import { parseCodexReviewConfiguration } from "./codex-review-configuration.ts";
+import {
+  collectedCodexReview,
+  commentReadCapability,
+  readCollectionComments,
+} from "./collect-codex-review.ts";
 import type {
   PullRequestCollectionFailure,
   PullRequestCollectionRequest,
   PullRequestCollectionResult,
   PullRequestReads,
+  PullRequestCommentReads,
 } from "./collect-pull-request-types.ts";
-import { provenance, repository } from "./evidence-validation-primitives.ts";
+import {
+  InvalidEvidenceError,
+  object,
+  provenance,
+  repository,
+} from "./evidence-validation-primitives.ts";
+import { GitHubReadError } from "./github-pull-request-reads.ts";
 import type {
   GitHubPullRequest,
   GitHubReview,
@@ -61,6 +74,24 @@ const validRequest = (request: PullRequestCollectionRequest): boolean => {
   try {
     repository(request.repository, "repository");
     provenance(request.provenance, "provenance");
+    if (Object.hasOwn(request, "codexReview")) {
+      const config = object(request.codexReview, "codexReview", [
+        "reviewer",
+        "issuer",
+        "botAccountId",
+        "attestation",
+        "maxCommentPages",
+      ]);
+      if (!positiveInteger(config.maxCommentPages as number)) {
+        return false;
+      }
+      parseCodexReviewConfiguration({
+        attestation: config.attestation,
+        botAccountId: config.botAccountId,
+        issuer: config.issuer,
+        reviewer: config.reviewer,
+      });
+    }
   } catch {
     return false;
   }
@@ -181,7 +212,7 @@ const readThreads = async (
  */
 export const collectPullRequest = async (
   input: PullRequestCollectionRequest,
-  reads: PullRequestReads
+  reads: PullRequestReads & Partial<PullRequestCommentReads>
 ): Promise<PullRequestCollectionResult> => {
   if (!validRequest(input)) {
     return { reason: "request-malformed", status: "invalid-request" };
@@ -189,8 +220,16 @@ export const collectPullRequest = async (
   // Taken before any read, so nothing done to the caller's request or ledger
   // while the reads are awaited changes what is collected.
   const request = structuredClone(input);
+  const commentReads = commentReadCapability(reads);
+  if (request.codexReview !== undefined && commentReads === null) {
+    return { reason: "comment-read-missing", status: "unavailable" };
+  }
   try {
     const reviews = await readReviews(reads);
+    const comments = await readCollectionComments(
+      request.codexReview,
+      commentReads
+    );
     const { pullRequest, servedAt, servedTime } = await readPullRequest(
       reads,
       request
@@ -222,6 +261,14 @@ export const collectPullRequest = async (
       return { reason: "threads-changed", status: "changed" };
     }
 
+    const commentsAgain = await readCollectionComments(
+      request.codexReview,
+      commentReads
+    );
+    if (!isDeepStrictEqual(comments, commentsAgain)) {
+      return { reason: "comments-changed", status: "changed" };
+    }
+
     const { assignments, humanReviews, ledger } = humanReviewEvidence({
       ...timeline,
       ledger: request.ledger,
@@ -230,6 +277,22 @@ export const collectPullRequest = async (
       repository: request.repository,
       reviews,
     });
+    const subject = {
+      baseSha: pullRequest.base.sha,
+      headSha: pullRequest.head.sha,
+      id: pullRequest.number,
+      kind: "pull_request" as const,
+      repository: request.repository,
+    };
+    const codexReview = collectedCodexReview(request.codexReview, comments, {
+      ledger,
+      reviewThreads,
+      servedAt,
+      subject,
+    });
+    if (codexReview !== undefined) {
+      ledger.reviewFindings = structuredClone(codexReview.reviewFindings);
+    }
     return {
       evidence: {
         assignments,
@@ -245,16 +308,11 @@ export const collectPullRequest = async (
         mergeable: pullRequest.mergeable,
         open: pullRequest.state === "open",
         provenance: request.provenance,
-        subject: {
-          baseSha: pullRequest.base.sha,
-          headSha: pullRequest.head.sha,
-          id: pullRequest.number,
-          kind: "pull_request",
-          repository: request.repository,
-        },
+        subject,
         unresolvedThreads: reviewThreads.filter((thread) => !thread.isResolved)
           .length,
       },
+      ...(codexReview === undefined ? {} : { codexReview }),
       ledger,
       reviewThreads,
       status: "collected",
@@ -269,6 +327,22 @@ export const collectPullRequest = async (
       return {
         path: error.path,
         reason: "response-unreadable",
+        status: "unreadable",
+      };
+    }
+    if (error instanceof GitHubReadError) {
+      return {
+        reason:
+          error.code === "pages-exceeded"
+            ? "comment-pages-exceeded"
+            : "read-failed",
+        status: "unavailable",
+      };
+    }
+    if (error instanceof InvalidEvidenceError) {
+      return {
+        path: "codexReview",
+        reason: "codex-evidence-unreadable",
         status: "unreadable",
       };
     }

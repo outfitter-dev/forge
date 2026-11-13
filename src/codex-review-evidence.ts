@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { parseCodexReviewConfiguration } from "./codex-review-configuration.ts";
 import type {
   CodexReviewDiagnostic,
   CodexReviewEvidenceInput,
@@ -9,11 +10,8 @@ import { codexReviewFindings } from "./codex-review-findings.ts";
 import type { AgentReviewAttempt } from "./evidence-types.ts";
 import {
   choice,
-  count,
   digest,
   invalid,
-  producer,
-  provenance,
   subject,
   text,
 } from "./evidence-validation-primitives.ts";
@@ -25,24 +23,12 @@ const instant = (value: string, path: string): number =>
 
 const validInput = (input: CodexReviewEvidenceInput): void => {
   subject(input.subject, "subject", "pull_request");
-  provenance(input.issuer, "issuer");
-  producer(input.reviewer, "reviewer", ["reviewer", "rung", "waitSeconds"]);
-  text(input.reviewer.reviewer, "reviewer.reviewer");
-  choice(input.reviewer.rung, "reviewer.rung", ["hosted"]);
-  count(input.reviewer.waitSeconds, "reviewer.waitSeconds");
-  count(input.botAccountId, "botAccountId");
-  if (input.reviewer.waitSeconds === 0 || input.botAccountId === 0) {
-    invalid("reviewer", "expected positive wait and bot account ID");
-  }
-  if (
-    input.issuer.producer !== input.reviewer.producer ||
-    input.issuer.runtimeFingerprint !== input.reviewer.runtimeFingerprint
-  ) {
-    invalid(
-      "issuer",
-      "must match the configured reviewer's producer and runtime"
-    );
-  }
+  parseCodexReviewConfiguration({
+    attestation: input.attestation,
+    botAccountId: input.botAccountId,
+    issuer: input.issuer,
+    reviewer: input.reviewer,
+  });
   if (input.findingsComplete !== undefined) {
     choice(input.findingsComplete, "findingsComplete", [true, false]);
   }
