@@ -17,7 +17,7 @@ The fictitious hosted reviewers in `examples/evidence/v2/` and test fixtures are
 
 ## Codex hosted code review
 
-Status on November 12, 2026 is contract confirmed, awaiting collector implementation and adoption qualification. Matt confirmed the revised PR #38 contract, including the last-editor rule and inactive all-null security section, and reaffirmed standing approval for future reviewed scoped merges with green CI. The confirmation is recorded on FOR-37. A collector and an adopting policy entry still need implementation and qualification. This entry is scoped to `outfitter-dev/forge`.
+Status on November 13, 2026 is collector implemented, awaiting the policy owner's decision on observed proposed-guidance influence and production adoption qualification. Matt confirmed the revised PR #38 contract on November 12, including the last-editor rule and inactive all-null security section, and reaffirmed standing approval for future reviewed scoped merges with green CI. The confirmation is recorded on FOR-37. The [guidance qualification record](codex-guidance-qualification.md) captures the disposable experiment and live adverse collection. An adopting trusted policy entry remains pending. This entry is scoped to `outfitter-dev/forge`.
 
 [FOR-37](https://linear.app/outfitter/issue/FOR-37) retains the decisions, vendor-documentation check, raw observation pointers and collector design. That check found no supported machine-readable contract for the markers below. Their format is observed. The observed clean review and adverse review came from Forge PRs 26 and 27.
 
@@ -55,7 +55,7 @@ The collector may record `context: "none"` only because Forge's trusted collecto
 The basis for the proposed independence attestation is a separate hosted review invocation, without inherited author-session context. The collector cannot observe the vendor's internal session, memory or filesystem isolation. The policy owner accepts that assumption and the following weaknesses.
 
 - The author's pull request description, commit messages and proposed files reach the reviewer and can carry instructions.
-- Codex follows repository guidance. Which revision of `AGENTS.md` it reads remains unestablished. If proposed guidance controls the reviewer, the result goes back to the policy owner before adoption.
+- Codex's disposable experiment output used the proposed head's guidance marker and explicitly cited that head's `AGENTS.md`. Both markers were visible in the diff and Devin had already posted the head marker, so the internal revision-loading path remains unproven. The lead treats this observed influence as reaching the policy-owner decision condition before adoption. See the [qualification record](codex-guidance-qualification.md#observed-review).
 - A commenter can request a review with additional focus instructions.
 - A Codex-authored change and a Codex review can use the same vendor's models. A separate invocation alone does not establish independent judgment.
 - The bot creator identity alone cannot establish who wrote a summary's current body. The last-editor rule addresses edited summaries. Persisted findings preserve blockers when inline comments disappear.
