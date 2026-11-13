@@ -44,6 +44,8 @@ Every attributed thread becomes a finding keyed by its stable GraphQL node ID. T
 
 A positive adverse report without safely attributable details creates a synthetic `adverse-review` entry keyed by the stable comment database ID. Its native reference is that comment’s source URL. This fallback also covers unresolved flags with only resolved visible threads, and unavailable or malformed adverse observations whose flags cannot safely map to thread details. Stale reports and reports with an unverified editor still retain these adverse observations from the strict parser. An ordinary valid report with findings and no unresolved flag may use its visible resolved threads.
 
+Adverse sources are accounted for individually. A separate adverse bot comment retains its own synthetic blocker even when the governing summary is parsed and visible threads are resolved. Attributable resolved findings from the governing summary keep their native resolutions.
+
 Synthetic entries persist across subsequent clean reports and have no provider-native exit. This conservative fallback can keep a change blocked after a provider loses or obscures details. The accepted contract requires retaining that uncertainty. Another reviewer’s clean result resolves nothing by itself.
 
 A clean summary contradicted by an unresolved attributed thread produces completed failed evidence and `summary-thread-conflict`. The diagnostic gives the lead the evidence required to apply the contract’s attestation-withdrawal rule. The pure operation changes no policy.

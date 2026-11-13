@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { parseCodexSummary } from "../src/index.ts";
 import {
   finding,
   followUp,
@@ -99,6 +100,23 @@ test("an explicitly reopened thread clears a prior follow-up disposition", () =>
   });
   expect(result.reviewFindings.findings[0]?.resolution).toBeNull();
   expect(evaluate(result).codes).toContain("blocking-findings");
+});
+
+test("an observed native resolution replaces a stale follow-up disposition", () => {
+  const previous = finding({
+    id: "T1",
+    resolution: followUp({ subject: subject(12) }),
+    reviewer: HOSTED,
+  });
+  const result = evidence({
+    findings: { findings: [previous], recorded: true },
+    threads: [thread("T1", true)],
+  });
+  expect(result.reviewFindings.findings[0]).toEqual({
+    ...previous,
+    resolution: { kind: "native", nativeRef: "T1", provenance: input().issuer },
+  });
+  expect(evaluate(result).eligible).toBe(true);
 });
 
 test("a finding hidden by an unknown first author cannot keep a native resolution", () => {
@@ -207,6 +225,47 @@ test("ordinary adverse reports whose visible threads are resolved can retain tho
     evaluate(result, [localAttempt({ subject: subject(12) })]).eligible
   ).toBe(true);
 });
+
+test.each([false, true])(
+  "separate adverse comments retain their own blocker beside resolved governing-summary findings",
+  (governingAdverse) => {
+    const governing = summary({ has_any_findings: governingAdverse }).summary;
+    if (governing === null) {
+      throw new Error("expected the fixture summary comment");
+    }
+    const separate = {
+      ...governing,
+      body: '<!-- codex-review-state:v2 {"code_review":{"has_any_findings":true}} -->',
+      id: 501,
+      nativeRef: "https://github.com/example/project/pull/12#issuecomment-501",
+      nodeId: "IC_501",
+    };
+    const observation = parseCodexSummary(
+      [governing, separate],
+      input().botAccountId
+    );
+    expect(observation.status).toBe("parsed");
+    expect(observation.reportedAdverse).toBe(true);
+    const result = evidence({
+      summary: observation,
+      threads: [thread("T1", true)],
+    });
+    expect(result.reviewFindings.findings.map((item) => item.id)).toEqual([
+      "T1",
+      "adverse-review:501",
+    ]);
+    expect(result.reviewFindings.findings[1]).toMatchObject({
+      kind: "adverse-review",
+      nativeRef: separate.nativeRef,
+      resolution: null,
+    });
+    const evaluated = evaluate(result, [
+      localAttempt({ subject: subject(12) }),
+    ]);
+    expect(evaluated.eligible).toBe(false);
+    expect(evaluated.codes).toContain("blocking-findings");
+  }
+);
 
 test("active security adverse flags are retained as failed evidence", () => {
   const active = {

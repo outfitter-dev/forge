@@ -21,28 +21,28 @@ const resolution = (
     if (!thread.isResolved) {
       return null;
     }
-    return finding.resolution?.kind === "follow-up-review"
-      ? finding.resolution
-      : nativeResolution(input, thread);
+    return nativeResolution(input, thread);
   }
   return finding.resolution?.kind === "native" ? null : finding.resolution;
 };
 
 /** A positive unresolved claim needs a blocker even when every visible thread is resolved. */
-const unaccountedAdverse = (
+const unaccountedAdverseComments = (
   input: CodexReviewEvidenceInput,
   owned: GitHubReviewThread[]
-): boolean => {
+) => {
   if (!input.summary.reportedAdverse) {
-    return false;
+    return [];
   }
   const { state, status } = input.summary;
-  return (
+  const unaccountedSummary =
     status === "unavailable" ||
     owned.length === 0 ||
     ((state?.codeReview.hasUnresolvedFindings === true ||
       state?.securityReview?.hasUnresolvedFindings === true) &&
-      owned.every((thread) => thread.isResolved))
+      owned.every((thread) => thread.isResolved));
+  return input.summary.adverseComments.filter(
+    (comment) => comment.id !== input.summary.summary?.id || unaccountedSummary
   );
 };
 
@@ -84,26 +84,24 @@ export const codexReviewFindings = (
       existing.add(thread.id);
     }
   }
-  const adverse = unaccountedAdverse(input, owned);
-  if (adverse) {
-    for (const comment of input.summary.adverseComments) {
-      const id = `adverse-review:${comment.id}`;
-      findingIds.push(id);
-      if (!existing.has(id)) {
-        findings.push({
-          attemptId,
-          id,
-          kind: "adverse-review",
-          nativeRef: comment.nativeRef,
-          resolution: null,
-          reviewer: input.reviewer.reviewer,
-        });
-        existing.add(id);
-      }
+  const adverseComments = unaccountedAdverseComments(input, owned);
+  for (const comment of adverseComments) {
+    const id = `adverse-review:${comment.id}`;
+    findingIds.push(id);
+    if (!existing.has(id)) {
+      findings.push({
+        attemptId,
+        id,
+        kind: "adverse-review",
+        nativeRef: comment.nativeRef,
+        resolution: null,
+        reviewer: input.reviewer.reviewer,
+      });
+      existing.add(id);
     }
   }
   return {
-    adverse,
+    adverse: adverseComments.length > 0,
     findingIds,
     ledger: { findings, recorded: input.findingsComplete === true },
   };
