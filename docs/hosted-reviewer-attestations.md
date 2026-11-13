@@ -17,7 +17,39 @@ The fictitious hosted reviewers in `examples/evidence/v2/` and test fixtures are
 
 ## Codex hosted code review
 
-Status on November 13, 2026 is collector implemented, awaiting the policy owner's decision on observed proposed-guidance influence and production adoption qualification. Matt confirmed the revised PR #38 contract on November 12, including the last-editor rule and inactive all-null security section, and reaffirmed standing approval for future reviewed scoped merges with green CI. The confirmation is recorded on FOR-37. The [guidance qualification record](codex-guidance-qualification.md) captures the disposable experiment and live adverse collection. An adopting trusted policy entry remains pending. This entry is scoped to `outfitter-dev/forge`.
+Status on November 13, 2026 is independence basis accepted by Matt, with production lane adoption pending. Matt accepted both the observed proposed-guidance influence and the source-path uncertainty recorded in PR #49. That decision satisfies the owner-decision condition below. His November 12 confirmation of the revised PR #38 contract includes the last-editor rule and inactive all-null security section. The [guidance qualification record](codex-guidance-qualification.md) preserves the experiment and its limits. This entry is scoped to `outfitter-dev/forge`. [FOR-37 decision record](https://linear.app/outfitter/issue/FOR-37)
+
+### Adopted policy entry
+
+| Field | Selected value |
+| --- | --- |
+| Repository | `outfitter-dev/forge` |
+| Reviewer key | `codex-github` |
+| Bot account ID | `199175422`, with author and editor both type `Bot` |
+| Attestation ID | `forge/codex-github/2026-11-13` |
+| Decision revision | `linear-comment:ab87b5a1-593e-44e8-bd41-c109eb96265a` |
+| Independence statement | `separate-hosted-invocation-without-inherited-author-context` |
+| Hosted wait | `900` seconds from the persisted snapshot |
+| Finding-history policy | `supplied-global-ledger` |
+
+The Forge lead selected a finite 15-minute hosted wait to allow review startup and execution while retaining a deadline. The roughly one-minute disposable observation establishes one observed duration. The selected wait is a policy bound, with timeout semantics defined by the collector. Later adverse findings remain blocking after that bound.
+
+The corresponding `codexReview` extension is explicit trusted configuration.
+
+```json
+{
+  "reviewer": "codex-github",
+  "botAccountId": 199175422,
+  "findingHistory": "supplied-global-ledger",
+  "independence": {
+    "id": "forge/codex-github/2026-11-13",
+    "policyRevision": "linear-comment:ab87b5a1-593e-44e8-bd41-c109eb96265a",
+    "statement": "separate-hosted-invocation-without-inherited-author-context"
+  }
+}
+```
+
+The matching eligible hosted reviewer entry must use the selected key and wait. The invoker authenticates a current complete supplied finding ledger covering all reporting reviewers, including sources such as Devin, and preserves accepted history. Unknown coverage stays non-passing. FOR-38 owns the production collector, verification and reviewer issuer identities and runtime fingerprints, trusted installed source, state location and root `forge-gate.json`. The bounded local qualification uses its own explicitly identified runtime and producer. The production policy must load this entry from its trusted revision outside the proposed checkout.
 
 [FOR-37](https://linear.app/outfitter/issue/FOR-37) retains the decisions, vendor-documentation check, raw observation pointers and collector design. That check found no supported machine-readable contract for the markers below. Their format is observed. The observed clean review and adverse review came from Forge PRs 26 and 27.
 
@@ -66,6 +98,6 @@ The basis for the proposed independence attestation is a separate hosted review 
 1. Use the confirmed scope of this entry and its independence exception, including the last-editor rule and the inactive all-null security section observed in the samples. Further scoped PRs proceed under standing delivery authority.
 2. Implement and test the distinct collector-policy attestation, strict parser, stable collection, exact base binding and persisted findings.
 3. Record one live observation on Forge separately from offline fixtures, and identify the format as observed in policy and usage documentation.
-4. Establish which `AGENTS.md` revision Codex follows with one bounded test on an agreed disposable repository. If the proposed copy governs the review, obtain the policy owner's decision before enabling the entry. The [November 13 experiment](codex-guidance-qualification.md) records head-guidance influence but leaves the internal source path unproven because the diff and earlier review expose the marker too. This prerequisite remains open until the owner explicitly accepts that evidence limit and observed influence as the adoption basis, or further qualification establishes the required revision behavior. Record that decision before enabling the entry.
+4. Establish which `AGENTS.md` revision Codex follows with one bounded test on an agreed disposable repository. If the proposed copy governs the review, obtain the policy owner's decision before enabling the entry. The [November 13 experiment](codex-guidance-qualification.md) records head-guidance influence but leaves the internal source path unproven because the diff and earlier review expose the marker too. Matt explicitly accepted both that evidence limit and observed influence as the adoption basis on November 13, recorded in the decision revision above. This owner-decision prerequisite is satisfied under that accepted basis.
 
 Withdraw the attestation if its basis fails, the vendor establishes an incompatible interface, a supposedly clean state contradicts reported findings, or the policy owner rejects observed guidance influence. The hosted reviewer then stays `unknown`, and its persisted findings remain.
