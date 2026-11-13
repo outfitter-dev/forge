@@ -247,7 +247,7 @@ A rate limit is reported like any other failing status, as `request-failed 403` 
 - Refusing a redirect depends on the `fetch`: it must honour `redirect: "error"` or report `redirected` on the response. A `fetch` that follows a redirect and reports neither is not caught.
 - It does not show that GitHub accepts the API version, the query or the token. Offline tests cannot.
 
-Offline tests in `tests/github-pull-request-reads.test.ts` give the transport a `fetch` that records every request and answers from a script. They assert each request's address, method, headers and options, the conversion of the `Date` header, pagination and its bound, every failure and what a failure may hold, and they give these reads to the real `collectPullRequest`. No test makes a network request, and no live read of GitHub through this transport has been qualified.
+Offline tests in `tests/github-pull-request-reads.test.ts` give the transport a `fetch` that records every request and answers from a script. They assert each request's address, method, headers and options, the conversion of the `Date` header, pagination and its bound, every failure and what a failure may hold, and they give these reads to the real `collectPullRequest`. The tests remain offline. A separate [FOR-37 source observation](https://linear.app/outfitter/issue/FOR-37) used trusted source `452529cf45b5348b5f931cb0302cb243f224de69` for two complete read-only collections of Forge PR 26 and local ledger CAS. Both stored successfully and retained unavailable review evidence because the old summary predates the new snapshot and independence was unknown. Production-lane adoption remains pending.
 
 ## Review-thread observations
 
@@ -273,4 +273,4 @@ Only after complete accepted configured reads does this path explicitly attest `
 
 A successful enabled result adds `codexReview: CodexReviewEvidenceResult` outside the minimal evaluator facts. That field contains the attempt, updated finding ledger, null ladder claim, diagnostics and body-free source/attestation observations. The `evidence` object retains its existing minimal fields. Invalid normalized source observations from the pure operation become `unreadable` / `codex-evidence-unreadable` with the fixed path `codexReview`.
 
-Offline collection tests exercise the complete flow through the real evaluator, snapshot resets, changes and failures. Command/policy composition and live qualification remain subsequent integration work.
+Offline collection tests exercise the complete flow through the real evaluator, snapshot resets, changes and failures. The optional [gate policy and command composition](forge-gate.md#optional-codex-collector-policy) now use this flow. FOR-37 records the separate read-only source observation, while production adoption and guidance-revision qualification remain pending.

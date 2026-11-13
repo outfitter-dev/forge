@@ -10,7 +10,7 @@ It composes operations that already exist, in one fixed order:
 - [collects the pull request](pull-request-collection.md) from GitHub's API, read-only
 - stores the ledger entry the collection returned
 - turns the `forge check` receipts it was given into [verification evidence](verification-evidence.md)
-- joins the agent-review evidence it was given with accepted persisted findings
+- joins optional collected Codex evidence and supplied agent-review evidence with accepted persisted findings
 - calls the [evidence evaluator](evidence-evaluator.md) and prints its result
 
 It reports. It does not post a status, a comment or a label, it does not merge, and it does not enforce anything. It makes no request that writes to GitHub. It runs no check and no review: receipts come from `forge check` runs and review evidence comes from Ranger, and both reach this command as files. It writes one thing, the ledger entry in the state directory. It has no retry, cache, daemon or scheduler.
@@ -42,7 +42,7 @@ Every flag takes one value. A missing required flag, an unknown flag, a repeated
 | `--receipt` | A file holding one [`forge check` receipt](forge-check.md) as JSON. Give it once per receipt, or not at all. |
 | `--review-evidence` | A file holding `{ "agentReviews": [...], "reviewFindings": {...}, "reviewLadder": ... }`: exactly the three [agent-review fields](evidence-evaluator.md#agent-review-under-schema-version-2) of a version 2 pull request, and no other key. The evaluator validates the content. |
 
-Without `--review-evidence` the command supplies no agent attempts or ladder, starts from unknown finding evidence and includes accepted persisted findings, so the `agent-review` gate fails. Without any `--receipt` the three verification gates fail the same way.
+With Codex collection disabled, an absent `--review-evidence` supplies no agent attempts or ladder and leaves finding evidence unknown, so `agent-review` fails. With Codex collection enabled, the complete accepted collector history can satisfy the gate without that flag. An explicitly supplied unknown history remains unknown during composition and blocks. Without any `--receipt` the three verification gates fail the same way.
 
 ### The token
 
@@ -120,21 +120,41 @@ The parser is `parseGatePolicy` in [gate-policy.ts](../src/gate-policy.ts).
 
 Forge's own policy will be `forge-gate.json` at the root of the trusted revision the lane runs. It is not in the repository yet, and this change does not add it. A policy names a collector, a verification producer and the eligible reviewers, each with a runtime fingerprint, and Forge has none of those identities until a lane exists to hold them. The file arrives with the lane. Until then the only policies are the fictitious ones the tests build.
 
+## Optional Codex collector policy
+
+`GatePolicy.codexReview` is an optional explicit collector-policy extension. Its fields are distinct from the evaluator’s eligible-reviewer list.
+
+| Field | Meaning |
+| --- | --- |
+| `reviewer` | The exact key of one eligible hosted reviewer in `evidence.agentReview.reviewers`. |
+| `botAccountId` | The configured positive numeric account ID of that bot. |
+| `independence` | `null`, or exactly `{ id, policyRevision, statement }`. |
+
+An independence entry’s statement must be exactly `separate-hosted-invocation-without-inherited-author-context`. Its identifier and trusted policy revision are nonempty trimmed strings. Merely listing Codex as an eligible reviewer grants no independence attestation. A null entry collects observations with `context: "unknown"`, which cannot establish an independent completed review.
+
+The policy parser rejects unknown, local or duplicate selected reviewer identities and malformed statements before GitHub or the ledger is read. The collector takes issuer identity, runtime and wait from the matching eligible hosted entry. Its issuer run ID comes from the invocation. The recorded attestation scopes its identifier and policy revision to the wrapper’s repository, selected reviewer and bot account ID. The command uses a fixed maximum of 50 comment pages per pass. There are no account or wait defaults.
+
+The invoker guarantees that the entire wrapper policy, including this extension, comes from a trusted revision outside proposed code. The extension records the [approved independence meaning](hosted-reviewer-attestations.md) and the caller’s explicit adoption. It does not authenticate the file’s source or supply credentials. Forge’s own adopting policy, identity/wait selection and live adoption qualification remain separate work.
+
+When collection is enabled, an absent review-evidence flag contributes no additional completeness claim. Explicitly supplied unknown history blocks even beside a complete collected ledger. Supplied attempts are appended to collected attempts without deduplication. Duplicate IDs stay blocking, malformed attempts or findings stay invalid input, and an external clean or conflicting resolution cannot erase a persisted blocker. Supplied evidence retains its existing evaluation-only role and does not rewrite stored finding origins or resolutions.
+
+Only a stored accepted collection can reach evaluation. Comment read failures retain the transport code and HTTP status in `not-collected.read`. CAS conflicts return `not-collected` with no evaluation or source record. An evaluated enabled result adds `codexReview: { diagnostics, observations }` beside the evaluator result. That record retains scoped attestation ID/policy revision and normalized source identities, state, flags, timestamps and threads, with comment bodies stripped. The evaluator input still contains only normalized evidence.
+
 ## Flow
 
 1. Validate the arguments, the token, the state directory, the policy file, each receipt file and the review-evidence file. The policy must parse, each receipt must be readable JSON, and the review evidence must be a JSON object with exactly its three keys. Any failure is invalid input, and at that point nothing has been requested from GitHub and nothing has been read from or created in the state directory.
 2. Read the machine's clock once, as a whole-second UTC time.
 3. Read the stored ledger entry for this pull request from `<state>/review-ledger`, giving the store that time. A pull request with no entry has the empty one.
-4. Collect the pull request from GitHub, giving the collector the stored entry, the policy's hold label, and a provenance made of the policy's collector `producer` and `runtimeFingerprint` and the `--run-id`.
+4. Collect the pull request from GitHub, giving the collector the stored entry, the policy’s hold label and collector provenance with the `--run-id`. When `codexReview` is configured, also supply its resolved hosted reviewer configuration and retain the comment-read capability. The [optional collection flow](pull-request-collection.md#optional-codex-collection) establishes complete comments, source stability, the effective snapshot and updated findings.
 5. If the collection did not end as `collected`, stop: not collected. Nothing is stored.
 6. Store the entry the collection returned, in place of the one read in step 3. If another run stored an entry in between (`conflict`), the lock file exists (`ledger-busy`) or the store refuses for any other reason, stop: not collected. Evidence from a collection whose ledger was not stored is never evaluated, because the bindings and snapshot it relies on would be recorded nowhere.
 7. Normalize the receipts under the policy's `checks` mapping and `evidence.verification` identity.
-8. Assemble version 2 pull request facts from the collected evidence, the normalized checks and the review evidence. Combine supplied finding entries with accepted persisted entries under the [finding-history rules](review-ledger-store.md#finding-history-and-compatibility), then evaluate under `policy.evidence`.
+8. Assemble version 2 pull request facts from collected evidence, normalized checks, optional collected Codex attempts and supplied review evidence. Preserve duplicate attempts and malformed supplied content for the evaluator. Combine supplied finding entries with the accepted collector ledger under the [finding-history rules](review-ledger-store.md#finding-history-and-compatibility), then evaluate under `policy.evidence`.
 9. If the evaluator answers `invalid`, report invalid input with its issues. Otherwise report its result.
 
 Nothing is retried. On `conflict` or `ledger-busy` the invoker runs the command again; see [the lock](review-ledger-store.md#the-lock) for a lock a stopped process left behind.
 
-Step 9 comes after steps 4 and 6. A policy whose `evidence.agentReview` the evaluator refuses, or review evidence whose content it refuses, is therefore reported only after GitHub has been read and the ledger entry stored. That entry is a true record of the collection and stays.
+Step 9 comes after steps 4 and 6. Supplied review-evidence content and evidence-policy fields left to the evaluator may therefore be reported invalid only after GitHub has been read and the collector’s ledger entry stored. When Codex is enabled, its selected eligible reviewer and independence statement are validated before reads. That entry is a true record of the collection and stays.
 
 ## Output
 
@@ -323,13 +343,13 @@ They are constants in [run-gate.ts](../src/run-gate.ts), not flags. A list that 
 - **That the facts still hold.** The answer describes the pull request when it was read. A push, a label or a review after that is not seen. The [automation contract](automation-contract.md#decisions-leave-usable-evidence) requires a fresh evaluation before a consequential action.
 - **That the clock is right.** The time given to the ledger store is the machine's. A clock behind GitHub's stops the run with `entry-ahead-of-clock`; a clock far ahead lets a future-dated ledger entry through. See [`now` and `entry-ahead-of-clock`](review-ledger-store.md#now-and-entry-ahead-of-clock).
 - **That the runtime's environment is clean.** The requests are made by Bun's own `fetch`, which the invoker's environment configures. A proxy, or a setting that turns off certificate verification, removes the assurance that a response is GitHub's, as the [transport's limits](pull-request-collection.md#what-the-transport-does-not-establish) say. The command refuses `BUN_CONFIG_VERBOSE_FETCH` as described under [the token](#the-token).
-- **Anything about a live GitHub.** No live run against GitHub is qualified. The API version, the GraphQL query, the token's access and GitHub's actual responses are untested outside fixtures, as the [transport's own limits](pull-request-collection.md#what-the-transport-does-not-establish) say.
+- **Production adoption.** [FOR-37](https://linear.app/outfitter/issue/FOR-37) records two complete live source reads and local ledger CAS of Forge PR 26 at trusted source `452529cf45b5348b5f931cb0302cb243f224de69`. The historical summary correctly remained unavailable because its update predates the new snapshot and independence was unknown. The selected production lane, adopting policy and guidance-revision qualification remain pending.
 - **Any enforcement.** Nothing here posts a status, and no repository rule requires one. Until a lane reports the exit code as a required status, a pull request this command calls not eligible can still be merged.
 
 The limits of the composed operations carry over unchanged: [collection](pull-request-collection.md#what-this-does-not-establish), the [ledger store](review-ledger-store.md#what-it-does-not-establish), [verification evidence](verification-evidence.md#what-this-does-not-establish) and the [evaluator](evidence-evaluator.md#trusted-collector-responsibilities).
 
 ## Verification scope
 
-`bun test tests/gate-policy.test.ts tests/forge-gate.test.ts` exercises the policy parser and the command offline. The command tests run `src/forge-cli.ts gate` as a real subprocess with a test file preloaded that replaces the global `fetch`: it answers requests to `https://api.github.com` from a script, records every request, and fails a request to any other origin. No production code has a test hook. State, policy, receipts and review evidence live in temporary directories outside the repository, which the tests remove.
+`bun test tests/gate-policy.test.ts tests/gate-codex-policy.test.ts tests/forge-gate.test.ts tests/forge-gate-codex.test.ts` exercises the policy parser and the command offline. The command tests run `src/forge-cli.ts gate` as a real subprocess with a test file preloaded that replaces the global `fetch`: it answers requests to `https://api.github.com` from a script, records every request, and fails a request to any other origin. No production code has a test hook. State, policy, receipts and review evidence live in temporary directories outside the repository, which the tests remove.
 
 They cover an eligible pull request; each gate failing alone where the evaluator allows it; an approval that binds on a second run because the first recorded its snapshot; rejected receipts; every not-collected stage, with the ledger file compared byte for byte; every kind of invalid input, with no request made and nothing created in the state directory; and, on every run, that the token appears only in the `Authorization` header of requests to GitHub. They prove deterministic behavior only.

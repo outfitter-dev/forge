@@ -1,3 +1,4 @@
+import type { CodexReviewEvidenceResult } from "./codex-review-evidence-types.ts";
 import type { PullRequestCollectionFailure } from "./collect-pull-request-types.ts";
 import type { EvaluationResult, ValidationIssue } from "./evidence-types.ts";
 import type { GitHubReadFailure } from "./github-pull-request-reads.ts";
@@ -7,6 +8,8 @@ import type { ReviewLedgerErrorCode } from "./review-ledger-entry.ts";
 /** The pull request was judged. `eligible` is the answer; `evaluation` is why. */
 export interface GateEvaluated {
   status: "evaluated";
+  /** Source and explicit attestation provenance, outside evaluator input and without comment bodies. */
+  codexReview?: Pick<CodexReviewEvidenceResult, "diagnostics" | "observations">;
   eligible: boolean;
   /** The revision judged, as collected from GitHub. */
   subject: {

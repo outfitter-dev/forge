@@ -1,18 +1,22 @@
 import path from "node:path";
 
-import type { PullRequestReads } from "./collect-pull-request-types.ts";
+import type {
+  PullRequestCommentReads,
+  PullRequestReads,
+} from "./collect-pull-request-types.ts";
 import { collectPullRequest } from "./collect-pull-request.ts";
 import { evaluateEvidence } from "./evaluate-evidence.ts";
 import { GATE_USAGE, parseGateArguments } from "./gate-arguments.ts";
+import { gateCodexCollection } from "./gate-codex-policy.ts";
 import type { GateDocument, GateLedgerStop } from "./gate-document.ts";
 import { readGateInputs } from "./gate-inputs.ts";
+import { gateReviewEvidence } from "./gate-review-evidence.ts";
 import {
   GitHubReadError,
   githubPullRequestReads,
 } from "./github-pull-request-reads.ts";
 import { normalizeCheckReceipts } from "./normalize-check-receipts.ts";
 import { ReviewLedgerError } from "./review-ledger-entry.ts";
-import { gateReviewFindings } from "./review-ledger-findings.ts";
 import {
   readReviewLedger,
   replaceReviewLedger,
@@ -24,6 +28,8 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_REST_PAGES = 50;
 /** The most review-thread pages one pass may read. */
 const MAX_THREAD_PAGES = 50;
+/** The most issue-comment pages one collection pass may read. */
+const MAX_COMMENT_PAGES = 50;
 
 export interface GateInvocation {
   /** The arguments after `gate`. */
@@ -67,7 +73,7 @@ const ledgerStep = async <T>(
  * them throws. The collector reports every thrown read as `read-failed`, so
  * without this an outage could not be told from a page bound that is too small.
  */
-const remembering = (reads: PullRequestReads) => {
+const remembering = (reads: PullRequestReads & PullRequestCommentReads) => {
   let failure: { code: GitHubReadError["code"]; status: number | null } | null =
     null;
   const watch = async <T>(read: () => Promise<T>): Promise<T> => {
@@ -80,7 +86,8 @@ const remembering = (reads: PullRequestReads) => {
       throw error;
     }
   };
-  const watched: PullRequestReads = {
+  const watched: PullRequestReads & PullRequestCommentReads = {
+    issueComments: (cursor) => watch(() => reads.issueComments(cursor)),
     pullRequest: () => watch(() => reads.pullRequest()),
     reviewThreads: (cursor) => watch(() => reads.reviewThreads(cursor)),
     reviews: () => watch(() => reads.reviews()),
@@ -130,10 +137,12 @@ const gate = async ({
       token,
     })
   );
+  const codexReview = gateCodexCollection(policy, runId, MAX_COMMENT_PAGES);
   const collection = await collectPullRequest(
     {
       // Passing the policy's label is what adopts the collector's rule for
       // `mergeAuthorized`; a policy without one was refused above.
+      ...(codexReview === undefined ? {} : { codexReview }),
       holdLabel: policy.mergeAuthorization.holdLabel,
       ledger: entry,
       maxThreadPages: MAX_THREAD_PAGES,
@@ -185,12 +194,12 @@ const gate = async ({
       event: "pull_request",
       pullRequest: {
         ...collection.evidence,
-        ...reviewEvidence,
-        checks,
-        reviewFindings: gateReviewFindings(
-          collection.ledger.reviewFindings ?? { findings: [], recorded: false },
-          reviewEvidence.reviewFindings
+        ...gateReviewEvidence(
+          collection.ledger.reviewFindings,
+          collection.codexReview,
+          reviewEvidence
         ),
+        checks,
       },
       schemaVersion: 2,
     },
@@ -204,6 +213,14 @@ const gate = async ({
   const { subject } = collection.evidence;
   return {
     ...FRAME,
+    ...(collection.codexReview === undefined
+      ? {}
+      : {
+          codexReview: {
+            diagnostics: collection.codexReview.diagnostics,
+            observations: collection.codexReview.observations,
+          },
+        }),
     eligible: evaluation.eligible,
     evaluation,
     rejectedReceipts: rejected,
