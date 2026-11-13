@@ -152,15 +152,21 @@ test("bot-login impostors and human threads are not attributed to Codex", () => 
   expect(result.reviewFindings.findings).toEqual([]);
 });
 
-test("detail-less adverse review uses stable comment identity and has no native exit", () => {
+test("detail-less adverse review identifies its comment version and has no native exit", () => {
   const first = evidence({ summary: summary({ has_any_findings: true }) });
+  const [synthetic] = first.reviewFindings.findings;
+  if (!synthetic) {
+    throw new Error("missing synthetic fixture finding");
+  }
+  expect(synthetic.id).toMatch(
+    /^adverse-review:500:2026-01-01T00:10:00Z:[\da-f]{64}$/u
+  );
   expect(first.agentReviews[0]).toMatchObject({
-    findingIds: ["adverse-review:500"],
+    findingIds: [synthetic.id],
     state: "completed",
     verdict: "failed",
   });
-  expect(first.reviewFindings.findings[0]).toMatchObject({
-    id: "adverse-review:500",
+  expect(synthetic).toMatchObject({
     kind: "adverse-review",
     nativeRef: "https://github.com/example/project/pull/12#issuecomment-500",
     resolution: null,
@@ -250,10 +256,11 @@ test.each([false, true])(
       summary: observation,
       threads: [thread("T1", true)],
     });
-    expect(result.reviewFindings.findings.map((item) => item.id)).toEqual([
-      "T1",
-      "adverse-review:501",
-    ]);
+    expect(result.reviewFindings.findings).toHaveLength(2);
+    expect(result.reviewFindings.findings[0]?.id).toBe("T1");
+    expect(result.reviewFindings.findings[1]?.id).toMatch(
+      /^adverse-review:501:2026-01-01T00:10:00Z:[\da-f]{64}$/u
+    );
     expect(result.reviewFindings.findings[1]).toMatchObject({
       kind: "adverse-review",
       nativeRef: separate.nativeRef,

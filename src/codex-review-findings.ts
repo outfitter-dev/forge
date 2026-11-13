@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { CodexReviewEvidenceInput } from "./codex-review-evidence-types.ts";
 import type { FindingResolution, ReviewFinding } from "./evidence-types.ts";
 import type { GitHubReviewThread } from "./github-pull-request-types.ts";
@@ -86,7 +88,8 @@ export const codexReviewFindings = (
   }
   const adverseComments = unaccountedAdverseComments(input, owned);
   for (const comment of adverseComments) {
-    const id = `adverse-review:${comment.id}`;
+    const digest = createHash("sha256").update(comment.body).digest("hex");
+    const id = `adverse-review:${comment.id}:${comment.updatedAt}:${digest}`;
     findingIds.push(id);
     if (!existing.has(id)) {
       findings.push({
