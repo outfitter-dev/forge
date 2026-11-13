@@ -21,7 +21,14 @@ export interface CodexIndependenceAttestation {
   botAccountId: number;
 }
 
-export interface CodexReviewEvidenceInput {
+export interface CodexReviewConfiguration {
+  reviewer: Extract<ReviewerPolicy, { rung: "hosted" }>;
+  issuer: Provenance;
+  botAccountId: number;
+  attestation: CodexIndependenceAttestation | null;
+}
+
+export interface CodexReviewEvidenceInput extends CodexReviewConfiguration {
   subject: PullRequestSubject;
   /** The first pull request read's servedAt from the stable collection. */
   servedAt: string;
@@ -39,10 +46,6 @@ export interface CodexReviewEvidenceInput {
    * collected and prior accepted findings retained. Absent or false stays unknown.
    */
   findingsComplete?: boolean;
-  reviewer: Extract<ReviewerPolicy, { rung: "hosted" }>;
-  issuer: Provenance;
-  botAccountId: number;
-  attestation: CodexIndependenceAttestation | null;
 }
 
 export type CodexReviewDiagnostic =

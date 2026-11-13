@@ -1,6 +1,6 @@
 # Pull request collection
 
-`collectPullRequest(request, reads)` reads one pull request's live state and returns the pull-request part of the [evidence evaluator](evidence-evaluator.md)'s input (FOR-34). It is exported from `src/index.ts` with its types. Everything it learns comes through the four injected reads: it performs no network, filesystem, clock or environment access, and it never writes to GitHub.
+`collectPullRequest(request, reads)` reads one pull request's live state and returns the pull-request part of the [evidence evaluator](evidence-evaluator.md)'s input (FOR-34). It is exported from `src/index.ts` with its types. Everything it learns comes through the injected reads: it performs no network, filesystem, clock or environment access, and it never writes to GitHub.
 
 It supplies `subject`, `provenance`, `assignments`, `humanReviews`, `open`, `draft`, `mergeable`, `mergeAuthorized` and `unresolvedThreads`, typed from `PullRequestEvidenceOf` in [evidence-types.ts](../src/evidence-types.ts). It does not supply `checks`, `agentReviews`, `reviewFindings` or `reviewLadder`; [verification evidence](verification-evidence.md) and other operations do. It contains no GitHub client, pagination, token handling, ledger store or command, and it collects no merge group. The [GitHub read transport](#github-read-transport) supplies the four reads and an additive [issue-comment capability](codex-summary-observations.md), and the [review ledger store](review-ledger-store.md) is a separate operation that supplies the ledger entry and persists the one returned.
 
@@ -35,6 +35,7 @@ if (result.status === "collected") {
 | `provenance` | The collector's producer ID, runtime fingerprint and run ID, copied onto the evidence. Evaluator policy compares it with `policy.collector`. |
 | `ledger` | The `ReviewLedgerEntry` the last accepted collection of this pull request returned, or an empty entry for a pull request never collected. |
 | `maxThreadPages` | The most review-thread pages one pass may read, a positive integer. |
+| `codexReview` | Optional explicit [Codex collection configuration](#optional-codex-collection). Absent preserves the existing four-read flow and result shape. |
 
 The request is copied before the first read, so changing it or its ledger while the collection runs changes nothing. The request's ledger is never modified.
 
@@ -51,8 +52,8 @@ Responses are parsed by the functions in [parse-github-pull-request.ts](../src/p
 
 Each collection makes two passes, and no two reads run at once.
 
-1. First pass: reviews, then the pull request, then the timeline, then review threads page by page.
-2. Second pass: the pull request, then reviews, then the timeline, then review threads page by page.
+1. First pass reads reviews, optional issue comments page by page, the pull request, the timeline and review threads page by page.
+2. Second pass reads the pull request, reviews, the timeline, review threads page by page and optional issue comments page by page.
 
 The order of the first pass is fixed by the binding rule in [review-ledger.ts](../src/review-ledger.ts). GitHub records no base for an approval, so an approval is bound to the base the pull request had when it was read, and only if an earlier collection saw this same head and base before the approval and no base change is recorded since. That is sound only if the reviews are read no later than the pull request and the timeline no earlier. Read in that order, every approval the collection holds was submitted before the pull request was served, and every base change recorded up to that moment is in the timeline. Read in another order, an approval could be bound across a base change the collection never saw.
 
@@ -68,6 +69,7 @@ A collection is accepted only if the second pass parses to the same values as th
 - the parsed reviews
 - the review requests and the base changes parsed from the timeline
 - the full ordered review-thread list, including stable thread ID, resolution and first-comment author identity
+- when Codex collection is configured, the full ordered normalized issue-comment list, including IDs, native references, bodies, author/editor identity and update/edit times
 
 Parsed values are compared, not response text. A field Forge does not read, such as the title, and a timeline event that is neither a review request nor a possible base change, do not count. The order of labels, reviewers, reviews and events does count. `servedAt` may differ between the passes and is not part of this comparison.
 
@@ -109,6 +111,7 @@ The call can reject instead of returning a result when the caller breaks the req
 | `changed` | `pull-request-changed` | The second read of the pull request parsed differently from the first. |
 | `changed` | `reviews-changed` | The reviews differed between the passes. |
 | `changed` | `timeline-changed` | The review requests or base changes in the timeline differed between the passes. |
+| `changed` | `comments-changed` | The complete normalized issue-comment lists differed between passes. |
 | `changed` | `threads-changed` | The complete ordered thread observations differed between the passes, including thread ID, resolution or first-author identity. |
 | `unreadable` | `response-unreadable` | A response did not parse. `path` is the parser's path to the field. |
 | `unreadable` | `served-at-unreadable` | A `servedAt` was not a whole-second UTC time. `path` is `servedAt`. |
@@ -253,3 +256,21 @@ FOR-37 adds `reviewThreads: GitHubReviewThread[]` to a successful collection, ou
 The parser retains its `unresolved` page count for existing callers and adds `threads`. Collection derives `evidence.unresolvedThreads` from the accepted full list. Existing evidence and ledger meanings are preserved. Older injected reads returning only `isResolved` must supply the widened response shape before collecting again. An incomplete old response cannot establish reviewer observations.
 
 Both passes read every thread, including resolved threads and threads from earlier heads. The complete ordered list must agree, so same-count thread substitutions, author changes and resolution swaps stop as `threads-changed`. Duplicate thread IDs within or across pages and repeated pagination cursors stop as unreadable. A list exceeding the configured page bound stays unavailable. Page boundaries may differ between passes when the resulting ordered list agrees. These observations establish no hosted-review verdict or finding-ledger entry by themselves.
+
+## Optional Codex collection
+
+`PullRequestCollectionRequest.codexReview` adopts an optional collection capability for that invocation. Its `PullRequestCodexReviewConfig` has the hosted `reviewer` policy, matching `issuer` provenance, positive `botAccountId`, explicit independence `attestation` or `null`, and positive `maxCommentPages`. Shared configuration validation runs before reads. An invalid configuration is `invalid-request` / `request-malformed`. This configuration alone establishes no repository gate policy adoption.
+
+The reads argument accepts `PullRequestReads & Partial<PullRequestCommentReads>`. Existing callers retain the four required reads. A configured invocation requires `issueComments(cursor)` and fails as `unavailable` / `comment-read-missing` before any read when it is missing. With no configuration, issue comments are never read and the successful result keeps exactly `status`, `evidence`, `ledger` and `reviewThreads`.
+
+Enabled collection reads every comment page before the first pull request response. The second complete comment read follows the second thread read. The full order is reviews, comments, pull request, timeline, threads, pull request, reviews, timeline, threads, comments. No reads run at once. The [comment reader](codex-summary-observations.md#comment-reads) supplies complete ordered normalization and rejects duplicate IDs, repeated cursors, GraphQL errors and malformed fields. Exceeding its bound on either pass is `unavailable` / `comment-pages-exceeded`. Read failures are `unavailable` / `read-failed`. Malformed responses retain the existing `unreadable` / `response-unreadable` result with a field path. Every non-collected result contains no ledger or evidence.
+
+The second list must equal the first as normalized data. A change to a body, state block, identity, editor, timestamp, native reference, ordering or list membership produces `changed` / `comments-changed`. Pagination boundaries may differ while the complete ordered list agrees. Both passes read all comments, including ordinary comments outside the governing summary.
+
+After all reads agree, human-review collection computes the effective snapshot from persisted history and the complete timeline. The [pure Codex operation](codex-review-evidence.md) receives that effective snapshot, the first pull request response’s `servedAt`, the strict parsed summary, the same accepted full thread list and prior accepted findings. A base-away-and-back event invalidates the original matching snapshot before normalization. A first snapshot cannot bind an earlier summary, and a later second served time cannot admit a summary newer than the first response.
+
+Only after complete accepted configured reads does this path explicitly attest `findingsComplete: true` for its source. Its caller remains responsible for configuring every reporting source it owns and preserving independent explicitly unknown external history during later composition. The returned canonical ledger carries the pure operation’s updated findings alongside the effective snapshot and human bindings. The consumer must persist that entire ledger through the existing CAS before using its evidence.
+
+A successful enabled result adds `codexReview: CodexReviewEvidenceResult` outside the minimal evaluator facts. That field contains the attempt, updated finding ledger, null ladder claim, diagnostics and body-free source/attestation observations. The `evidence` object retains its existing minimal fields. Invalid normalized source observations from the pure operation become `unreadable` / `codex-evidence-unreadable` with the fixed path `codexReview`.
+
+Offline collection tests exercise the complete flow through the real evaluator, snapshot resets, changes and failures. Command/policy composition and live qualification remain subsequent integration work.

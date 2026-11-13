@@ -6,6 +6,12 @@ The seven original operational documents are verified in the [machine-local arch
 
 For the complete originating-session record, including worker recovery details and superseded decisions, read [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md).
 
+## FOR-37 optional Codex collection increment
+
+The `for-37-codex-collection` branch starts at `9ec3a036ebbefeb689cc37f0856d355bb022f429`. `collectPullRequest` accepts optional `codexReview` configuration and comment capability, reads complete comments before the first pull request response, compares their full normalized second pass, and derives pure evidence only after every configured source agrees. It passes human collection’s effective snapshot and the first served time, returns optional `codexReview` outside minimal evaluator facts, and places updated findings in the returned canonical ledger. Disabled invocations retain their four-read callers and exact result shape. [Collection documentation](pull-request-collection.md#optional-codex-collection) defines fixed failures and caller completeness responsibilities.
+
+Source changes are in `src/collect-pull-request.ts`, `src/collect-pull-request-types.ts`, new `src/collect-codex-review.ts`, shared `src/codex-review-configuration.ts`, and the pure operation’s configuration types/validation. Tests are `tests/collect-codex-review.test.ts` and `tests/codex-collection-fixtures.ts`. Bootstrap, frozen installation, targeted tests and the full local check qualify this branch. The Forge lead owns restacking onto the repaired pure increment, final checks, independent review, hosted CI and delivery after the author commit. In particular, retain the lower per-source adverse mapping repair and actual resolved-thread native resolution update from PR #45. Increment 6 owns trusted policy and command composition, body-free source output, explicitly unknown external histories and atomic ledger storage before evaluation. Policy adoption and live qualification remain pending.
+
 ## FOR-37 pure Codex evidence increment
 
 The `for-37-codex-evidence` branch starts at `88a008abea0299ed3da476ab2c5ac3228b414368`. New `src/codex-review-evidence.ts`, `src/codex-review-evidence-types.ts` and `src/codex-review-findings.ts` provide the pure [Codex review evidence operation](codex-review-evidence.md), exported through `src/index.ts`. Tests use shared `tests/codex-review-fixtures.ts` and exercise the actual evaluator in `tests/codex-review-evidence.test.ts` and `tests/codex-review-findings.test.ts`.

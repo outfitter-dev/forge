@@ -1,3 +1,7 @@
+import type {
+  CodexReviewConfiguration,
+  CodexReviewEvidenceResult,
+} from "./codex-review-evidence-types.ts";
 import type { Provenance, PullRequestEvidenceOf } from "./evidence-types.ts";
 import type { GitHubReviewThread } from "./github-pull-request-types.ts";
 import type {
@@ -26,6 +30,11 @@ export interface PullRequestCommentReads {
   issueComments: (cursor: string | null) => Promise<unknown>;
 }
 
+/** Explicit optional collector capability. It does not adopt a gate policy. */
+export interface PullRequestCodexReviewConfig extends CodexReviewConfiguration {
+  maxCommentPages: number;
+}
+
 export interface PullRequestCollectionRequest {
   /** `owner/name`, as policy names it. The evidence subject carries it as given. */
   repository: string;
@@ -38,6 +47,7 @@ export interface PullRequestCollectionRequest {
   ledger: ReviewLedgerEntry;
   /** The most review-thread pages one pass may read. */
   maxThreadPages: number;
+  codexReview?: PullRequestCodexReviewConfig;
 }
 
 /** The pull-request evidence this operation supplies; other operations supply the rest. */
@@ -66,18 +76,27 @@ export type PullRequestCollectionFailure =
         | "pull-request-changed"
         | "reviews-changed"
         | "timeline-changed"
-        | "threads-changed";
+        | "threads-changed"
+        | "comments-changed";
     }
   | {
       status: "unreadable";
       reason:
         | "response-unreadable"
         | "served-at-unreadable"
-        | "served-at-regressed";
+        | "served-at-regressed"
+        | "codex-evidence-unreadable";
       path: string;
     }
   | { status: "ambiguous"; reason: "review-history-ambiguous" }
-  | { status: "unavailable"; reason: "read-failed" | "thread-pages-exceeded" }
+  | {
+      status: "unavailable";
+      reason:
+        | "read-failed"
+        | "thread-pages-exceeded"
+        | "comment-pages-exceeded"
+        | "comment-read-missing";
+    }
   | {
       status: "mismatch";
       reason: "repository-mismatch" | "pull-request-mismatch";
@@ -87,6 +106,8 @@ export type PullRequestCollectionFailure =
 export type PullRequestCollectionResult =
   | {
       status: "collected";
+      /** Present only when explicitly configured. Outside minimal evaluator facts. */
+      codexReview?: CodexReviewEvidenceResult;
       evidence: CollectedPullRequestEvidence;
       /** Stable full-list source observations, outside evaluator facts. */
       reviewThreads: GitHubReviewThread[];
