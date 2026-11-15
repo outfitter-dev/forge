@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   utimesSync,
@@ -24,6 +25,7 @@ const origin = `https://github.com/${repository}.git`;
 const source = "src/forge-cli.ts";
 const original = "export const answer = 1;\n";
 const sameSize = "export const answer = 2;\n";
+const executable = "run.sh";
 const usage =
   "Usage: scripts/verify-trusted-install.sh --install <absolute-dir> --repository <owner/name> --commit <40-hex>";
 
@@ -32,7 +34,7 @@ const failures = {
   bunVersion:
     "the Bun on PATH is not the version the install's .bun-version pins.",
   flags:
-    "the install's index has entries flagged assume-unchanged or skip-worktree.",
+    "the install's index is unreadable or has entries flagged assume-unchanged or skip-worktree.",
   head: "the install's HEAD is not the expected commit.",
   path: "the install path is not an existing directory, or it is a symlink.",
   pin: "the install has no .bun-version holding a three-part version.",
@@ -76,6 +78,8 @@ const template = (() => {
   writeFileSync(path.join(install, ".gitignore"), "node_modules/\n");
   writeFileSync(path.join(install, source), "export const answer = 0;\n");
   symlinkSync(source, path.join(install, "latest"));
+  writeFileSync(path.join(install, executable), "#!/bin/sh\necho 1\n");
+  chmodSync(path.join(install, executable), 0o755);
   git(install, "add", "-A");
   git(install, "commit", "-q", "-m", "one");
   const parent = git(install, "rev-parse", "HEAD");
@@ -112,6 +116,7 @@ const fixture = (): Fixture => {
     `#!/bin/bash
 [[ "$1" == --version ]] || exit 64
 echo "\${TEST_BUN_VERSION:-1.4.4}"
+[[ -z "\${TEST_BUN_STDERR:-}" ]] || echo "$TEST_BUN_STDERR" >&2
 exit "\${TEST_BUN_EXIT:-0}"
 `
   );
@@ -120,9 +125,11 @@ exit "\${TEST_BUN_EXIT:-0}"
 };
 
 const run = (args: string[], env: Record<string, string>) => {
+  // The limit keeps a script that blocks, on a FIFO for instance, from hanging the suite.
   const child = Bun.spawnSync(["/bin/bash", script, ...args], {
     cwd: tmpdir(),
     env,
+    timeout: 30_000,
   });
   return {
     exitCode: child.exitCode,
@@ -177,7 +184,42 @@ const callerHome = (fx: Fixture, config: string) => {
   };
 };
 
+const mkfifo = (file: string) => {
+  const child = Bun.spawnSync(["mkfifo", file], {
+    env: { PATH: "/usr/bin:/bin" },
+  });
+  if (child.exitCode !== 0) {
+    throw new Error(`mkfifo: ${child.stderr.toString()}`);
+  }
+};
+/** Git's status reports nothing for a same-size edit when a clean filter prints the original. */
+const hideEdit = (fx: Fixture, file: string) => {
+  const contents = readFileSync(path.join(fx.install, file), "utf-8");
+  const attributes = path.join(fx.install, ".git/info/attributes");
+  writeFileSync(attributes, `${file} filter=pinned\n`);
+  const clean = `cat >/dev/null; printf '%s\\n' '${contents.trim()}'`;
+  git(fx.install, "config", "filter.pinned.clean", clean);
+  write(fx, file, contents.replace("1", "2"));
+  expect(git(fx.install, "status", "--porcelain")).toBe("");
+  return {};
+};
+/** Directories a test made unreadable, restored so that they can be removed. */
+const locked: string[] = [];
+const lock = (directory: string) => {
+  chmodSync(directory, 0);
+  locked.push(directory);
+};
+// Root reads and enters any directory, so those cases cannot be staged as root.
+const isRoot = process.getuid?.() === 0;
+const caseSensitive = (() => {
+  writeFileSync(path.join(home, "case-probe"), "");
+  return !existsSync(path.join(home, "CASE-PROBE"));
+})();
+
 afterEach(() => {
+  for (const directory of locked.splice(0)) {
+    chmodSync(directory, 0o755);
+  }
   for (const root of roots.splice(0)) {
     rmSync(root, { force: true, recursive: true });
   }
@@ -208,6 +250,44 @@ test("a doubled slash inside the install path is not a usage error", () => {
   expect(verify(fx, { install })).toEqual(verified);
 });
 
+test("an install below a symlinked directory verifies", () => {
+  const fx = fixture();
+  symlinkSync(fx.root, path.join(fx.root, "alias"));
+  const install = path.join(fx.root, "alias/install");
+  expect(verify(fx, { install })).toEqual(verified);
+});
+
+test("a linked work tree, whose .git is a file, verifies", () => {
+  const fx = fixture();
+  const install = path.join(fx.root, "linked");
+  git(fx.install, "worktree", "add", "-q", "--detach", install, "HEAD");
+  expect(verify(fx, { install })).toEqual(verified);
+});
+
+test("INSTALL, REPOSITORY and COMMIT in the caller's environment are not arguments", () => {
+  const env = {
+    COMMIT: "0".repeat(40),
+    INSTALL: "/opt/other",
+    REPOSITORY: "acme/other",
+  };
+  expect(verify(fixture(), { env })).toEqual(verified);
+});
+
+test("nothing a Bun writes to stderr reaches the caller", () => {
+  const env = { TEST_BUN_STDERR: "noise from bun" };
+  expect(verify(fixture(), { env })).toEqual(verified);
+});
+
+test("a .bun-version with a carriage return is read as bootstrap reads it", () => {
+  const fx = fixture();
+  write(fx, ".bun-version", "1.4.4\r\n");
+  const commit = commitAll(fx);
+  expect(verify(fx, { commit })).toEqual({
+    ...verified,
+    stdout: verified.stdout.replace(template.commit, commit),
+  });
+});
+
 const pinned = "0123456789abcdef0123456789abcdef01234567";
 const flags = (overrides: Record<string, string> = {}) =>
   Object.entries({
@@ -219,10 +299,10 @@ const flags = (overrides: Record<string, string> = {}) =>
 const without = (flag: string) => flags().toSpliced(flags().indexOf(flag), 2);
 const required = "--install, --repository and --commit are all required.";
 const badInstall =
-  "--install must be an absolute path with no trailing slash and no . or .. component.";
+  "--install must be an absolute path with one leading slash, no trailing slash and no . or .. component.";
 const badCommit = "--commit must be 40 lowercase hexadecimal characters.";
 const badRepository =
-  "--repository must be owner/name in letters, digits, hyphens, underscores and dots.";
+  "--repository must be owner/name in letters, digits, hyphens, underscores and dots, with no .git suffix.";
 const usageErrors: [string, string[], string][] = [
   ["no arguments", [], required],
   ["a missing --install", without("--install"), required],
@@ -262,6 +342,11 @@ const usageErrors: [string, string[], string][] = [
   ],
   ["a relative install path", flags({ "--install": "opt/forge" }), badInstall],
   ["an empty install path", flags({ "--install": "" }), badInstall],
+  [
+    "an install path with two leading slashes",
+    flags({ "--install": "//opt/forge" }),
+    badInstall,
+  ],
   [
     "an install path with a trailing slash",
     flags({ "--install": "/opt/forge/" }),
@@ -307,6 +392,16 @@ const usageErrors: [string, string[], string][] = [
   [
     "a repository with a .. part",
     flags({ "--repository": "acme/.." }),
+    badRepository,
+  ],
+  [
+    "a repository with a . part",
+    flags({ "--repository": "acme/." }),
+    badRepository,
+  ],
+  [
+    "a repository name with a .git suffix",
+    flags({ "--repository": `${repository}.git` }),
     badRepository,
   ],
 ];
@@ -441,7 +536,53 @@ const failingInstalls: [string, Failure, (fx: Fixture) => Overrides][] = [
       };
     },
   ],
-  // 5. The working tree.
+  // 5. Index flags and submodules.
+  [
+    "an assume-unchanged file",
+    "flags",
+    (fx) => {
+      git(fx.install, "update-index", "--assume-unchanged", source);
+      return {};
+    },
+  ],
+  [
+    "an assume-unchanged file whose bytes differ",
+    "flags",
+    (fx) => {
+      git(fx.install, "update-index", "--assume-unchanged", source);
+      write(fx, source, sameSize);
+      expect(git(fx.install, "status", "--porcelain")).toBe("");
+      return {};
+    },
+  ],
+  [
+    "an index Git cannot read",
+    "flags",
+    (fx) => {
+      write(fx, ".git/index", "not an index\n");
+      return {};
+    },
+  ],
+  [
+    "a skip-worktree file",
+    "flags",
+    (fx) => {
+      git(fx.install, "update-index", "--skip-worktree", source);
+      return {};
+    },
+  ],
+  [
+    "a submodule",
+    "submodules",
+    (fx) => {
+      const entry = `160000,${template.parent},vendor/sub`;
+      git(fx.install, "update-index", "--add", "--cacheinfo", entry);
+      mkdirSync(path.join(fx.install, "vendor/sub"), { recursive: true });
+      git(fx.install, "commit", "-q", "-m", "submodule");
+      return { commit: git(fx.install, "rev-parse", "HEAD") };
+    },
+  ],
+  // 6. The working tree.
   [
     "a modified tracked file",
     "tree",
@@ -515,24 +656,76 @@ const failingInstalls: [string, Failure, (fx: Fixture) => Overrides][] = [
     },
   ],
   [
-    "an assume-unchanged file whose bytes differ",
+    "a same-size edit a configured clean filter hides from Git's status",
+    "tree",
+    (fx) => hideEdit(fx, source),
+  ],
+  [
+    "the same hidden edit in an executable file",
+    "tree",
+    (fx) => hideEdit(fx, executable),
+  ],
+  [
+    "a configuration that makes Git's status fail",
     "tree",
     (fx) => {
-      git(fx.install, "update-index", "--assume-unchanged", source);
-      write(fx, source, sameSize);
+      git(fx.install, "config", "status.relativePaths", "maybe");
+      return {};
+    },
+  ],
+  [
+    "a directory named .git below the top level",
+    "tree",
+    (fx) => {
+      mkdirSync(path.join(fx.install, "src/.git"));
+      write(fx, "src/.git/payload.ts", "export {};\n");
       expect(git(fx.install, "status", "--porcelain")).toBe("");
       return {};
     },
   ],
   [
-    "a same-size edit a configured clean filter hides from Git's status",
+    "a file named .git below the top level",
     "tree",
     (fx) => {
-      const attributes = path.join(fx.install, ".git/info/attributes");
-      writeFileSync(attributes, `${source} filter=pinned\n`);
-      const clean = `cat >/dev/null; printf '${original.trim()}\\n'`;
-      git(fx.install, "config", "filter.pinned.clean", clean);
-      write(fx, source, sameSize);
+      write(fx, "src/.git", "gitdir: /nowhere\n");
+      expect(git(fx.install, "status", "--porcelain")).toBe("");
+      return {};
+    },
+  ],
+  [
+    "a repository created inside a tracked directory",
+    "tree",
+    (fx) => {
+      git(path.join(fx.install, "src"), "init", "-q");
+      expect(git(fx.install, "status", "--porcelain")).toBe("");
+      return {};
+    },
+  ],
+  [
+    "a directory named .GIT below the top level",
+    "tree",
+    (fx) => {
+      mkdirSync(path.join(fx.install, "src/.GIT"));
+      write(fx, "src/.GIT/payload.ts", "export {};\n");
+      return {};
+    },
+  ],
+  [
+    "an untracked FIFO",
+    "tree",
+    (fx) => {
+      mkfifo(path.join(fx.install, "src/pipe.ts"));
+      expect(git(fx.install, "status", "--porcelain")).toBe("");
+      return {};
+    },
+  ],
+  [
+    "a plain file holding a tracked symlink's text, with core.symlinks off",
+    "tree",
+    (fx) => {
+      git(fx.install, "config", "core.symlinks", "false");
+      rmSync(path.join(fx.install, "latest"));
+      write(fx, "latest", source);
       expect(git(fx.install, "status", "--porcelain")).toBe("");
       return {};
     },
@@ -579,34 +772,6 @@ const failingInstalls: [string, Failure, (fx: Fixture) => Overrides][] = [
       return { env };
     },
   ],
-  // 6. Index flags and submodules.
-  [
-    "an assume-unchanged file",
-    "flags",
-    (fx) => {
-      git(fx.install, "update-index", "--assume-unchanged", source);
-      return {};
-    },
-  ],
-  [
-    "a skip-worktree file",
-    "flags",
-    (fx) => {
-      git(fx.install, "update-index", "--skip-worktree", source);
-      return {};
-    },
-  ],
-  [
-    "a submodule",
-    "submodules",
-    (fx) => {
-      const entry = `160000,${template.parent},vendor/sub`;
-      git(fx.install, "update-index", "--add", "--cacheinfo", entry);
-      mkdirSync(path.join(fx.install, "vendor/sub"), { recursive: true });
-      git(fx.install, "commit", "-q", "-m", "submodule");
-      return { commit: git(fx.install, "rev-parse", "HEAD") };
-    },
-  ],
   // 7. The Bun pin.
   [
     "a missing .bun-version",
@@ -625,9 +790,40 @@ const failingInstalls: [string, Failure, (fx: Fixture) => Overrides][] = [
     },
   ],
   [
+    "a .bun-version with a leading v",
+    "pin",
+    (fx) => {
+      write(fx, ".bun-version", "v1.4.4\n");
+      return { commit: commitAll(fx) };
+    },
+  ],
+  [
+    "a .bun-version with a prerelease suffix",
+    "pin",
+    (fx) => {
+      write(fx, ".bun-version", "1.4.4-canary\n");
+      return { commit: commitAll(fx) };
+    },
+  ],
+  [
     "a different Bun version",
     "bunVersion",
     () => ({ env: { TEST_BUN_VERSION: "1.4.5" } }),
+  ],
+  [
+    "a Bun version the pin is only a prefix of",
+    "bunVersion",
+    () => ({ env: { TEST_BUN_VERSION: "1.4.40" } }),
+  ],
+  [
+    "a Bun version with a prerelease suffix",
+    "bunVersion",
+    () => ({ env: { TEST_BUN_VERSION: "1.4.4-canary" } }),
+  ],
+  [
+    "a Bun that prints a second line after the pin",
+    "bunVersion",
+    () => ({ env: { TEST_BUN_VERSION: "1.4.4\nextra" } }),
   ],
   [
     "a Bun that prints the pin and fails",
@@ -643,6 +839,77 @@ test.each(failingInstalls)("%s fails its check", (_title, failure, arrange) => {
   expect(result).toEqual(failed(failure));
   expect(result.stderr + result.stdout).not.toContain(secret);
 });
+
+test("a work tree configured as the install path plus a newline fails check 2", () => {
+  const fx = fixture();
+  const sibling = `${fx.install}\n`;
+  cpSync(fx.install, sibling, {
+    filter: (from) => path.basename(from) !== ".git",
+    recursive: true,
+    verbatimSymlinks: true,
+  });
+  git(fx.install, "config", "core.worktree", sibling);
+  write(fx, "notes.txt", "left behind\n");
+  expect(verify(fx)).toEqual(failed("workTree"));
+});
+
+test.skipIf(isRoot)(
+  "an install directory the user cannot enter fails check 2 without naming it (not as root)",
+  () => {
+    const fx = fixture();
+    lock(fx.install);
+    expect(verify(fx)).toEqual(failed("workTree"));
+  }
+);
+
+test.skipIf(isRoot)(
+  "an untracked directory the user cannot read fails check 6 (not as root)",
+  () => {
+    const fx = fixture();
+    mkdirSync(path.join(fx.install, "private"));
+    write(fx, "private/left.ts", "export {};\n");
+    lock(path.join(fx.install, "private"));
+    expect(git(fx.install, "status", "--porcelain")).toBe("");
+    expect(verify(fx)).toEqual(failed("tree"));
+  }
+);
+
+test("a tracked file replaced by a FIFO and flagged assume-unchanged fails check 5 unread", () => {
+  const fx = fixture();
+  const fifo = path.join(fx.install, source);
+  git(fx.install, "update-index", "--assume-unchanged", source);
+  rmSync(fifo);
+  mkfifo(fifo);
+  // If a broken script opens the FIFO, this writer lets its reader finish instead of blocking.
+  const writer = Bun.spawn(["/bin/sh", "-c", ': > "$1"', "sh", fifo]);
+  try {
+    expect(verify(fx)).toEqual(failed("flags"));
+  } finally {
+    writer.kill();
+  }
+});
+
+test.skipIf(!caseSensitive)(
+  "a case-variant untracked file that core.ignoreCase hides fails check 6 (case-sensitive file systems only)",
+  () => {
+    const fx = fixture();
+    git(fx.install, "config", "core.ignoreCase", "true");
+    write(fx, source.replace("forge", "Forge"), sameSize);
+    expect(git(fx.install, "status", "--porcelain")).toBe("");
+    expect(verify(fx)).toEqual(failed("tree"));
+  }
+);
+
+test.skipIf(caseSensitive)(
+  "a case-only rename of a tracked file fails check 6 (case-insensitive file systems only)",
+  () => {
+    const fx = fixture();
+    const renamed = path.join(fx.install, source.replace("forge", "Forge"));
+    renameSync(path.join(fx.install, source), renamed);
+    expect(git(fx.install, "status", "--porcelain")).toBe("");
+    expect(verify(fx)).toEqual(failed("tree"));
+  }
+);
 
 test("a configured fsmonitor program is not run", () => {
   const fx = fixture();

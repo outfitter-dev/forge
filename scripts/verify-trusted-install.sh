@@ -36,12 +36,13 @@ done
 if [[ -z "${INSTALL+given}" || -z "${REPOSITORY+given}" || -z "${COMMIT+given}" ]]; then
   usage "--install, --repository and --commit are all required."
 fi
-# A trailing slash or dot component would let the symlink test below look through a link.
-if [[ "$INSTALL" != /* || "$INSTALL" == */ || "$INSTALL/" == */./* || "$INSTALL/" == */../* ]]; then
-  usage "--install must be an absolute path with no trailing slash and no . or .. component."
+# A trailing slash or dot component would let the symlink test below look through a link, and bash
+# keeps two leading slashes in a physical path, which would never equal Git's top level.
+if [[ "$INSTALL" != /* || "$INSTALL" == //* || "$INSTALL" == */ || "$INSTALL/" == */./* || "$INSTALL/" == */../* ]]; then
+  usage "--install must be an absolute path with one leading slash, no trailing slash and no . or .. component."
 fi
-if [[ ! "$REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ || "/$REPOSITORY/" == */./* || "/$REPOSITORY/" == */../* ]]; then
-  usage "--repository must be owner/name in letters, digits, hyphens, underscores and dots."
+if [[ ! "$REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ || "/$REPOSITORY/" == */./* || "/$REPOSITORY/" == */../* || "$REPOSITORY" == *.git ]]; then
+  usage "--repository must be owner/name in letters, digits, hyphens, underscores and dots, with no .git suffix."
 fi
 if [[ ! "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
   usage "--commit must be 40 lowercase hexadecimal characters."
@@ -53,14 +54,16 @@ fi
 unset "${!GIT_@}"
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 
-# The install's own configuration is still read. These options override what could hide a
-# difference there: a replace ref swapping the commit's content, a file-system monitor (a program
-# Git would run and then believe), an ignored executable bit, and relaxed stat comparison.
-# Optional locks are off so the check leaves the index as it found it. Git's stderr is dropped
-# because it can quote the remote URL.
+# The install's own configuration is still read. These options override the settings known to hide
+# a difference there: a replace ref swapping the commit's content, a file-system monitor (a program
+# Git would run and then believe), an ignored executable bit, relaxed stat comparison, a plain
+# file accepted in place of a symlink, and file names compared without regard to case. Optional
+# locks are off so the check leaves the index as it found it. Git's stderr is dropped because it
+# can quote the remote URL.
 run_git() {
   git --no-replace-objects --no-optional-locks \
     -c core.fsmonitor=false -c core.fileMode=true -c core.trustctime=true -c core.checkStat=default \
+    -c core.symlinks=true -c core.ignoreCase=false \
     -C "$INSTALL" "$@" 2>/dev/null
 }
 
@@ -70,7 +73,10 @@ if [[ ! -d "$INSTALL" || -L "$INSTALL" ]]; then
 fi
 
 # 2. The top level of a work tree: not a subdirectory, a bare repository or a redirected work tree.
-if [[ "$(run_git rev-parse --show-toplevel)" != "$(cd "$INSTALL" && pwd -P)" ]]; then
+# The dot keeps a trailing newline in either path from being stripped before they are compared.
+TOP_LEVEL="$(run_git rev-parse --show-toplevel && echo .)" || TOP_LEVEL=""
+PHYSICAL="$(cd "$INSTALL" 2>/dev/null && pwd -P && echo .)" || PHYSICAL=""
+if [[ -z "$TOP_LEVEL" || "$TOP_LEVEL" != "$PHYSICAL" ]]; then
   fail "the install path is not the top level of a Git work tree owned by the user running this check."
 fi
 
@@ -85,25 +91,30 @@ if [[ "$ORIGIN" != "https://github.com/$REPOSITORY.git" && "$ORIGIN" != "https:/
   fail "the install's origin remote is not the expected GitHub repository over HTTPS."
 fi
 
-# 5. The working tree. Status reports modified, staged, untracked and ignored files, but it
-# trusts cached stat data and configured filters, so every tracked regular file is also hashed
-# unfiltered and compared with the commit's own blob.
-TREE_MESSAGE="the install's working tree is not exactly the expected commit."
-STATUS="$(run_git status --porcelain --untracked-files=all --ignored=matching --ignore-submodules=none)" || fail "$TREE_MESSAGE"
-[[ -z "$STATUS" ]] || fail "$TREE_MESSAGE"
-FILES="$(run_git ls-tree -r --full-tree "$COMMIT" | grep '^100')" || fail "$TREE_MESSAGE"
-EXPECTED="$(cut -f1 <<<"$FILES" | cut -d' ' -f3)"
-ACTUAL="$(cut -f2- <<<"$FILES" | run_git hash-object --no-filters --stdin-paths)" || fail "$TREE_MESSAGE"
-[[ "$ACTUAL" == "$EXPECTED" ]] || fail "$TREE_MESSAGE"
-
-# 6. Index flags that make status skip a file, and submodules, which status does not look inside.
+# 5. Index flags that make status skip a file, and submodules, which status does not look inside.
+# This runs before any file is read, because a flagged path can be a FIFO that would block the read.
 ENTRIES="$(run_git ls-files -v --stage)" || ENTRIES=""
 if grep -qv '^H ' <<<"$ENTRIES"; then
-  fail "the install's index has entries flagged assume-unchanged or skip-worktree."
+  fail "the install's index is unreadable or has entries flagged assume-unchanged or skip-worktree."
 fi
 if grep -q '^H 160000 ' <<<"$ENTRIES"; then
   fail "the install has submodules."
 fi
+
+# 6. The working tree. Status reports modified, staged, untracked and ignored files.
+TREE_MESSAGE="the install's working tree is not exactly the expected commit."
+STATUS="$(run_git status --porcelain --untracked-files=all --ignored=matching)" || fail "$TREE_MESSAGE"
+[[ -z "$STATUS" ]] || fail "$TREE_MESSAGE"
+# Status never lists an entry named .git below the top level or anything inside one, nor a FIFO,
+# socket or device file, and it skips a directory it cannot read. find reports each of those.
+UNLISTED="$(cd "$INSTALL" && find . -path ./.git -prune -o \( -name .git -o ! -type f ! -type d ! -type l \) -print 2>/dev/null)" || fail "$TREE_MESSAGE"
+[[ -z "$UNLISTED" ]] || fail "$TREE_MESSAGE"
+# Status also trusts cached stat data and configured filters, so every tracked regular file is
+# hashed unfiltered and compared with the commit's own blob.
+FILES="$(run_git ls-tree -r --full-tree "$COMMIT" | grep '^100')" || fail "$TREE_MESSAGE"
+EXPECTED="$(cut -f1 <<<"$FILES" | cut -d' ' -f3)"
+ACTUAL="$(cut -f2- <<<"$FILES" | run_git hash-object --no-filters --stdin-paths)" || fail "$TREE_MESSAGE"
+[[ "$ACTUAL" == "$EXPECTED" ]] || fail "$TREE_MESSAGE"
 
 # 7. The Bun pin. This compares the version Bun reports, not the binary.
 PIN_MESSAGE="the install has no .bun-version holding a three-part version."
