@@ -120,10 +120,13 @@ EXPECTED="$(cut -f1 <<<"$FILES" | cut -d' ' -f3)"
 ACTUAL="$(cut -f2- <<<"$FILES" | run_git hash-object --no-filters --stdin-paths)" || fail "$TREE_MESSAGE"
 [[ "$ACTUAL" == "$EXPECTED" ]] || fail "$TREE_MESSAGE"
 
-# 7. The Bun pin. This compares the version Bun reports, not the binary. stderr is redirected
-# before the pin is opened, so the shell's own complaint about a pin it cannot read is dropped too.
-# NUL bytes go with the white space: bash drops them anyway, and bash 5 warns when it does.
+# 7. The Bun pin. This compares the version Bun reports, not the binary. The pin must be a regular
+# file, or a link to one, before it is read: a FIFO or a device would block the read. stderr is
+# redirected before the pin is opened, so the shell's own complaint about a pin it cannot read is
+# dropped too. NUL bytes go with the white space: bash drops them anyway, and bash 5 warns when it
+# does.
 PIN_MESSAGE="the install has no .bun-version holding a three-part version."
+[[ -f "$INSTALL/.bun-version" ]] || fail "$PIN_MESSAGE"
 PINNED_VERSION="$(tr -d '[:space:]\000' 2>/dev/null <"$INSTALL/.bun-version")" || fail "$PIN_MESSAGE"
 [[ "$PINNED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "$PIN_MESSAGE"
 if ! command -v bun >/dev/null 2>&1; then

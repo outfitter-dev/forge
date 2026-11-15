@@ -1,6 +1,8 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
 import {
+  accessSync,
   chmodSync,
+  constants,
   cpSync,
   existsSync,
   lutimesSync,
@@ -240,6 +242,22 @@ const lock = (directory: string) => {
 };
 // Root reads and enters any directory, so those cases cannot be staged as root.
 const isRoot = process.getuid?.() === 0;
+// A unix socket's path is limited to about a hundred bytes, which the default temporary directory
+// can exceed, so the socket test builds its install under /tmp and needs to write there.
+const shortTemp = (() => {
+  try {
+    accessSync("/tmp", constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+/** Commits .bun-version as a symlink to the target and returns the commit. */
+const linkPin = (fx: Fixture, target: string) => {
+  rmSync(path.join(fx.install, ".bun-version"));
+  symlinkSync(target, path.join(fx.install, ".bun-version"));
+  return commitAll(fx);
+};
 const caseSensitive = (() => {
   writeFileSync(path.join(home, "case-probe"), "");
   return !existsSync(path.join(home, "CASE-PROBE"));
@@ -842,6 +860,16 @@ const failingInstalls: [string, Failure, (fx: Fixture) => Overrides][] = [
     },
   ],
   [
+    "a .bun-version linking to a directory",
+    "pin",
+    (fx) => ({ commit: linkPin(fx, fx.bin) }),
+  ],
+  [
+    "a .bun-version linking to nothing",
+    "pin",
+    (fx) => ({ commit: linkPin(fx, path.join(fx.root, "absent")) }),
+  ],
+  [
     "a .bun-version with a leading v",
     "pin",
     (fx) => {
@@ -938,25 +966,27 @@ test("an untracked file below a path too long for Git's status to open fails che
   }
 });
 
-test("an untracked unix socket fails check 6", () => {
-  // A socket's path is limited to about a hundred bytes, so this install sits under a short one.
-  const fx = fixture("/tmp");
-  const listener = Bun.listen({
-    // Nothing connects; Bun requires a handler.
-    socket: {
-      data: (connection) => {
-        connection.end();
+test.skipIf(!shortTemp)(
+  "an untracked unix socket fails check 6 (needs a writable /tmp)",
+  () => {
+    const fx = fixture("/tmp");
+    const listener = Bun.listen({
+      // Nothing connects; Bun requires a handler.
+      socket: {
+        data: (connection) => {
+          connection.end();
+        },
       },
-    },
-    unix: path.join(fx.install, "src/s"),
-  });
-  try {
-    expect(git(fx.install, "status", "--porcelain")).toBe("");
-    expect(verify(fx)).toEqual(failed("tree"));
-  } finally {
-    listener.stop(true);
+      unix: path.join(fx.install, "src/s"),
+    });
+    try {
+      expect(git(fx.install, "status", "--porcelain")).toBe("");
+      expect(verify(fx)).toEqual(failed("tree"));
+    } finally {
+      listener.stop(true);
+    }
   }
-});
+);
 
 test.skipIf(isRoot)(
   "a .bun-version linking to a file the user cannot read fails check 7 without naming it (not as root)",
@@ -965,11 +995,23 @@ test.skipIf(isRoot)(
     const pin = path.join(fx.root, "pin");
     writeFileSync(pin, "1.4.4\n");
     chmodSync(pin, 0);
-    rmSync(path.join(fx.install, ".bun-version"));
-    symlinkSync(pin, path.join(fx.install, ".bun-version"));
-    expect(verify(fx, { commit: commitAll(fx) })).toEqual(failed("pin"));
+    expect(verify(fx, { commit: linkPin(fx, pin) })).toEqual(failed("pin"));
   }
 );
+
+test("a .bun-version linking to a FIFO fails check 7 unread", () => {
+  const fx = fixture();
+  const fifo = path.join(fx.root, "pin");
+  mkfifo(fifo);
+  const commit = linkPin(fx, fifo);
+  // If a broken script reads the FIFO, this writer hands it the pin, so it verifies instead of blocking.
+  const writer = Bun.spawn(["/bin/sh", "-c", 'echo 1.4.4 > "$1"', "sh", fifo]);
+  try {
+    expect(verify(fx, { commit })).toEqual(failed("pin"));
+  } finally {
+    writer.kill();
+  }
+});
 
 test("a tracked file replaced by a FIFO and flagged assume-unchanged fails check 5 unread", () => {
   const fx = fixture();
