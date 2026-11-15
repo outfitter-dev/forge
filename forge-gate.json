@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "kind": "forge-gate-policy",
+  "evidence": {
+    "schemaVersion": 2,
+    "repository": "outfitter-dev/forge",
+    "collector": {
+      "producer": "forge-lane:collector",
+      "runtimeFingerprint": "669452db802c5f89282b529b887b1279b97dcefa56270ff55b01df3bf29a0317"
+    },
+    "verification": {
+      "producer": "forge-lane:verification",
+      "runtimeFingerprint": "032062081a4a7001d94465e3594c6276972660661399041e4e7bc94daf9abe90"
+    },
+    "agentReview": {
+      "reviewers": [
+        {
+          "reviewer": "codex-github",
+          "rung": "hosted",
+          "waitSeconds": 900,
+          "producer": "forge-lane:codex-github",
+          "runtimeFingerprint": "0da8c6452337b50894ea8921f36ae2fb6364cef647c927028ab9d3c6b6568e89"
+        }
+      ],
+      "instructions": [],
+      "ladder": {
+        "producer": "forge-lane:ladder",
+        "runtimeFingerprint": "301860e81617dd53bc227ced5a48ef8b1e7f931e4400aaa410e2471e976bdc0e"
+      }
+    }
+  },
+  "checks": { "lint": "check", "test": "check", "build": "check" },
+  "codexReview": {
+    "reviewer": "codex-github",
+    "botAccountId": 199175422,
+    "findingHistory": "supplied-global-ledger",
+    "independence": {
+      "id": "forge/codex-github/2026-11-13",
+      "policyRevision": "linear-comment:ab87b5a1-593e-44e8-bd41-c109eb96265a",
+      "statement": "separate-hosted-invocation-without-inherited-author-context"
+    }
+  },
+  "mergeAuthorization": {
+    "rule": "same-repository-unless-held",
+    "holdLabel": "forge:hold"
+  }
+}
