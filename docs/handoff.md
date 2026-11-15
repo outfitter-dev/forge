@@ -6,6 +6,10 @@ The seven original operational documents are verified in the [machine-local arch
 
 For the complete originating-session record, including worker recovery details and superseded decisions, read [session closeout](session-closeout.md) and [pilot qualification](pilot-qualification.md).
 
+## FOR-38 production policy file
+
+Forge's production gate policy is the root [`forge-gate.json`](../forge-gate.json), with four declared lane identities described under [Forge's own policy file](forge-gate.md#forges-own-policy-file). No lane reads it yet. FOR-38 still owes the trusted-install check, the lane tasks and command hook, the Buildkite account setup and the acceptance demonstrations. The source of the gate's finding list is an open owner decision recorded on [FOR-38](https://linear.app/outfitter/issue/FOR-38): under the adopted `supplied-global-ledger` setting the gate cannot answer yes, because nothing produces that list. The Forge lead owns the remaining slices.
+
 ## FOR-37 live guidance qualification
 
 FOR-37's selected entry and accepted basis landed in PR #50 as `a2546e51cf4813386421c7e8d1fd795f06803264`. The [normal-command qualification](codex-command-qualification.md) records exact-head hosted Codex acceptance, explicit actual local follow-up resolution of the retained Devin finding, complete source auditing and isolated controls. Independent coverage audit is clean. The full gate remained non-passing for missing verification receipts and draft state in its historical observation window. FOR-38 owns production lane/policy and authenticated input qualification, followed by FOR-39 enforcement and FOR-40 live consumer acceptance. The Forge lead owns delivery of this final qualification record and tracker closeout.
