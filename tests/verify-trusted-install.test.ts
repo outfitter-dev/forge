@@ -72,10 +72,14 @@ const git = (cwd: string, ...args: string[]) => {
 /** One two-commit repository, built once and copied for each test. */
 const template = (() => {
   const install = path.join(home, "template");
-  mkdirSync(path.join(install, "src"), { recursive: true });
+  mkdirSync(path.join(install, "src/deep"), { recursive: true });
   git(install, "init", "-q", "-b", "main");
   writeFileSync(path.join(install, ".bun-version"), "1.4.4\n");
   writeFileSync(path.join(install, ".gitignore"), "node_modules/\n");
+  // A file three levels down, and names that a line count or an option parser would misread.
+  writeFileSync(path.join(install, "src/deep/notes.txt"), "notes\n");
+  writeFileSync(path.join(install, "-dash"), "dash\n");
+  writeFileSync(path.join(install, "new\nline"), "newline\n");
   writeFileSync(path.join(install, source), "export const answer = 0;\n");
   symlinkSync(source, path.join(install, "latest"));
   writeFileSync(path.join(install, executable), "#!/bin/sh\necho 1\n");
@@ -101,8 +105,8 @@ interface Overrides {
 }
 
 const roots: string[] = [];
-const fixture = (): Fixture => {
-  const root = mkdtempSync(path.join(tmpdir(), "forge trusted install "));
+const fixture = (parent = tmpdir()): Fixture => {
+  const root = mkdtempSync(path.join(parent, "forge trusted install "));
   roots.push(root);
   const install = path.join(root, "install");
   cpSync(template.install, install, {
@@ -156,6 +160,10 @@ const verified = {
   stderr: "",
   stdout: `trusted install verified: ${repository} ${template.commit} bun 1.4.4\n`,
 };
+const verifiedAt = (commit: string) => ({
+  ...verified,
+  stdout: verified.stdout.replace(template.commit, commit),
+});
 const failed = (failure: Failure) => ({
   exitCode: 1,
   stderr: `Error: ${failures[failure]}\n`,
@@ -202,6 +210,27 @@ const hideEdit = (fx: Fixture, file: string) => {
   write(fx, file, contents.replace("1", "2"));
   expect(git(fx.install, "status", "--porcelain")).toBe("");
   return {};
+};
+/**
+ * Builds or removes 240 nested directories with a file at the bottom: 5,040 bytes of path, past the
+ * longest either macOS or Linux accepts in one call. Building goes by relative steps of 40 levels.
+ * Removal falls back to single relative steps over whatever part of the chain exists, so that no
+ * test leaves behind a tree the ordinary cleanup cannot delete.
+ */
+const deepChain = (action: "build" | "remove", install: string) => {
+  const name = "a".repeat(20);
+  const chunk = Array.from({ length: 40 }, () => name).join("/");
+  const steps = {
+    build: `i=0; while [ "$i" -lt 6 ]; do mkdir -p ${chunk} && cd ${chunk} || exit 1; i=$((i + 1)); done; echo left > left.ts`,
+    remove: `rm -rf ${name} 2>/dev/null; [ -e ${name} ] || exit 0; i=0; while [ -d ${name} ]; do cd ${name} || exit 1; i=$((i + 1)); done; rm -f left.ts; while [ "$i" -gt 0 ]; do cd .. && rmdir ${name} || exit 1; i=$((i - 1)); done`,
+  };
+  const child = Bun.spawnSync(["/bin/bash", "-c", steps[action]], {
+    cwd: install,
+    env: { PATH: "/usr/bin:/bin" },
+  });
+  if (child.exitCode !== 0) {
+    throw new Error(`deep chain ${action}: ${child.stderr.toString()}`);
+  }
 };
 /** Directories a test made unreadable, restored so that they can be removed. */
 const locked: string[] = [];
@@ -282,10 +311,14 @@ test("a .bun-version with a carriage return is read as bootstrap reads it", () =
   const fx = fixture();
   write(fx, ".bun-version", "1.4.4\r\n");
   const commit = commitAll(fx);
-  expect(verify(fx, { commit })).toEqual({
-    ...verified,
-    stdout: verified.stdout.replace(template.commit, commit),
-  });
+  expect(verify(fx, { commit })).toEqual(verifiedAt(commit));
+});
+
+test("a NUL byte in .bun-version is dropped without a shell warning", () => {
+  const fx = fixture();
+  write(fx, ".bun-version", "1.4.4\0\n");
+  const commit = commitAll(fx);
+  expect(verify(fx, { commit })).toEqual(verifiedAt(commit));
 });
 
 const pinned = "0123456789abcdef0123456789abcdef01234567";
@@ -684,6 +717,25 @@ const failingInstalls: [string, Failure, (fx: Fixture) => Overrides][] = [
     },
   ],
   [
+    "an empty untracked directory",
+    "tree",
+    (fx) => {
+      mkdirSync(path.join(fx.install, "src/deep/empty"));
+      expect(git(fx.install, "status", "--porcelain")).toBe("");
+      return {};
+    },
+  ],
+  [
+    "a directory named .git three levels down",
+    "tree",
+    (fx) => {
+      mkdirSync(path.join(fx.install, "src/deep/.git"));
+      write(fx, "src/deep/.git/payload.ts", "export {};\n");
+      expect(git(fx.install, "status", "--porcelain")).toBe("");
+      return {};
+    },
+  ],
+  [
     "a file named .git below the top level",
     "tree",
     (fx) => {
@@ -871,6 +923,51 @@ test.skipIf(isRoot)(
     lock(path.join(fx.install, "private"));
     expect(git(fx.install, "status", "--porcelain")).toBe("");
     expect(verify(fx)).toEqual(failed("tree"));
+  }
+);
+
+test("an untracked file below a path too long for Git's status to open fails check 6", () => {
+  const fx = fixture();
+  deepChain("build", fx.install);
+  try {
+    const listed = git(fx.install, "status", "--porcelain", "-uall");
+    expect(listed).toBe("");
+    expect(verify(fx)).toEqual(failed("tree"));
+  } finally {
+    deepChain("remove", fx.install);
+  }
+});
+
+test("an untracked unix socket fails check 6", () => {
+  // A socket's path is limited to about a hundred bytes, so this install sits under a short one.
+  const fx = fixture("/tmp");
+  const listener = Bun.listen({
+    // Nothing connects; Bun requires a handler.
+    socket: {
+      data: (connection) => {
+        connection.end();
+      },
+    },
+    unix: path.join(fx.install, "src/s"),
+  });
+  try {
+    expect(git(fx.install, "status", "--porcelain")).toBe("");
+    expect(verify(fx)).toEqual(failed("tree"));
+  } finally {
+    listener.stop(true);
+  }
+});
+
+test.skipIf(isRoot)(
+  "a .bun-version linking to a file the user cannot read fails check 7 without naming it (not as root)",
+  () => {
+    const fx = fixture();
+    const pin = path.join(fx.root, "pin");
+    writeFileSync(pin, "1.4.4\n");
+    chmodSync(pin, 0);
+    rmSync(path.join(fx.install, ".bun-version"));
+    symlinkSync(pin, path.join(fx.install, ".bun-version"));
+    expect(verify(fx, { commit: commitAll(fx) })).toEqual(failed("pin"));
   }
 );
 

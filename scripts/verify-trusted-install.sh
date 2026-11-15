@@ -105,21 +105,26 @@ fi
 TREE_MESSAGE="the install's working tree is not exactly the expected commit."
 STATUS="$(run_git status --porcelain --untracked-files=all --ignored=matching)" || fail "$TREE_MESSAGE"
 [[ -z "$STATUS" ]] || fail "$TREE_MESSAGE"
-# Status never lists an entry named .git below the top level or anything inside one, nor a FIFO,
-# socket or device file, and it skips a directory it cannot read. find reports each of those.
-UNLISTED="$(cd "$INSTALL" && find . -path ./.git -prune -o \( -name .git -o ! -type f ! -type d ! -type l \) -print 2>/dev/null)" || fail "$TREE_MESSAGE"
-[[ -z "$UNLISTED" ]] || fail "$TREE_MESSAGE"
+# Status never lists an entry named .git below the top level or anything inside one, a FIFO, socket
+# or device file, an empty directory, or anything below a path too long for it to open, and it
+# skips a directory it cannot read. It found no tracked path missing, and a checkout has no empty
+# directory, so an install that holds exactly as many files, links and empty directories as the
+# commit names entries holds none of those. find fails on a directory it cannot read.
+TREE="$(run_git ls-tree -r --full-tree "$COMMIT")" || fail "$TREE_MESSAGE"
+SEEN="$(cd "$INSTALL" && find . -path ./.git -prune -o \( ! -type d -o -empty \) -print0 2>/dev/null | tr -dc '\0' | wc -c)" || fail "$TREE_MESSAGE"
+[[ "$SEEN" -eq "$(wc -l <<<"$TREE")" ]] || fail "$TREE_MESSAGE"
 # Status also trusts cached stat data and configured filters, so every tracked regular file is
 # hashed unfiltered and compared with the commit's own blob.
-FILES="$(run_git ls-tree -r --full-tree "$COMMIT" | grep '^100')" || fail "$TREE_MESSAGE"
+FILES="$(grep '^100' <<<"$TREE")" || fail "$TREE_MESSAGE"
 EXPECTED="$(cut -f1 <<<"$FILES" | cut -d' ' -f3)"
 ACTUAL="$(cut -f2- <<<"$FILES" | run_git hash-object --no-filters --stdin-paths)" || fail "$TREE_MESSAGE"
 [[ "$ACTUAL" == "$EXPECTED" ]] || fail "$TREE_MESSAGE"
 
-# 7. The Bun pin. This compares the version Bun reports, not the binary.
+# 7. The Bun pin. This compares the version Bun reports, not the binary. stderr is redirected
+# before the pin is opened, so the shell's own complaint about a pin it cannot read is dropped too.
+# NUL bytes go with the white space: bash drops them anyway, and bash 5 warns when it does.
 PIN_MESSAGE="the install has no .bun-version holding a three-part version."
-[[ -f "$INSTALL/.bun-version" ]] || fail "$PIN_MESSAGE"
-PINNED_VERSION="$(tr -d '[:space:]' <"$INSTALL/.bun-version")"
+PINNED_VERSION="$(tr -d '[:space:]\000' 2>/dev/null <"$INSTALL/.bun-version")" || fail "$PIN_MESSAGE"
 [[ "$PINNED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "$PIN_MESSAGE"
 if ! command -v bun >/dev/null 2>&1; then
   fail "bun is not on PATH."
