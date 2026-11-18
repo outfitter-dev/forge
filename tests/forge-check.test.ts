@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -240,3 +241,62 @@ test("unsupported source coverage fails before executing", () => {
     diagnostic: "source-unavailable",
   });
 });
+
+test.each(["--assume-unchanged", "--skip-worktree"])(
+  "index flag %s refuses command admission even with unchanged bytes",
+  (flag) => {
+    const root = project('require("fs").writeFileSync("ran", "yes")');
+    gitFixture(root, "update-index", flag, "input.txt");
+    const result = run(root);
+    expect(result.code).toBe(2);
+    expect(result.receipt).toMatchObject({
+      admission: "not-started",
+      diagnostic: "source-unavailable",
+      evidence: "unknown",
+      outcome: "not-run",
+      sourceBefore: null,
+    });
+    expect(existsSync(path.join(root, "ran"))).toBe(false);
+  }
+);
+
+test("sparse checkout refuses command admission", () => {
+  const root = project('require("fs").writeFileSync("ran", "yes")');
+  gitFixture(
+    root,
+    "sparse-checkout",
+    "set",
+    "--no-cone",
+    "/forge.json",
+    "/.gitignore"
+  );
+  expect(existsSync(path.join(root, "input.txt"))).toBe(false);
+  const result = run(root);
+  expect(result.code).toBe(2);
+  expect(result.receipt).toMatchObject({
+    admission: "not-started",
+    diagnostic: "source-unavailable",
+    evidence: "unknown",
+    outcome: "not-run",
+    sourceBefore: null,
+  });
+  expect(existsSync(path.join(root, "ran"))).toBe(false);
+});
+
+test.each(["--assume-unchanged", "--skip-worktree"])(
+  "index flag %s appearing during execution makes evidence unknown",
+  (flag) => {
+    const root = project(
+      `require("child_process").execFileSync("git", ["update-index", ${JSON.stringify(flag)}, "input.txt"])`
+    );
+    const result = run(root);
+    expect(result.code).toBe(1);
+    expect(result.receipt).toMatchObject({
+      admission: "started",
+      evidence: "unknown",
+      exitCode: 0,
+      outcome: "passed",
+      sourceAfter: null,
+    });
+  }
+);
