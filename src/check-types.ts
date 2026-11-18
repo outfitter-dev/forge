@@ -5,6 +5,7 @@ export interface ProjectConfig {
   check: { id: string; command: string[] };
 }
 
+/** Current observations refuse submodules and assume-unchanged/skip-worktree entries. */
 export interface CheckSource {
   head: string;
   tree: string;

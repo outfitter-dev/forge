@@ -29,6 +29,11 @@ export const observeSource = (
   if (index.split("\0").some((entry) => entry.startsWith("160000 "))) {
     throw new Error("Submodule coverage unavailable");
   }
+  // Git status can hide working-tree changes for these index flags.
+  const taggedFiles = git(root, ["ls-files", "-v", "-z"]);
+  if (taggedFiles.split("\0").some((entry) => /^[a-zS] /u.test(entry))) {
+    throw new Error("Flagged index coverage unavailable");
+  }
   const tracked = git(root, ["ls-files", "-z"]).split("\0").filter(Boolean);
   const untracked = git(root, [
     "ls-files",
