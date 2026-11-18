@@ -1,6 +1,6 @@
 # Worker lifecycle and capacity plan
 
-FOR-8 delivered a lifecycle plan and is reopened for configurable hosts and trusted/project execution lanes. The complete original machine-specific plan is preserved in the [local operational archive](public-readiness.md#operational-record-preservation); Matt accepted machine-local, non-durable storage. Routine scoped delivery follows [standing authority](../AGENTS.md#standing-delivery-authority), with non-passes routed through [owned recovery](../AGENTS.md#owned-failure-recovery). No worker, service, state, credential or capacity change is performed by this documentation move.
+FOR-8's lifecycle plan and [configurable host/lane plan](buildkite-lanes-plan.md) cover preservation, execution boundaries, operator configuration and qualification sequencing. The complete original machine-specific plan is preserved in the [local operational archive](public-readiness.md#operational-record-preservation); Matt accepted machine-local, non-durable storage. Routine scoped delivery follows [standing authority](../AGENTS.md#standing-delivery-authority), with non-passes routed through [owned recovery](../AGENTS.md#owned-failure-recovery).
 
 Execution host is explicit configuration. Studio was one historical pilot host, not a permanent or sole Buildkite host. An operator must identify the actual host/account, queues, trusted runtime, isolated project-code lane and allowed inputs for an agreed operation. Prior setup observations are not current health or access evidence.
 
