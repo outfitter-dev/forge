@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { buildkiteBootstrap } from "./buildkite-bootstrap.ts";
 import {
   BUILDKITE_PIPELINE_USAGE,
   buildkitePipeline,
@@ -52,13 +53,27 @@ const check = async (args: string[]): Promise<void> => {
 const [command, ...args] = Bun.argv.slice(2);
 if (command === "buildkite") {
   const [operation, ...pipelineArgs] = args;
-  const pipeline =
-    operation === "pipeline" ? buildkitePipeline(pipelineArgs) : null;
-  if (pipeline === null) {
-    console.error(BUILDKITE_PIPELINE_USAGE);
-    process.exitCode = 2;
+  if (operation === "bootstrap") {
+    const result = await buildkiteBootstrap({
+      args: pipelineArgs,
+      env: process.env,
+      fetch,
+    });
+    process.exitCode = result.exitCode;
+    if (result.exitCode === 0) {
+      console.log(JSON.stringify(result.pipeline));
+    } else {
+      console.error(result.diagnostic);
+    }
   } else {
-    console.log(JSON.stringify(pipeline));
+    const pipeline =
+      operation === "pipeline" ? buildkitePipeline(pipelineArgs) : null;
+    if (pipeline === null) {
+      console.error(BUILDKITE_PIPELINE_USAGE);
+      process.exitCode = 2;
+    } else {
+      console.log(JSON.stringify(pipeline));
+    }
   }
 } else if (command === "check") {
   await check(args);
