@@ -279,6 +279,23 @@ test("a clean install at the pinned commit with the pinned Bun verifies", () => 
   expect(verify(fixture())).toEqual(verified);
 });
 
+test("a dangling link preserves tabs and newlines in its name and target", () => {
+  const fx = fixture();
+  symlinkSync("absent\tname\n\n", path.join(fx.install, "link\tname\n"));
+  const commit = commitAll(fx);
+  expect(verify(fx, { commit })).toEqual(verifiedAt(commit));
+});
+
+test.each(["exit 1", "printf different"])(
+  "link reader %s stops verification",
+  (command) => {
+    const fx = fixture();
+    const reader = path.join(fx.bin, "readlink");
+    writeFileSync(reader, `#!/bin/sh\n${command}\n`, { mode: 0o755 });
+    expect(verify(fx)).toEqual(failed("tree"));
+  }
+);
+
 test("the origin URL may omit the .git suffix", () => {
   const fx = fixture();
   git(fx.install, "remote", "set-url", "origin", origin.slice(0, -4));
