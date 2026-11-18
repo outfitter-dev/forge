@@ -3,7 +3,7 @@ import path from "node:path";
 import type { ValidationIssue } from "./evidence-types.ts";
 
 export const GATE_SYNOPSIS =
-  "forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>]";
+  "forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>]";
 export const GATE_USAGE = `Usage: ${GATE_SYNOPSIS}`;
 
 export interface GateArguments {
@@ -18,6 +18,8 @@ export interface GateArguments {
   /** One file per `--receipt` flag, in the order given. */
   receipts: string[];
   reviewEvidence: string | null;
+  /** Trusted admission's exact subject, checked before storing collected state. */
+  expectedRevision: { headSha: string; baseSha: string } | null;
 }
 
 export type GateArgumentsResult =
@@ -31,7 +33,13 @@ const REQUIRED = [
   "--state",
   "--run-id",
 ] as const;
-const FLAGS = new Set<string>([...REQUIRED, "--receipt", "--review-evidence"]);
+const FLAGS = new Set<string>([
+  ...REQUIRED,
+  "--receipt",
+  "--review-evidence",
+  "--expected-head",
+  "--expected-base",
+]);
 
 /**
  * Every flag with the values it was given. An argument that is not a known
@@ -101,6 +109,18 @@ export const parseGateArguments = (args: string[]): GateArgumentsResult => {
   const pullRequest = pullRequestNumber(one("--pull-request"));
   const state = one("--state");
   const runId = one("--run-id");
+  const expectsRevision =
+    given.has("--expected-head") || given.has("--expected-base");
+  if (expectsRevision) {
+    for (const flag of ["--expected-head", "--expected-base"]) {
+      if (!/^[\da-f]{40}$/u.test(one(flag))) {
+        issues.push({
+          message: "expected a full lowercase commit ID",
+          path: flag,
+        });
+      }
+    }
+  }
   if (!isRepository(repository)) {
     issues.push({ message: "expected owner/name", path: "--repository" });
   }
@@ -124,6 +144,9 @@ export const parseGateArguments = (args: string[]): GateArgumentsResult => {
   }
   return {
     arguments: {
+      expectedRevision: expectsRevision
+        ? { baseSha: one("--expected-base"), headSha: one("--expected-head") }
+        : null,
       policy: one("--policy"),
       pullRequest,
       receipts: given.get("--receipt") ?? [],
