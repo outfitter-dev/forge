@@ -10,7 +10,7 @@ bun src/forge-cli.ts buildkite pipeline \
   --base "$ADMITTED_BASE"
 ```
 
-Queue names are explicit and contain ASCII letters, digits, underscores or hyphens, beginning with a letter or digit. Supply them from the trusted bootstrap configuration. They may name the same queue when agent roles distinguish the lanes. Each agent must have the corresponding `role=project` or `role=trusted` tag. Routing tags select workers; the host establishes their actual isolation and credentials.
+Queue names are explicit and contain ASCII letters, digits, underscores or hyphens. Supply distinct names from the trusted bootstrap configuration. Equal names, including names differing only in ASCII case, are refused. Each lane's registration token must be bounded to its own queue. Agents also carry the corresponding `role=project` or `role=trusted` tag. Routing tags select workers; queue-scoped registration and the host establish their actual isolation and credentials.
 
 Both full lowercase 40-character commit IDs are required from trusted admission. Each step carries the same `FORGE_HEAD_SHA` and `FORGE_BASE_SHA` pins. Missing, malformed or symbolic revisions fail before any graph is emitted. Workers must compare the actual checked revision, current head/base and received artifact/receipt bindings to these pins before status eligibility. The emitted environment alone establishes no authenticated subject or producer.
 
@@ -24,4 +24,4 @@ This graph is the offline dispatch slice. A trusted bootstrap must validate the 
 
 The project worker must invoke the declared check through Forge and bind its receipt to the admitted revision and producer. The trusted worker must authenticate and validate that receipt, then invoke the existing `forge gate` operation with trusted policy and state. Neither gate behavior nor receipt validation is implemented again in the emitter.
 
-Status publication awaits a qualified subject and producer boundary. No emitted notification grants a GitHub success status. Live worker deployment, webhook triggers for review/hold changes, GitHub App access, and the acceptance scenarios remain FOR-38 work. The emitter creates no pipeline, build, worker or credential.
+Status publication awaits a qualified subject and producer boundary. No emitted notification grants a GitHub success status. Live worker deployment, webhook triggers for review/hold changes, verification of the existing GitHub App access, and the acceptance scenarios remain FOR-38 work. The emitter creates no pipeline, build, worker or credential.

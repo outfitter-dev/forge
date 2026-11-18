@@ -67,6 +67,44 @@ test("each command fails when the worker has no command hook", () => {
   }
 });
 
+test.each(["--project-queue", "--trusted-queue"])(
+  "rejects invalid %s with all other arguments valid",
+  (flag) => {
+    for (const value of [
+      "",
+      "ci project",
+      "PRIVATE_MARKER;exit",
+      "ci.project",
+      "é",
+    ]) {
+      const args = [...queues];
+      args[args.indexOf(flag) + 1] = value;
+      const child = run(["pipeline", ...args]);
+      expect(child.exitCode).toBe(2);
+      expect(child.stdout.toString()).toBe("");
+      expect(child.stderr.toString()).not.toContain("PRIVATE_MARKER");
+    }
+  }
+);
+
+test.each(["ci-project", "CI-PROJECT"])(
+  "refuses a shared queue %s",
+  (trusted) => {
+    const args = [...queues];
+    args[args.indexOf("--trusted-queue") + 1] = trusted;
+    const child = run(["pipeline", ...args]);
+    expect(child.exitCode).toBe(2);
+    expect(child.stdout.toString()).toBe("");
+  }
+);
+
+test("queue slugs allow a leading hyphen or underscore", () => {
+  const args = [...queues];
+  args[args.indexOf("--project-queue") + 1] = "-project";
+  args[args.indexOf("--trusted-queue") + 1] = "_trusted";
+  expect(run(["pipeline", ...args]).exitCode).toBe(0);
+});
+
 test.each(["--head", "--base"])(
   "requires a full lowercase commit for %s",
   (flag) => {
@@ -100,22 +138,7 @@ test.each([
   ["pipeline", ...queues, "--trusted-queue", "duplicate"],
   ["pipeline", ...queues, "--unknown", "value"],
   ["pipeline", ...queues, "extra"],
-  ["pipeline", "--project-queue", "", "--trusted-queue", "ci-trusted"],
   ["pipeline", "--project-queue", "--trusted-queue", "ci-trusted"],
-  [
-    "pipeline",
-    "--project-queue",
-    "ci project",
-    "--trusted-queue",
-    "ci-trusted",
-  ],
-  [
-    "pipeline",
-    "--project-queue",
-    "PRIVATE_MARKER;exit",
-    "--trusted-queue",
-    "ci",
-  ],
 ])(
   "invalid invocation %p emits no uploadable document",
   (...args: string[]) => {

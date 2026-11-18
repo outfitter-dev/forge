@@ -27,7 +27,7 @@ export const buildkitePipeline = (args: string[]) => {
       !value ||
       !(flag === "--head" || flag === "--base"
         ? /^[\da-f]{40}$/u.test(value)
-        : /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/u.test(value))
+        : /^[a-zA-Z0-9_-]+$/u.test(value))
     ) {
       return null;
     }
@@ -37,7 +37,10 @@ export const buildkitePipeline = (args: string[]) => {
   const trustedQueue = values.get("--trusted-queue");
   const head = values.get("--head");
   const base = values.get("--base");
-  if (!(projectQueue && trustedQueue && head && base)) {
+  if (
+    !(projectQueue && trustedQueue && head && base) ||
+    projectQueue.toLowerCase() === trustedQueue.toLowerCase()
+  ) {
     return null;
   }
   return {
