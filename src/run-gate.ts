@@ -181,6 +181,26 @@ const gate = async ({
       status: "not-collected",
     };
   }
+  const { expectedRevision } = parsed.arguments;
+  if (expectedRevision !== null) {
+    const { subject } = collection.evidence;
+    if (subject.headSha !== expectedRevision.headSha) {
+      return {
+        ...FRAME,
+        code: "head-mismatch",
+        stage: "subject",
+        status: "not-collected",
+      };
+    }
+    if (subject.baseSha !== expectedRevision.baseSha) {
+      return {
+        ...FRAME,
+        code: "base-mismatch",
+        stage: "subject",
+        status: "not-collected",
+      };
+    }
+  }
   collection.ledger.reviewFindings = ingestFindingHistory(
     collection.ledger.reviewFindings,
     suppliedFindings

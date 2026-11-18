@@ -45,6 +45,10 @@ export interface GateLedgerStop {
 export type GateNotCollected = { status: "not-collected" } & (
   | GateLedgerStop
   | {
+      stage: "subject";
+      code: "head-mismatch" | "base-mismatch";
+    }
+  | {
       stage: "collection";
       /** The collector's own status and reason. `path` names a response field, never its value. */
       collection: {

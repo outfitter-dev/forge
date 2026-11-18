@@ -120,6 +120,16 @@ EXPECTED="$(cut -f1 <<<"$FILES" | cut -d' ' -f3)"
 ACTUAL="$(cut -f2- <<<"$FILES" | run_git hash-object --no-filters --stdin-paths)" || fail "$TREE_MESSAGE"
 [[ "$ACTUAL" == "$EXPECTED" ]] || fail "$TREE_MESSAGE"
 
+# Git stores the link target itself as the blob. Stream its bytes (including trailing newlines)
+# directly to Git. NUL-delimited tree records preserve arbitrary names without shell unquoting.
+run_git ls-tree -rz --full-tree "$COMMIT" | while IFS= read -r -d '' entry; do
+  [[ "$entry" == '120000 blob '* ]] || continue
+  metadata=${entry%%$'\t'*}
+  link_path=${entry#*$'\t'}
+  actual_link=$(readlink -n "$INSTALL/$link_path" 2>/dev/null | run_git hash-object --stdin) || exit 1
+  [[ "$actual_link" == "${metadata##* }" ]] || exit 1
+done || fail "$TREE_MESSAGE"
+
 # 7. The Bun pin. This compares the version Bun reports, not the binary. The pin must be a regular
 # file, or a link to one, before it is read: a FIFO or a device would block the read. stderr is
 # redirected before the pin is opened, so the shell's own complaint about a pin it cannot read is
