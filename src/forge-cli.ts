@@ -1,5 +1,9 @@
 import path from "node:path";
 
+import {
+  BUILDKITE_PIPELINE_USAGE,
+  buildkitePipeline,
+} from "./buildkite-pipeline.ts";
 import { GATE_SYNOPSIS } from "./gate-arguments.ts";
 import { gateExitCode } from "./gate-document.ts";
 import { receiptExitCode, runCheck } from "./run-check.ts";
@@ -46,7 +50,17 @@ const check = async (args: string[]): Promise<void> => {
 };
 
 const [command, ...args] = Bun.argv.slice(2);
-if (command === "check") {
+if (command === "buildkite") {
+  const [operation, ...pipelineArgs] = args;
+  const pipeline =
+    operation === "pipeline" ? buildkitePipeline(pipelineArgs) : null;
+  if (pipeline === null) {
+    console.error(BUILDKITE_PIPELINE_USAGE);
+    process.exitCode = 2;
+  } else {
+    console.log(JSON.stringify(pipeline));
+  }
+} else if (command === "check") {
   await check(args);
 } else if (command === "gate") {
   const document = await runGate({
