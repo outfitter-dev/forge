@@ -41,6 +41,9 @@ Every flag takes one value. A missing required flag, an unknown flag, a repeated
 | `--run-id` | The invoker's identifier for this run: a CI build ID, or anything for a local run. It becomes `provenance.runId` of the collected evidence. Nonempty, with no space at either end. |
 | `--receipt` | A file holding one [`forge check` receipt](forge-check.md) as JSON. Give it once per receipt, or not at all. |
 | `--review-evidence` | A file holding `{ "agentReviews": [...], "reviewFindings": {...}, "reviewLadder": ... }`: exactly the three [agent-review fields](evidence-evaluator.md#agent-review-under-schema-version-2) of a version 2 pull request, and no other key. The evaluator validates the content. |
+| `--expected-head`, `--expected-base` | Optional admission pins, supplied together as full lowercase 40-character commit IDs. After collection, both must equal the subject collected from GitHub before any ledger replacement or evaluation. |
+
+A CI lane supplies both expected revisions from trusted admission. In Buildkite, it must bind `--expected-head` to the exact commit on which Buildkite will post the status and obtain `--expected-base` from trusted pull request admission. Build input alone cannot authenticate these values. A different collected head or base stops with `not-collected` at stage `subject`, preserves any existing ledger, and exits 3. An invocation that omits both pins retains its existing collection behavior.
 
 With Codex collection disabled, an absent `--review-evidence` supplies no agent attempts or ladder and leaves finding evidence unknown, so `agent-review` fails. With Codex collection enabled and `findingHistory: "codex-only"`, complete accepted collector history can satisfy the gate without that flag. `findingHistory: "supplied-global-ledger"` requires current complete trusted supplied history. An explicitly supplied unknown history remains unknown during composition and blocks. Without any `--receipt` the three verification gates fail the same way.
 
@@ -184,7 +187,7 @@ Only a stored accepted collection can reach evaluation. Comment read failures re
 2. Read the machine's clock once, as a whole-second UTC time.
 3. Read the stored ledger entry for this pull request from `<state>/review-ledger`, giving the store that time. A pull request with no entry has the empty one.
 4. Collect the pull request from GitHub, giving the collector the stored entry, the policy’s hold label and collector provenance with the `--run-id`. When `codexReview` is configured, also supply its resolved hosted reviewer configuration and retain the comment-read capability. The [optional collection flow](pull-request-collection.md#optional-codex-collection) establishes complete comments, source stability, the effective snapshot and updated findings.
-5. If the collection did not end as `collected`, stop: not collected. Nothing is stored.
+5. If the collection did not end as `collected`, stop: not collected. When expected revisions were supplied, compare them with the collected head and base and stop on a mismatch. Nothing is stored in either case.
 6. Ingest accepted trusted supplied findings into the returned ledger under the conflict rules above, then store that entry, in place of the one read in step 3. If another run stored an entry in between (`conflict`), the lock file exists (`ledger-busy`) or the store refuses for any other reason, stop: not collected. Evidence from a collection whose ledger was not stored is never evaluated, because the bindings and snapshot it relies on would be recorded nowhere.
 7. Normalize the receipts under the policy's `checks` mapping and `evidence.verification` identity.
 8. Assemble version 2 pull request facts from collected evidence, normalized checks, optional collected Codex attempts and supplied review evidence. Preserve duplicate attempts and malformed supplied content for the evaluator. Compose findings from the stored combined ledger and preserve invalid or conflicting supplied evidence under the [finding-history rules](review-ledger-store.md#finding-history-and-compatibility), then evaluate under `policy.evidence`.
@@ -274,6 +277,7 @@ The pull request was not judged. Exit 3, always: never 0 and never 1. `stage` sa
 | --- | --- |
 | `ledger-read` | `code`: the store's [error code](review-ledger-store.md#errors), such as `entry-invalid` or `entry-ahead-of-clock`. GitHub was not read. |
 | `collection` | `collection`: the collector's own `status` and `reason`, and `path` when the reason is about a response field, from [its results](pull-request-collection.md#results). `read`: the `code` and HTTP `status` of the first [read failure](pull-request-collection.md#failures) the transport threw, or `null` when no read threw. |
+| `subject` | `code`: `head-mismatch` or `base-mismatch`. The collected subject differs from the expected admission pins. Nothing was stored. Head is compared first. |
 | `ledger-store` | `code`: `conflict`, or the store's error code, such as `ledger-busy`. GitHub was read and the result was discarded. |
 | `internal` | Nothing. An unexpected failure anywhere in the operation ends here, with nothing from the failure in the output. |
 
@@ -315,7 +319,7 @@ What the command was given could not be used. Exit 2.
   "schemaVersion": 1,
   "status": "invalid-input",
   "issues": [{ "path": "--state", "message": "required" }],
-  "usage": "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>]"
+  "usage": "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>]"
 }
 ```
 
