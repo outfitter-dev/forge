@@ -18,6 +18,8 @@ No single review provider is required. Agent review needs one acceptable, comple
 
 Missing, stale, canceled, failed, ambiguous, or incomplete required evidence cannot authorize progression. An evaluation that could not complete cannot authorize progression either. Report what is known and what remains unsatisfied. Model judgment can contribute an assessment under explicit policy; it cannot override a deterministic blocker.
 
+The [configured-bot finding proposal](configured-bot-findings-proposal.md) is pending Matt’s confirmation. It defines proposed source coverage and handling of adverse reports outside review threads for FOR-38.
+
 ## Evidence belongs to an exact subject
 
 Evidence identifies the repository, source revisions, producer, and execution context needed to establish what it proves. Bind review and verification receipts to the relevant head and base. Merge-candidate checks prove integration behavior; they do not replace each member's required admission evidence.
