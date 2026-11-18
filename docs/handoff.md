@@ -8,7 +8,7 @@ For the complete originating-session record, including worker recovery details a
 
 ## FOR-38 production policy file
 
-Forge's production gate policy is the root [`forge-gate.json`](../forge-gate.json), with four declared lane identities described under [Forge's own policy file](forge-gate.md#forges-own-policy-file). No lane reads it yet. FOR-38 still owes the trusted-install check, the lane tasks and command hook, the durable state location, the Buildkite account setup and the acceptance demonstrations. The source of the gate's finding list is an open owner decision recorded on [FOR-38](https://linear.app/outfitter/issue/FOR-38): under the adopted `supplied-global-ledger` setting no lane run can answer yes until something produces that list. The Forge lead owns the remaining slices.
+Forge's production gate policy is the root [`forge-gate.json`](../forge-gate.json), with four declared lane identities described under [Forge's own policy file](forge-gate.md#forges-own-policy-file). No lane reads it yet. The [trusted-install check](trusted-install-check.md) verifies an install's repository, commit, working tree and Bun pin, and nothing calls it yet. FOR-38 still owes the lane tasks and command hook, the durable state location, the Buildkite account setup and the acceptance demonstrations. The source of the gate's finding list is an open owner decision recorded on [FOR-38](https://linear.app/outfitter/issue/FOR-38): under the adopted `supplied-global-ledger` setting no lane run can answer yes until something produces that list. The Forge lead owns the remaining slices.
 
 ## FOR-37 live guidance qualification
 
