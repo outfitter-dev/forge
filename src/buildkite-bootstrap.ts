@@ -12,7 +12,7 @@ export const BUILDKITE_BOOTSTRAP_USAGE =
 /** Trusted host inputs. Build identity and the install must be authenticated before invocation. */
 export interface BuildkiteBootstrapOptions {
   args: string[];
-  token: string | undefined;
+  env: Record<string, string | undefined>;
   fetch: GitHubPullRequestReadsOptions["fetch"];
 }
 
@@ -62,7 +62,14 @@ export const buildkiteBootstrap = async (
     return parsed;
   }
   const { commit, number, queueArgs, repository } = parsed;
-  if (!options.token) {
+  if (Object.keys(options.env).includes("BUN_CONFIG_VERBOSE_FETCH")) {
+    return {
+      diagnostic: "BUN_CONFIG_VERBOSE_FETCH must be unset.",
+      exitCode: 2,
+    } as const;
+  }
+  const token = options.env.FORGE_GITHUB_TOKEN;
+  if (!token) {
     return {
       diagnostic: "GitHub read credential is required.",
       exitCode: 2,
@@ -75,7 +82,7 @@ export const buildkiteBootstrap = async (
       pullRequest: number,
       repository,
       timeoutMs: 30_000,
-      token: options.token,
+      token,
     });
     const response = await reads.pullRequest();
     const pull = parsePullRequest(response.body);

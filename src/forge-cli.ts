@@ -56,8 +56,8 @@ if (command === "buildkite") {
   if (operation === "bootstrap") {
     const result = await buildkiteBootstrap({
       args: pipelineArgs,
+      env: process.env,
       fetch,
-      token: process.env.FORGE_GITHUB_TOKEN,
     });
     process.exitCode = result.exitCode;
     if (result.exitCode === 0) {

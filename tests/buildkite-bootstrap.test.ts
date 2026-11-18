@@ -21,6 +21,7 @@ const args = [
 const run = (body: unknown, givenArgs = args) =>
   buildkiteBootstrap({
     args: givenArgs,
+    env: { FORGE_GITHUB_TOKEN: "offline-token" },
     fetch: (url, init) => {
       expect(url).toBe("https://api.github.com/repos/example/project/pulls/12");
       expect(init.method).toBe("GET");
@@ -31,7 +32,6 @@ const run = (body: unknown, givenArgs = args) =>
         })
       );
     },
-    token: "offline-token",
   });
 
 test("admits same-repository open PRs and uses GitHub's revision pair for both lanes", async () => {
@@ -95,11 +95,11 @@ test.each(
     let calls = 0;
     const result = await buildkiteBootstrap({
       args: givenArgs,
+      env: { FORGE_GITHUB_TOKEN: "offline-token" },
       fetch: () => {
         calls += 1;
         throw new Error("PRIVATE_MARKER");
       },
-      token: "offline-token",
     });
     expect(result.exitCode).toBe(2);
     expect(calls).toBe(0);
@@ -109,10 +109,10 @@ test.each(
 test("unavailable GitHub does not emit a graph or leak the underlying error", async () => {
   const result = await buildkiteBootstrap({
     args,
+    env: { FORGE_GITHUB_TOKEN: "offline-token" },
     fetch: () => {
       throw new Error("PRIVATE_MARKER");
     },
-    token: "offline-token",
   });
   expect(result.exitCode).toBe(3);
   expect(JSON.stringify(result)).not.toContain("PRIVATE_MARKER");
@@ -185,12 +185,38 @@ test.each(["", "example/../project", "https://github.com/example/project"])(
     given[given.indexOf("--repository") + 1] = repository;
     const result = await buildkiteBootstrap({
       args: given,
+      env: { FORGE_GITHUB_TOKEN: "offline-token" },
       fetch: () => {
         throw new Error("must not read");
       },
-      token: "offline-token",
     });
     expect(result.exitCode).toBe(2);
     expect(result).not.toHaveProperty("pipeline");
+  }
+);
+
+test.each(["", "0", "1", "curl"])(
+  "CLI refuses verbose fetch %p before reading or logging a token",
+  (value) => {
+    const child = Bun.spawnSync(
+      [
+        process.execPath,
+        path.resolve(import.meta.dir, "../src/forge-cli.ts"),
+        "buildkite",
+        "bootstrap",
+        ...args,
+      ],
+      {
+        env: {
+          BUN_CONFIG_VERBOSE_FETCH: value,
+          FORGE_GITHUB_TOKEN: "PRIVATE_TOKEN_MARKER",
+        },
+      }
+    );
+    expect(child.exitCode).toBe(2);
+    expect(child.stdout.toString()).toBe("");
+    expect(child.stderr.toString()).toBe(
+      "BUN_CONFIG_VERBOSE_FETCH must be unset.\n"
+    );
   }
 );

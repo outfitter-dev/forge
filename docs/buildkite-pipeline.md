@@ -20,7 +20,7 @@ Both steps disable automatic checkout using the native [command-step checkout at
 
 ## Bootstrap admission
 
-`forge buildkite bootstrap` reads the specified pull request through Forge's existing bounded GitHub REST transport and emits the same native graph only after admission. The host supplies the repository, pull request number, queues and the exact commit Buildkite will report on. `FORGE_GITHUB_TOKEN` supplies the read credential.
+`forge buildkite bootstrap` reads the specified pull request through Forge's existing bounded GitHub REST transport and emits the same native graph only after admission. The host supplies the repository, pull request number, queues and the exact commit Buildkite will report on. `FORGE_GITHUB_TOKEN` supplies the read credential. `BUN_CONFIG_VERBOSE_FETCH` must be absent, including an empty value, before any authenticated request can run.
 
 ```sh
 bun src/forge-cli.ts buildkite bootstrap \
