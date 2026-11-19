@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { constants, open, readFile } from "node:fs/promises";
 
 import type { ProjectConfig } from "./check-types.ts";
 
@@ -14,10 +14,30 @@ const keys = (value: Record<string, unknown>, expected: string[]): boolean =>
 const identifier = (value: unknown): value is string =>
   typeof value === "string" && /^[\w./-]{1,200}$/u.test(value);
 
+export const readRegularConfig = async (file: string): Promise<Buffer> => {
+  const handle = await open(
+    file,
+    // oxlint-disable-next-line eslint/no-bitwise
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+  );
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) {
+      throw new Error("Expected a regular project configuration file");
+    }
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
+};
+
 export const readConfig = async (
-  file: string
+  file: string,
+  requireRegular = false
 ): Promise<{ config: ProjectConfig; identity: string }> => {
-  const bytes = await readFile(file);
+  const bytes = await (requireRegular
+    ? readRegularConfig(file)
+    : readFile(file));
   const value: unknown = JSON.parse(bytes.toString());
   if (
     !object(value) ||
