@@ -5,10 +5,7 @@ import path from "node:path";
 
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
-import {
-  buildkiteHostDispatch,
-  runCommand,
-} from "../src/buildkite-host-dispatch.ts";
+import { buildkiteHostDispatch } from "../src/buildkite-host-dispatch.ts";
 import { buildkitePipeline } from "../src/buildkite-pipeline.ts";
 
 const organizationId = "10000000-0000-4000-8000-000000000001";
@@ -539,16 +536,78 @@ cat "$HOME/fixture.json"
   expect(reads).toEqual([]);
 });
 
-test("bounds a verifier whose descendant holds stdout open after the shell exits", async () => {
-  // A background process inherits the shell's stdout even after Bash has exited.
-  await expect(
-    runCommand(
-      {
-        argv: ["/bin/bash", "-c", "/bin/sleep 10 &"],
-        cwd: host,
-        env: { PATH: "/usr/bin:/bin" },
-      },
-      100
-    )
-  ).rejects.toThrow("Host command timed out.");
-}, 2000);
+const waitFor = async (condition: () => Promise<boolean>): Promise<void> => {
+  const deadline = Date.now() + 2500;
+  // oxlint-disable-next-line eslint/no-await-in-loop
+  while (!(await condition())) {
+    if (Date.now() >= deadline) {
+      throw new Error("Fixture did not reach the expected process state.");
+    }
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    await Bun.sleep(10);
+  }
+};
+
+test.each(["deadline", "SIGTERM"] as const)(
+  "terminates a verifier's stdout-holding descendant on %s",
+  async (mode) => {
+    const marker = path.join(host, `${mode}.pid`);
+    const env = { PATH: "/usr/bin:/bin" };
+    const command: Command = {
+      argv: [
+        "/bin/bash",
+        "-c",
+        '/bin/sleep 10 & echo "$!" > "$1"',
+        "fixture",
+        marker,
+      ],
+      cwd: host,
+      env,
+    };
+    const moduleUrl = new URL(
+      "../src/buildkite-host-dispatch.ts",
+      import.meta.url
+    );
+    const code = `import { runCommand } from ${JSON.stringify(moduleUrl.href)};
+try { await runCommand(${JSON.stringify(command)}, ${mode === "deadline" ? 1000 : 7000}); }
+catch (error) { console.error(error.message); process.exitCode = 1; }`;
+    const runner = Bun.spawn([process.execPath, "-e", code], {
+      cwd: host,
+      env,
+      stderr: "pipe",
+    });
+    let pid = 0;
+    const running = (): boolean => {
+      const ps = Bun.spawnSync(["/bin/ps", "-o", "stat=", "-p", String(pid)], {
+        env,
+      });
+      return ps.exitCode === 0 && !ps.stdout.toString().trim().startsWith("Z");
+    };
+    try {
+      await waitFor(async () => {
+        pid = Number(
+          await Bun.file(marker)
+            .text()
+            .catch(() => "")
+        );
+        return Number.isSafeInteger(pid) && pid > 0;
+      });
+      if (mode === "SIGTERM") {
+        expect(running()).toBe(true);
+        runner.kill("SIGTERM");
+      }
+      expect(await runner.exited).toBe(1);
+      const diagnostic = await runner.stderr.text();
+      expect(diagnostic).toContain(
+        mode === "deadline" ? "Host command timed out." : "aborted"
+      );
+      await waitFor(() => Promise.resolve(!running()));
+    } finally {
+      runner.kill("SIGKILL");
+      if (pid > 0 && running()) {
+        process.kill(pid, "SIGKILL");
+      }
+    }
+  },
+  5000
+);

@@ -124,12 +124,19 @@ export const runCommand = async (
       throw new Error("Host command timed out.");
     }
   );
+  let canceled = false;
+  const cancel = () => {
+    canceled = true;
+    timer.abort();
+  };
+  process.on("SIGINT", cancel);
+  process.on("SIGTERM", cancel);
   try {
     const [status, stdout] = await Promise.race([
       Promise.all([child.exited, child.stdout.bytes()]),
       deadline,
     ]);
-    if (status !== 0 || stdout.byteLength > MAX_STDOUT) {
+    if (canceled || status !== 0 || stdout.byteLength > MAX_STDOUT) {
       throw new Error("Host command failed.");
     }
     return new TextDecoder().decode(stdout);
@@ -144,6 +151,8 @@ export const runCommand = async (
     }
     throw error;
   } finally {
+    process.off("SIGINT", cancel);
+    process.off("SIGTERM", cancel);
     timer.abort();
   }
 };
