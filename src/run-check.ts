@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { digest, readConfig } from "./check-config.ts";
+import { digest, readConfig, readRegularConfig } from "./check-config.ts";
 import { git, observeSource } from "./check-source.ts";
 import type { CheckReceipt } from "./check-types.ts";
 import { writePrivateFile } from "./write-private-file.ts";
@@ -133,13 +133,6 @@ const verifyProjectCheckout = (
   }
 };
 
-const readCheckConfig = async (file: string, project?: ProjectAdmission) => {
-  if (project && !(await lstat(file).then((stat) => stat.isFile()))) {
-    throw new Error("Expected a regular project configuration file");
-  }
-  return readConfig(file);
-};
-
 export const runCheck = async (
   root: string,
   configFile: string,
@@ -192,7 +185,10 @@ export const runCheck = async (
     return receipt;
   }
   try {
-    const { config, identity } = await readCheckConfig(configFile, project);
+    const { config, identity } = await readConfig(
+      configFile,
+      project !== undefined
+    );
     receipt.configBefore = identity;
     receipt.repository = config.repository;
     receipt.check = {
@@ -227,7 +223,10 @@ export const runCheck = async (
     }
     await execute(root, config.check.command, receipt, project?.toolPath);
     try {
-      receipt.configAfter = digest(await readFile(configFile));
+      const configBytes = await (project
+        ? readRegularConfig(configFile)
+        : readFile(configFile));
+      receipt.configAfter = digest(configBytes);
       receipt.sourceAfter = observeSource(root, base, project?.toolPath);
       receipt.evidence =
         receipt.configBefore === receipt.configAfter &&

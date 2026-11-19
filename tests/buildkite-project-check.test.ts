@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { readRegularConfig } from "../src/check-config.ts";
 import type { CheckReceipt } from "../src/check-types.ts";
 import { configure, fixture, gitFixture } from "./check-fixtures.ts";
 
@@ -138,6 +139,29 @@ test("does not pass a check whose command changes the admitted source", () => {
     outcome: "passed",
     sourceAfter: { dirty: true },
   });
+});
+
+test("records unavailable config evidence when the check leaves a directory in its place", () => {
+  const { args, root } = project("rm forge.json && mkdir forge.json");
+  const result = run(root, args);
+  expect(result.code).toBe(1);
+  expect(result.receipt).toMatchObject({
+    admission: "started",
+    configAfter: null,
+    evidence: "unknown",
+    outcome: "passed",
+  });
+});
+
+test("the regular config reader does not follow a local config link", async () => {
+  const root = directory();
+  const file = path.join(root, "config.json");
+  const link = path.join(root, "link.json");
+  writeFileSync(file, "{}");
+  symlinkSync("config.json", link);
+  const bytes = await readRegularConfig(file);
+  expect(bytes.toString()).toBe("{}");
+  await expect(readRegularConfig(link)).rejects.toThrow();
 });
 
 test.each([
