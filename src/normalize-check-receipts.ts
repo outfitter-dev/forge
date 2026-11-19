@@ -93,7 +93,7 @@ const isSource = (value: unknown): value is Source =>
   typeof value.dirty === "boolean" &&
   typeof value.untracked === "number";
 
-const isReceipt = (value: unknown): value is Receipt =>
+export const isCheckReceiptObservation = (value: unknown): value is Receipt =>
   isRecord(value) &&
   value.kind === "forge-check" &&
   value.schemaVersion === 1 &&
@@ -155,7 +155,7 @@ const normalize = (
   receipt: unknown,
   expectation: CheckReceiptExpectation
 ): CheckEvidence[] | CheckReceiptRejectionCode => {
-  if (!isReceipt(receipt)) {
+  if (!isCheckReceiptObservation(receipt)) {
     return "malformed-receipt";
   }
   const { check, receiptId, repository, sourceAfter, sourceBefore } = receipt;

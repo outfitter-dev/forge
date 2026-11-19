@@ -1,6 +1,7 @@
 /** Native Buildkite command steps for the two FOR-38 execution lanes. */
 export const BUILDKITE_PIPELINE_USAGE =
   "Usage: forge buildkite pipeline --project-queue <queue> --trusted-queue <queue> --head <commit-oid> --base <commit-oid>";
+export const BUILDKITE_PROJECT_STEP = "forge-check";
 
 const MISSING_HOOK =
   "echo 'Forge Buildkite command hook is required.' >&2; exit 1";
@@ -54,7 +55,7 @@ export const buildkitePipeline = (args: string[]) => {
           FORGE_BUILDKITE_TASK: "check",
           FORGE_HEAD_SHA: head,
         },
-        key: "forge-check",
+        key: BUILDKITE_PROJECT_STEP,
         label: "Forge check",
       },
       {
@@ -62,7 +63,7 @@ export const buildkitePipeline = (args: string[]) => {
         allow_dependency_failure: true,
         checkout: { skip: true },
         command: MISSING_HOOK,
-        depends_on: ["forge-check"],
+        depends_on: [BUILDKITE_PROJECT_STEP],
         env: {
           FORGE_BASE_SHA: base,
           FORGE_BUILDKITE_TASK: "gate",
