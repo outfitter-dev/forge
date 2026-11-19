@@ -83,7 +83,7 @@ const input = {
     configDigest: "b".repeat(64),
     provenance: {
       producer: "protected-project-runner",
-      runtimeFingerprint: "fixture-runtime",
+      runtimeFingerprint: "f".repeat(64),
     },
     runtime,
   },
@@ -246,6 +246,29 @@ test.each([
   "a bound receipt stays an observation without complete trusted pins",
   (expectation) => {
     expect(verify({ expectation })).toEqual({
+      checks: [],
+      reason: "expectation-unavailable",
+      verified: true,
+    });
+  }
+);
+
+test.each([
+  "fixture-runtime",
+  "F".repeat(64),
+  "g".repeat(64),
+  `${"f".repeat(63)}\n`,
+])(
+  "a malformed runtime fingerprint yields no passing evidence",
+  (runtimeFingerprint) => {
+    expect(
+      verify({
+        expectation: {
+          ...input.expectation,
+          provenance: { ...input.expectation.provenance, runtimeFingerprint },
+        },
+      })
+    ).toEqual({
       checks: [],
       reason: "expectation-unavailable",
       verified: true,

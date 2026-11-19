@@ -62,9 +62,18 @@ export const count = (value: unknown, path: string) => {
   }
 };
 
+export const isLowerHexDigest = (
+  value: unknown,
+  length: number
+): value is string =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  value.length === length &&
+  !/[^\da-f]/u.test(value);
+
 export const digest = (value: unknown, path: string, length: number) => {
   const result = text(value, path);
-  if (result.length !== length || !/^[\da-f]+$/u.test(result)) {
+  if (!isLowerHexDigest(result, length)) {
     invalid(path, `expected ${length} lowercase hexadecimal characters`);
   }
 };

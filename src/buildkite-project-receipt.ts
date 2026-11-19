@@ -4,6 +4,7 @@ import { digest } from "./check-config.ts";
 import type { CheckReceipt } from "./check-types.ts";
 import type { CheckEvidence } from "./evidence-types.ts";
 import { VERIFICATION_GATES } from "./evidence-types.ts";
+import { isLowerHexDigest } from "./evidence-validation-primitives.ts";
 import { isRecord } from "./github-response.ts";
 import {
   isCheckReceiptObservation,
@@ -91,8 +92,7 @@ const JOB_IDENTITY_FIELDS = [
 ] as const;
 const MAX_RECEIPT_BYTES = 64 * 1024;
 const RUNTIME_FIELDS = ["bun", "platform", "arch"] as const;
-const sha256 = (value: unknown): value is string =>
-  typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
+const sha256 = (value: unknown): value is string => isLowerHexDigest(value, 64);
 const identifier = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.trim() === value;
 
@@ -124,7 +124,7 @@ const validExpectation = (
   VERIFICATION_GATES.every((gate) => identifier(expectation.checks[gate])) &&
   isRecord(expectation.provenance) &&
   identifier(expectation.provenance.producer) &&
-  identifier(expectation.provenance.runtimeFingerprint);
+  sha256(expectation.provenance.runtimeFingerprint);
 
 const matchingExecution = (
   receipt: Record<string, unknown>,
