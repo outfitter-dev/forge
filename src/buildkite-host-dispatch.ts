@@ -171,7 +171,7 @@ const dispatch = async (
   const readToken = env.FORGE_BUILDKITE_READ_TOKEN;
   const gitHubToken = env.FORGE_GITHUB_TOKEN;
   if (
-    "BUN_CONFIG_VERBOSE_FETCH" in env ||
+    Object.keys(env).includes("BUN_CONFIG_VERBOSE_FETCH") ||
     !buildkiteUuid(jobId) ||
     !jobToken ||
     !readToken ||

@@ -41,27 +41,40 @@ The [host bootstrap dispatcher](#host-bootstrap-dispatch) verifies the installat
 
 The dispatcher handles only the self-hosted, webhook-triggered `forge-bootstrap` step. It runs a protected copy of the install verifier before starting Forge, requests a short-lived [Buildkite OIDC token](https://buildkite.com/docs/agent/cli/reference/oidc) from the current job, and checks the signature, issuer, audience, time window, job, pipeline, step and queue. It reads the [build record](https://buildkite.com/docs/apis/rest-api/builds#get-a-build) using the signed build number and checks the build UUID, running job, repository and commit before taking the PR number from Buildkite. The verified install reads that PR from GitHub and produces the graph. Only a successful, nonempty graph goes to native `pipeline upload`, over stdin, with interpolation disabled and parse warnings rejected.
 
-Build the dispatcher from reviewed source as a host-owned executable. Do not install dependencies into the Forge checkout that the verifier inspects.
+Stage the host files on Linux from a separate, reviewed source checkout with the pinned Bun, its build dependencies, and a C compiler with static libc. Build for the worker's architecture. Do not install dependencies into the release checkout that the verifier inspects.
 
 ```sh
-bun build --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
-  src/buildkite-host-dispatch.ts --outfile /path/outside/the/install/forge-buildkite-dispatch
+bash scripts/stage-buildkite-bootstrap.sh /path/to/empty-staging-directory
 ```
 
-The operator supplies one absolute path to protected JSON. It contains:
+For an approved deployment, install the staged files at the following fixed paths. Root must own these directories, their parent paths and the files, with no write access for either lane account. Use executable files with mode `0555` and config with mode `0640` and group `bk-trusted`. Keep the configuration directory free of default pipeline files.
+
+| Staged file | Trusted host path |
+| --- | --- |
+| `command` | `/etc/buildkite-agent/hooks/trusted/command` |
+| `forge-buildkite-dispatch` | `/opt/forge/bootstrap/forge-buildkite-dispatch` |
+| `verify-trusted-install.sh` | `/opt/forge/bootstrap/verify-trusted-install.sh` |
+
+The operator creates `/etc/forge/trusted-bootstrap/dispatch.json` separately. It contains no credentials and selects:
 
 | Fields | Host selection |
 | --- | --- |
-| `install`, `installCommit`, `repository` | Absolute verified Forge checkout, approved full commit, GitHub owner/name |
-| `verifier`, `bun`, `agent` | Absolute protected paths outside that checkout, including a copy of the verifier and the Bun executable named `bun` |
+| `install`, `installCommit`, `repository` | Read-only mount at `/opt/forge/releases/<commit>`, approved full commit, GitHub owner/name |
+| `verifier`, `bun`, `agent` | Staged verifier above, `/opt/forge/tools/bin/bun`, `/usr/local/bin/buildkite-agent` |
 | `organizationId`, `organizationSlug`, `pipelineId`, `pipelineSlug` | Configured Buildkite organization and pipeline UUIDs and slugs |
 | `queueId`, `trustedQueue`, `projectQueue` | Trusted cluster queue UUID and the two distinct queue names |
 
-The protected launcher must start the dispatcher from a host-controlled working directory and a cleared environment. It supplies `BUILDKITE_JOB_ID` and `BUILDKITE_AGENT_ACCESS_TOKEN` from the real agent job, `FORGE_BUILDKITE_READ_TOKEN` with Buildkite `read_builds` access, and `FORGE_GITHUB_TOKEN` with GitHub PR read access. It must prevent the job from replacing those inputs, the launcher, binary, configuration, verifier, tools, or approved installation. Do not apply environment cleanup only after starting a shell in a job-controlled environment. Configure the stored bootstrap step to skip checkout, disable local hooks and plugins, and protect the job credentials and the host execution boundary. The dispatcher does not accept job-provided commands or trust job-provided repository, ref, commit, PR or queue values; its subprocesses inherit only the environment they need. Captured token and graph data, subprocess stderr and service errors are not written to logs.
+The Buildkite agent must execute the statically linked command hook directly as a [binary hook](https://buildkite.com/docs/agent/hooks#polyglot-hooks), not source a wrapper or run an intermediate shell. The hook refuses every step key except `forge-bootstrap`; this is a prefilter, not authentication. It starts the fixed dispatcher and config from the protected config directory with closed inherited descriptors above stderr, no job stdin, and only fixed `PATH` and `HOME` plus these inputs:
 
-Use the [lane plan's agent controls](buildkite-lanes-plan.md#lane-responsibilities), including `no-command-eval`, so only the protected command hook can call the dispatcher with its fixed config path. The stored step should fail if the hook is absent. Keep the config directory free of default pipeline files; the dispatcher supplies its graph on stdin, not from a checkout. The launcher must deliver interruption or termination signals to the dispatcher and contain its subprocesses on a hard kill, which the dispatcher cannot handle itself.
+- The agent supplies the actual job's `BUILDKITE_JOB_ID` and `BUILDKITE_AGENT_ACCESS_TOKEN`, not the registration token.
+- The trusted caller supplies `FORGE_BUILDKITE_READ_TOKEN` with only Buildkite `read_builds` access.
+- The trusted caller supplies `FORGE_GITHUB_TOKEN`, a short-lived per-job GitHub App installation token scoped to the configured repository and PR read. There is no PAT, static file, or App private-key fallback. Credential delivery and the [scoped token service](https://linear.app/outfitter/issue/OUT-497) are separate.
 
-Offline tests cover the boundary with local signing keys and service/process fixtures. They do not qualify actual Buildkite claims and PR metadata, API privileges, agent configuration or host isolation. This slice supplies no worker installation or service settings, including pipeline signing configuration. Manual rebuilds, `forge-check` and `forge-gate` are not dispatched by this bootstrap entry point.
+Use the [lane plan's agent controls](buildkite-lanes-plan.md#lane-responsibilities), including strict checkout overrides, `no-command-eval`, no local hooks and no plugins. Set `skip-checkout=true` on the trusted agent itself; also set checkout skip on the stored bootstrap and make its placeholder command fail if the hook is absent. Protect the four inputs from job-supplied overrides using the agent's [protected environment variables](https://buildkite.com/docs/agent/self-hosted/configure#protected-environment-variables); also protect pre-hook execution inputs such as `PATH`, `HOME`, `BASH_ENV`, `ENV`, `LD_*`, `GLIBC_TUNABLES`, and dangerous Git variables. Do not allow proposed code to set protected variables through hooks or the Job API, access the job token, or modify the bootstrap files, tools, or approved release. None of the accepted input values authenticates a job on its own; the dispatcher still checks the signed claims and build record. Captured token and graph data, subprocess stderr and service errors are not written to logs.
+
+The hook uses Linux user and PID namespaces without changing the agent UID or GID. It forwards interruption and termination to the dispatcher, kills the job if it does not stop within two seconds, and relies on namespace teardown to remove detached children even if the hook is killed. The hook refuses to run if it cannot establish containment. This is process lifetime containment for trusted tasks, not an isolation boundary for proposed code. Qualify the worker's kernel support, actual agent configuration and job credentials separately.
+
+Offline tests cover staging, launch, refusal, signal forwarding, descendant cleanup, and the existing signed-job and service fixtures. No worker settings or pipeline signing settings are applied. Manual rebuilds, `forge-check` and `forge-gate` are not dispatched by this entry point. Before Google federation or any real trusted-lane workload, whichever comes first, complete and verify the [pilot credential restriction](https://linear.app/outfitter/issue/OUT-499); a secret-store change alone does not satisfy that gate.
 
 ## Project check runner
 
