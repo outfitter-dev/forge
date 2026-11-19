@@ -30,9 +30,11 @@ const positiveInteger = (value: unknown): value is number =>
 
 const repositoryMatches = (value: unknown, repository: string): boolean =>
   typeof value === "string" &&
-  [`https://github.com/${repository}`, `git@github.com:${repository}`].some(
-    (url) => value === url || value === `${url}.git`
-  );
+  [
+    `https://github.com/${repository}`,
+    `git@github.com:${repository}`,
+    `git://github.com/${repository}`,
+  ].some((url) => value === url || value === `${url}.git`);
 
 const bootstrapIdentity = (
   claims: JWTPayload,

@@ -299,6 +299,23 @@ test.each([
   }
 );
 
+test("matches a legacy GitHub repository URL as identity without using its transport", async () => {
+  const { calls, command, request, reads } = fixture(await signedJob(), () =>
+    Response.json({
+      ...build,
+      pull_request: {
+        ...build.pull_request,
+        repository: `git://github.com/${repository}.git`,
+      },
+    })
+  );
+  expect(
+    await buildkiteHostDispatch([config], jobEnvironment, command, request)
+  ).toBeNull();
+  expect(calls).toHaveLength(4);
+  expect(reads).toEqual([`${issuer}/.well-known/jwks`, buildUrl]);
+});
+
 test("does not trust a signed payload with the wrong key", async () => {
   const { calls, command, request, reads } = fixture(await signedJob({}, true));
   expect(
