@@ -44,6 +44,7 @@ const source: CheckSource = {
   untracked: 0,
   worktreeDigest: "9".repeat(64),
 };
+const runtime = { arch: "x64", bun: "1.4.4", platform: "linux" };
 const receipt = {
   admission: "started",
   cancellation: null,
@@ -59,6 +60,7 @@ const receipt = {
   receiptId: "receipt-1",
   recording: { state: "persisted" },
   repository: REPOSITORY,
+  runtime,
   schemaVersion: 1,
   sourceAfter: source,
   sourceBefore: source,
@@ -77,10 +79,13 @@ const input = {
   capture: captured(bytes),
   expectation: {
     checks: { build: "check", lint: "check", test: "check" },
+    commandDigest: "a".repeat(64),
+    configDigest: "b".repeat(64),
     provenance: {
       producer: "protected-project-runner",
       runtimeFingerprint: "fixture-runtime",
     },
+    runtime,
   },
   job,
 };
@@ -219,8 +224,6 @@ test.each([
 );
 
 test.each([
-  { configAfter: "c".repeat(64) },
-  { configBefore: null },
   { evidence: "unknown" },
   { outcome: "failed" },
   { recording: { state: "failed" } },
@@ -228,7 +231,45 @@ test.each([
 ])("does not promote incomplete or nonpassing receipts: %j", (override) => {
   const artifact = encoded({ ...receipt, ...override });
   expect(verify({ bytes: artifact, capture: captured(artifact) })).toEqual({
+    checks: [],
     reason: "receipt-nonpassing",
-    verified: false,
+    verified: true,
   });
 });
+
+test.each([
+  null,
+  { ...input.expectation, commandDigest: "" },
+  { ...input.expectation, configDigest: "" },
+  { ...input.expectation, runtime: { ...runtime, bun: "" } },
+])(
+  "a bound receipt stays an observation without complete trusted pins",
+  (expectation) => {
+    expect(verify({ expectation })).toEqual({
+      checks: [],
+      reason: "expectation-unavailable",
+      verified: true,
+    });
+  }
+);
+
+test.each([
+  { check: { ...receipt.check, commandDigest: "c".repeat(64) } },
+  { configAfter: "c".repeat(64) },
+  { configBefore: null },
+  { configAfter: "c".repeat(64), configBefore: "c".repeat(64) },
+  { runtime: null },
+  { runtime: { ...runtime, arch: "arm64" } },
+  { runtime: { ...runtime, bun: "1.4.5" } },
+  { runtime: { ...runtime, platform: "darwin" } },
+])(
+  "a bound receipt stays an observation when execution pins differ: %j",
+  (override) => {
+    const artifact = encoded({ ...receipt, ...override });
+    expect(verify({ bytes: artifact, capture: captured(artifact) })).toEqual({
+      checks: [],
+      reason: "receipt-execution-mismatch",
+      verified: true,
+    });
+  }
+);

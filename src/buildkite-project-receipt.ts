@@ -1,9 +1,14 @@
 import { buildkiteUuid, fullCommit } from "./buildkite-job.ts";
 import { BUILDKITE_PROJECT_STEP } from "./buildkite-pipeline.ts";
 import { digest } from "./check-config.ts";
+import type { CheckReceipt } from "./check-types.ts";
 import type { CheckEvidence } from "./evidence-types.ts";
+import { VERIFICATION_GATES } from "./evidence-types.ts";
 import { isRecord } from "./github-response.ts";
-import { normalizeCheckReceipts } from "./normalize-check-receipts.ts";
+import {
+  isCheckReceiptObservation,
+  normalizeCheckReceipts,
+} from "./normalize-check-receipts.ts";
 import type { CheckReceiptExpectation } from "./normalize-check-receipts.ts";
 
 interface ProjectJobIdentity {
@@ -38,8 +43,26 @@ export interface BuildkiteProjectCapture {
   runnerExitCode: number;
 }
 
+/** Selected independently of the proposed checkout and captured receipt. */
+export interface BuildkiteProjectExpectation extends Omit<
+  CheckReceiptExpectation,
+  "pullRequest"
+> {
+  commandDigest: string;
+  configDigest: string;
+  runtime: CheckReceipt["runtime"];
+}
+
 type ProjectReceiptResult =
   | { verified: true; checks: CheckEvidence[] }
+  | {
+      verified: true;
+      checks: [];
+      reason:
+        | "expectation-unavailable"
+        | "receipt-execution-mismatch"
+        | "receipt-nonpassing";
+    }
   | {
       verified: false;
       reason:
@@ -50,8 +73,7 @@ type ProjectReceiptResult =
         | "receipt-unavailable"
         | "receipt-digest-mismatch"
         | "receipt-invalid"
-        | "receipt-subject-mismatch"
-        | "receipt-nonpassing";
+        | "receipt-subject-mismatch";
     };
 
 const JOB_ID_FIELDS = [
@@ -68,8 +90,11 @@ const JOB_IDENTITY_FIELDS = [
   "head",
 ] as const;
 const MAX_RECEIPT_BYTES = 64 * 1024;
+const RUNTIME_FIELDS = ["bun", "platform", "arch"] as const;
 const sha256 = (value: unknown): value is string =>
   typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
+const identifier = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.trim() === value;
 
 const validAdmission = (admission: BuildkiteProjectAdmission) =>
   JOB_ID_FIELDS.every((field) => buildkiteUuid(admission[field])) &&
@@ -87,10 +112,39 @@ const matchingSource = (
   source.head === admission.head &&
   source.base === admission.base;
 
+const validExpectation = (
+  expectation: BuildkiteProjectExpectation | null
+): expectation is BuildkiteProjectExpectation =>
+  isRecord(expectation) &&
+  sha256(expectation.commandDigest) &&
+  sha256(expectation.configDigest) &&
+  isRecord(expectation.runtime) &&
+  RUNTIME_FIELDS.every((key) => identifier(expectation.runtime[key])) &&
+  isRecord(expectation.checks) &&
+  VERIFICATION_GATES.every((gate) => identifier(expectation.checks[gate])) &&
+  isRecord(expectation.provenance) &&
+  identifier(expectation.provenance.producer) &&
+  identifier(expectation.provenance.runtimeFingerprint);
+
+const matchingExecution = (
+  receipt: Record<string, unknown>,
+  expectation: BuildkiteProjectExpectation
+) => {
+  const { check, runtime } = receipt;
+  return (
+    isRecord(check) &&
+    check.commandDigest === expectation.commandDigest &&
+    receipt.configBefore === expectation.configDigest &&
+    receipt.configAfter === expectation.configDigest &&
+    isRecord(runtime) &&
+    RUNTIME_FIELDS.every((key) => runtime[key] === expectation.runtime[key])
+  );
+};
+
 const readReceipt = (
   bytes: Uint8Array,
   admission: BuildkiteProjectAdmission,
-  expectation: Omit<CheckReceiptExpectation, "pullRequest">
+  expectation: BuildkiteProjectExpectation | null
 ): ProjectReceiptResult => {
   let receipt: unknown;
   try {
@@ -100,11 +154,7 @@ const readReceipt = (
   } catch {
     return { reason: "receipt-invalid", verified: false };
   }
-  const { checks, rejected } = normalizeCheckReceipts([receipt], {
-    ...expectation,
-    pullRequest: admission.pullRequest,
-  });
-  if (!isRecord(receipt) || rejected.length > 0) {
+  if (!isRecord(receipt) || !isCheckReceiptObservation(receipt)) {
     return { reason: "receipt-invalid", verified: false };
   }
   if (
@@ -114,20 +164,27 @@ const readReceipt = (
   ) {
     return { reason: "receipt-subject-mismatch", verified: false };
   }
-  if (
-    !sha256(receipt.configBefore) ||
-    receipt.configBefore !== receipt.configAfter ||
-    checks.length === 0 ||
-    checks.some(({ state }) => state !== "passed")
-  ) {
-    return { reason: "receipt-nonpassing", verified: false };
+  if (!validExpectation(expectation)) {
+    return { checks: [], reason: "expectation-unavailable", verified: true };
+  }
+  if (!matchingExecution(receipt, expectation)) {
+    return { checks: [], reason: "receipt-execution-mismatch", verified: true };
+  }
+  const { checks, rejected } = normalizeCheckReceipts([receipt], {
+    checks: expectation.checks,
+    provenance: expectation.provenance,
+    pullRequest: admission.pullRequest,
+  });
+  if (rejected.length > 0 || checks.some(({ state }) => state !== "passed")) {
+    return { checks: [], reason: "receipt-nonpassing", verified: true };
   }
   return { checks, verified: true };
 };
 
 /**
  * Correlates already authenticated observations; the artifact supplies only
- * bytes, never the expected job, digest or producer. No I/O or status writes.
+ * bytes, never the expected job, digest or producer. Verified receipts can
+ * remain observations without passing checks. No I/O or status writes.
  */
 export const verifyBuildkiteProjectReceipt = ({
   admission,
@@ -140,7 +197,7 @@ export const verifyBuildkiteProjectReceipt = ({
   job: BuildkiteProjectJob | null;
   capture: BuildkiteProjectCapture | null;
   bytes: Uint8Array | null;
-  expectation: Omit<CheckReceiptExpectation, "pullRequest">;
+  expectation: BuildkiteProjectExpectation | null;
 }): ProjectReceiptResult => {
   if (!validAdmission(admission)) {
     return { reason: "admission-invalid", verified: false };
