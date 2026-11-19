@@ -5,7 +5,10 @@ import path from "node:path";
 
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
-import { buildkiteHostDispatch } from "../src/buildkite-host-dispatch.ts";
+import {
+  buildkiteHostDispatch,
+  runCommand,
+} from "../src/buildkite-host-dispatch.ts";
 import { buildkitePipeline } from "../src/buildkite-pipeline.ts";
 
 const organizationId = "10000000-0000-4000-8000-000000000001";
@@ -523,3 +526,17 @@ cat "$HOME/fixture.json"
   ).toBe("Forge trusted install verification failed.");
   expect(reads).toEqual([]);
 });
+
+test("bounds a verifier whose descendant holds stdout open after the shell exits", async () => {
+  // A background process inherits the shell's stdout even after Bash has exited.
+  await expect(
+    runCommand(
+      {
+        argv: ["/bin/bash", "-c", "/bin/sleep 10 &"],
+        cwd: host,
+        env: { PATH: "/usr/bin:/bin" },
+      },
+      100
+    )
+  ).rejects.toThrow("Host command timed out.");
+}, 2000);

@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
   authenticateBuildkiteBootstrap,
@@ -102,30 +103,48 @@ const externalTo = (install: string, entry: string): boolean => {
   return relative === ".." || relative.startsWith(`..${path.sep}`);
 };
 
-const runCommand = async ({
-  argv,
-  cwd,
-  env,
-  input,
-}: Command): Promise<string> => {
+export const runCommand = async (
+  { argv, cwd, env, input }: Command,
+  timeoutMs = TIMEOUT_MS
+): Promise<string> => {
   const child = Bun.spawn(argv, {
     cwd,
+    detached: true,
     env,
     killSignal: "SIGKILL",
     maxBuffer: MAX_STDOUT,
     stderr: "ignore",
     stdin: input === undefined ? "ignore" : new Blob([input]),
     stdout: "pipe",
-    timeout: TIMEOUT_MS,
   });
-  const [status, stdout] = await Promise.all([
-    child.exited,
-    child.stdout.text(),
-  ]);
-  if (status !== 0 || stdout.length > MAX_STDOUT) {
-    throw new Error("Host command failed.");
+  const timer = new AbortController();
+  const deadline = delay(timeoutMs, undefined, { signal: timer.signal }).then(
+    () => {
+      throw new Error("Host command timed out.");
+    }
+  );
+  try {
+    const [status, stdout] = await Promise.race([
+      Promise.all([child.exited, child.stdout.bytes()]),
+      deadline,
+    ]);
+    if (status !== 0 || stdout.byteLength > MAX_STDOUT) {
+      throw new Error("Host command failed.");
+    }
+    return new TextDecoder().decode(stdout);
+  } catch (error) {
+    // Descendants can keep stdout open after the verifier shell exits.
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch (killError) {
+      if (!isRecord(killError) || killError.code !== "ESRCH") {
+        throw killError;
+      }
+    }
+    throw error;
+  } finally {
+    timer.abort();
   }
-  return stdout;
 };
 
 type Environment = Record<string, string | undefined>;
