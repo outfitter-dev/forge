@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { lstat, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { digest, readConfig } from "./check-config.ts";
@@ -20,7 +20,8 @@ const persist = async (file: string, receipt: CheckReceipt): Promise<void> => {
 const execute = (
   root: string,
   command: string[],
-  receipt: CheckReceipt
+  receipt: CheckReceipt,
+  toolPath?: string
 ): Promise<void> =>
   // Child process events have no native promise completion API.
   // oxlint-disable-next-line promise/avoid-new
@@ -35,6 +36,7 @@ const execute = (
     const child = spawn(executable, args, {
       cwd: root,
       detached: true,
+      ...(toolPath === undefined ? {} : { env: { PATH: toolPath } }),
       stdio: ["ignore", 2, 2],
     });
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -104,11 +106,47 @@ export const receiptExitCode = (receipt: CheckReceipt): number => {
   return receipt.outcome === "passed" && receipt.evidence === "stable" ? 0 : 1;
 };
 
+interface ProjectAdmission {
+  head: string;
+  repository: string;
+  toolPath: string;
+}
+
+const verifyProjectCheckout = (
+  query: (args: string[]) => string,
+  receipt: CheckReceipt,
+  project: ProjectAdmission
+): void => {
+  const source = receipt.sourceBefore;
+  if (
+    !source?.base ||
+    source.dirty ||
+    source.head !== project.head ||
+    receipt.repository !== project.repository ||
+    query(["rev-parse", "--verify", `${source.base}^{commit}`]).trim() !==
+      source.base ||
+    query(["rev-parse", "--is-shallow-repository"]).trim() !== "false" ||
+    query(["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]) !==
+      ""
+  ) {
+    throw new Error("Project checkout does not match admission");
+  }
+};
+
+const readCheckConfig = async (file: string, project?: ProjectAdmission) => {
+  if (project && !(await lstat(file).then((stat) => stat.isFile()))) {
+    throw new Error("Expected a regular project configuration file");
+  }
+  return readConfig(file);
+};
+
 export const runCheck = async (
   root: string,
   configFile: string,
-  base: string | null
+  base: string | null,
+  project?: ProjectAdmission
 ): Promise<CheckReceipt> => {
+  const query = (args: string[]) => git(root, args, project?.toolPath);
   const start = performance.now();
   const receipt: CheckReceipt = {
     admission: "not-started",
@@ -142,7 +180,7 @@ export const runCheck = async (
   let file: string;
   try {
     const directory = path.join(
-      git(root, ["rev-parse", "--absolute-git-dir"]).trim(),
+      query(["rev-parse", "--absolute-git-dir"]).trim(),
       "forge-check",
       receipt.receiptId
     );
@@ -154,7 +192,7 @@ export const runCheck = async (
     return receipt;
   }
   try {
-    const { config, identity } = await readConfig(configFile);
+    const { config, identity } = await readCheckConfig(configFile, project);
     receipt.configBefore = identity;
     receipt.repository = config.repository;
     receipt.check = {
@@ -162,13 +200,17 @@ export const runCheck = async (
       id: config.check.id,
     };
     receipt.diagnostic = "source-unavailable";
-    if (git(root, ["rev-parse", "--show-prefix"]).trim() !== "") {
+    if (query(["rev-parse", "--show-prefix"]).trim() !== "") {
       throw new Error("Invoke at repository root");
     }
     if (base !== null && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(base)) {
       throw new Error("Base must be an explicit commit object ID");
     }
-    receipt.sourceBefore = observeSource(root, base);
+    receipt.sourceBefore = observeSource(root, base, project?.toolPath);
+    if (project) {
+      receipt.diagnostic = "project-admission-mismatch";
+      verifyProjectCheckout(query, receipt, project);
+    }
     receipt.diagnostic = "execution-incomplete";
     receipt.admission = "unknown";
     receipt.outcome = "unknown";
@@ -183,10 +225,10 @@ export const runCheck = async (
       receipt.diagnostic = "receipt-write-failed";
       return receipt;
     }
-    await execute(root, config.check.command, receipt);
+    await execute(root, config.check.command, receipt, project?.toolPath);
     try {
       receipt.configAfter = digest(await readFile(configFile));
-      receipt.sourceAfter = observeSource(root, base);
+      receipt.sourceAfter = observeSource(root, base, project?.toolPath);
       receipt.evidence =
         receipt.configBefore === receipt.configAfter &&
         JSON.stringify(receipt.sourceBefore) ===

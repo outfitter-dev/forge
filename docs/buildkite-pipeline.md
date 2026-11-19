@@ -63,6 +63,26 @@ Use the [lane plan's agent controls](buildkite-lanes-plan.md#lane-responsibiliti
 
 Offline tests cover the boundary with local signing keys and service/process fixtures. They do not qualify actual Buildkite claims and PR metadata, API privileges, agent configuration or host isolation. This slice supplies no worker installation or service settings, including pipeline signing configuration. Manual rebuilds, `forge-check` and `forge-gate` are not dispatched by this bootstrap entry point.
 
+## Project check runner
+
+The project runner is the unprivileged half of the future `forge-check` hook. Build it from reviewed source, outside the proposed checkout:
+
+```sh
+bun build --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
+  src/buildkite-project-check.ts --outfile /protected/forge-buildkite-project-check
+```
+
+The protected launcher must authenticate the job and pins, prepare a fresh full checkout with host-controlled Git metadata, and enter the selected OS isolation under a dedicated account before invoking the absolute executable from the checkout root. It passes the expected repository and full head/base OIDs as arguments and starts the runner with an empty environment:
+
+```sh
+env -i /protected/forge-buildkite-project-check \
+  outfitter-dev/forge "$ADMITTED_HEAD" "$ADMITTED_BASE" /protected/project-tools
+```
+
+The runner refuses root, inherited environment, linked or shallow checkouts, unexpected source or repository identity, and existing working files that are modified, untracked or ignored. It uses the checkout's regular `forge.json`, a host-selected tool directory plus system paths, and the existing [Forge check receipt and exit contract](forge-check.md). The check subprocess receives only the tool `PATH` at launch. The runner sends command output to stderr and the receipt to stdout; the receipt is a project-side observation, not authenticated evidence.
+
+This does not install a hook, acquire source or dependencies, upload receipts, or create a sandbox. The actual launcher must keep credentials, agent interfaces, host homes and sockets inaccessible to the project account and contain detached processes. Host/account choice, dependency preparation inside isolation, and job/receipt binding and upload remain separate; offline fixtures qualify only the runner's behavior. The native graph still fails without the protected hook.
+
 ## Remaining integration
 
 The remaining project and gate hooks must implement their own dispatch and qualification. The host must disable local hooks and plugins, keep persistent ledger state outside jobs, and prevent proposed code from accessing orchestration credentials or changing task dispatch.
