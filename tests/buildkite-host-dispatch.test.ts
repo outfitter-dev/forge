@@ -361,7 +361,9 @@ test.each([
     );
     expect(
       await buildkiteHostDispatch([config], jobEnvironment, command, request)
-    ).toBe("Forge could not authenticate the Buildkite bootstrap job.");
+    ).toBe(
+      "Forge Buildkite build record did not match the signed job or identify an eligible PR."
+    );
     expect(calls).toHaveLength(2);
   }
 );
@@ -373,7 +375,17 @@ test("refuses a forbidden Buildkite read without reporting its body", async () =
   );
   expect(
     await buildkiteHostDispatch([config], jobEnvironment, command, request)
-  ).toBe("Forge could not authenticate the Buildkite bootstrap job.");
+  ).toBe("Forge was denied access to the Buildkite build record.");
+  expect(calls).toHaveLength(2);
+});
+
+test("distinguishes an unavailable Buildkite read without reporting transport details", async () => {
+  const { calls, command, request } = fixture(await signedJob(), () => {
+    throw new Error("private service diagnostic");
+  });
+  expect(
+    await buildkiteHostDispatch([config], jobEnvironment, command, request)
+  ).toBe("Forge could not read the Buildkite build record.");
   expect(calls).toHaveLength(2);
 });
 

@@ -5,6 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   authenticateBuildkiteBootstrap,
   BUILDKITE_OIDC_AUDIENCE,
+  BuildkiteBuildError,
   buildkiteUuid,
   fullCommit,
 } from "./buildkite-job.ts";
@@ -261,8 +262,8 @@ const dispatch = async (
       input: pipeline,
     });
     return null;
-  } catch {
-    return failure;
+  } catch (error) {
+    return error instanceof BuildkiteBuildError ? error.message : failure;
   }
 };
 

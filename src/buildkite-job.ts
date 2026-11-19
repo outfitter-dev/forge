@@ -8,6 +8,20 @@ const ISSUER = "https://agent.buildkite.com";
 const BOOTSTRAP_STEP = "forge-bootstrap";
 const TIMEOUT_MS = 15_000;
 
+const buildReadDiagnostics = {
+  denied: "Forge was denied access to the Buildkite build record.",
+  mismatch:
+    "Forge Buildkite build record did not match the signed job or identify an eligible PR.",
+  unavailable: "Forge could not read the Buildkite build record.",
+};
+
+export class BuildkiteBuildError extends Error {
+  constructor(reason: keyof typeof buildReadDiagnostics) {
+    super(buildReadDiagnostics[reason]);
+    this.name = "BuildkiteBuildError";
+  }
+}
+
 export const buildkiteUuid = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/u.test(value);
@@ -75,22 +89,31 @@ const readBuild = async (
   readToken: string,
   request: typeof fetch
 ): Promise<unknown> => {
-  const response = await request(
-    `https://api.buildkite.com/v2/organizations/${policy.organizationSlug}/pipelines/${policy.pipelineSlug}/builds/${identity.buildNumber}`,
-    {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${readToken}`,
-      },
-      redirect: "error",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+  try {
+    const response = await request(
+      `https://api.buildkite.com/v2/organizations/${policy.organizationSlug}/pipelines/${policy.pipelineSlug}/builds/${identity.buildNumber}`,
+      {
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${readToken}`,
+        },
+        redirect: "error",
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      }
+    );
+    if (response.status === 401 || response.status === 403) {
+      throw new BuildkiteBuildError("denied");
     }
-  );
-  if (response.redirected || response.status !== 200) {
-    throw new Error("Buildkite build read failed.");
+    if (response.redirected || response.status !== 200) {
+      throw new BuildkiteBuildError("unavailable");
+    }
+    return await response.json();
+  } catch (error) {
+    throw error instanceof BuildkiteBuildError
+      ? error
+      : new BuildkiteBuildError("unavailable");
   }
-  return await response.json();
 };
 
 const verifyRunningJob = (
@@ -108,7 +131,7 @@ const verifyRunningJob = (
     job.cluster_queue_id !== policy.queueId ||
     job.state !== "running"
   ) {
-    throw new Error("Buildkite bootstrap job is not running.");
+    throw new BuildkiteBuildError("mismatch");
   }
 };
 
@@ -131,7 +154,7 @@ const readPullRequest = (
     !repositoryMatches(build.pipeline.repository, policy.repository) ||
     !Array.isArray(build.jobs)
   ) {
-    throw new Error("Buildkite build did not match the signed job.");
+    throw new BuildkiteBuildError("mismatch");
   }
   verifyRunningJob(build.jobs, policy, jobId);
   const pullRequest = build.pull_request;
@@ -142,7 +165,7 @@ const readPullRequest = (
     !/^[1-9]\d*$/u.test(pullRequest.id) ||
     !positiveInteger(Number(pullRequest.id))
   ) {
-    throw new Error("Buildkite build did not identify a same-repository PR.");
+    throw new BuildkiteBuildError("mismatch");
   }
   return pullRequest.id;
 };
