@@ -14,50 +14,10 @@ import {
   VERIFICATION_GATES,
 } from "../src/index.ts";
 import { passingFactsV2, policyV2 } from "./agent-review-fixtures.ts";
-import { at, BASE, HEAD, REPOSITORY, subject } from "./evidence-fixtures.ts";
+import { receipt, source } from "./check-fixtures.ts";
+import { at, subject } from "./evidence-fixtures.ts";
 
 const OTHER = "d".repeat(40);
-
-const source = (overrides: Partial<CheckSource> = {}): CheckSource => ({
-  base: BASE,
-  coverage: "tracked-and-nonignored-untracked",
-  dirty: false,
-  head: HEAD,
-  indexDigest: "8".repeat(64),
-  mergeBase: BASE,
-  tree: "c".repeat(40),
-  untracked: 0,
-  worktreeDigest: "9".repeat(64),
-  ...overrides,
-});
-
-/** A persisted, stable, passing run of the aggregate check on the fixture PR. */
-const receipt = (overrides: Partial<CheckReceipt> = {}): CheckReceipt => ({
-  admission: "started",
-  cancellation: null,
-  cause: "unclassified",
-  check: { commandDigest: "f".repeat(64), id: "check" },
-  completion: "observed",
-  configAfter: "e".repeat(64),
-  configBefore: "e".repeat(64),
-  diagnostic: "command-passed",
-  durationMs: 1200,
-  evidence: "stable",
-  exitCode: 0,
-  finishedAt: "2026-01-01T00:00:02.000Z",
-  kind: "forge-check",
-  outcome: "passed",
-  receiptId: "receipt-1",
-  recording: { path: "/fixture/receipt.json", state: "persisted" },
-  repository: REPOSITORY,
-  runtime: { arch: "arm64", bun: "1.4.4", platform: "darwin" },
-  schemaVersion: 1,
-  signal: null,
-  sourceAfter: source(),
-  sourceBefore: source(),
-  startedAt: "2026-01-01T00:00:00.000Z",
-  ...overrides,
-});
 
 const named = (id: string, overrides: Partial<CheckReceipt> = {}) =>
   receipt({
