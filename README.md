@@ -18,7 +18,7 @@ The first operation is a [pure deterministic evidence evaluator](docs/evidence-e
 
 [Generated-release diff assessment](docs/generated-release-diff.md) checks complete, revision-bound path/status evidence against explicit product manifest/changelog pairs and deletable changeset paths. It qualifies file roles without claiming that modified content is a valid version bump.
 
-[Strict version/channel assessment](docs/release-version.md) checks literal version progression and product-declared destination tags. Malformed versions block; valid build metadata preserves prerelease routing and cannot alone establish a newer version.
+[`forge release version`](docs/release-version.md#local-cli) checks literal version progression and product-declared destination tags from two local JSON files. Malformed versions block; valid build metadata preserves prerelease routing and cannot alone establish a newer version.
 
 [Offline release composition](docs/release-composition.md) demonstrates explicit product mapping of diff/version/artifact/npm outcomes into required and auto-only release assessments, including manual-path blockers and the remaining minimum for a real consumer trial.
 

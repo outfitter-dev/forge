@@ -1001,7 +1001,7 @@ test.each<[string, Inputs, string]>([
   }
 );
 
-test("an unknown subcommand prints the usage error naming both subcommands", () => {
+test("an unknown subcommand prints usage for check, gate and release version", () => {
   for (const args of [[], ["wrong"], ["gates"]]) {
     const child = Bun.spawnSync(
       [process.execPath, "--preload", preload, cli, ...args],
@@ -1009,7 +1009,7 @@ test("an unknown subcommand prints the usage error naming both subcommands", () 
     );
     expect(child.exitCode).toBe(2);
     expect(JSON.parse(child.stdout.toString())).toStrictEqual({
-      diagnostic: `Usage: forge check [--config <file>] [--base <commit-oid>] | ${USAGE.slice("Usage: ".length)}`,
+      diagnostic: `Usage: forge check [--config <file>] [--base <commit-oid>] | ${USAGE.slice("Usage: ".length)} | forge release version <versions.json> --policy <policy.json>`,
       kind: "forge-check-input-error",
       schemaVersion: 1,
     });

@@ -2,6 +2,28 @@
 
 `evaluateReleaseVersion(input, policy)` assesses literal previous/next versions and a requested destination tag, without filesystem, provider, registry, publishing or tag effects. It adapts the channel mapping and first-differing-core comparison in [release-action's version helper](https://github.com/outfitter-dev/release-action/blob/781379183eaf3d4b6139894582e58a47cad28e08/src/version.ts) and [16 source tests](https://github.com/outfitter-dev/release-action/blob/781379183eaf3d4b6139894582e58a47cad28e08/src/version.test.ts). This Forge-only FOR-19 slice deliberately replaces permissive fallback behavior; it does not adopt a product or implement its versioning workflow.
 
+## Local CLI
+
+With the pinned Bun runtime, run `bun run forge release version <versions.json> --policy <policy.json>` from the Forge checkout. The two explicit paths resolve from the caller's working directory. To invoke Forge from another directory, use `bun /path/to/forge/src/forge-cli.ts release version <versions.json> --policy <policy.json>`. No credentials or network access are required.
+
+The command prints one JSON document to stdout:
+
+| Exit | Meaning | Output |
+| --- | --- | --- |
+| `0` | The supplied version and channel pass. | Unchanged evaluator result with `decision: "pass"`. |
+| `1` | The evaluator blocks, including when decoded JSON has an invalid shape. | Unchanged evaluator result with `decision: "block"` and diagnostics. |
+| `2` | Invalid arguments, unreadable file or syntactically malformed JSON. | `forge-release-version-input-error` document with a diagnostic and no assessment. |
+
+From the Forge checkout, run these offline examples individually. They deliberately exit `0`, `1` (`channel-tag-mismatch`), and `2` (missing policy argument), respectively:
+
+```sh
+bun run forge release version examples/release-version/passing.json --policy examples/release-version/policy.json
+bun run forge release version examples/release-version/blocked.json --policy examples/release-version/policy.json
+bun run forge release version examples/release-version/passing.json
+```
+
+These fixtures demonstrate the command, not a qualified release. A pass does not authenticate the supplied versions or policy and grants no publishing or tagging authority.
+
 ## Product policy and result
 
 `ReleaseVersionInput` supplies `previousVersion`, `version` and `tag`. Trusted `ReleaseVersionPolicy` supplies `stableTag` and `prereleaseTags: [{identifier, tag}]`. There are no default destinations. A stable next version requires exactly the declared stable tag; a prerelease requires an exact mapping for its first identifier. Unknown/case-mismatched/numeric channels block. Several identifiers may share one prerelease tag, but identifiers cannot repeat and no prerelease may target the stable tag. The previous version only needs valid syntax: historical channels need not remain in the current destination policy.
