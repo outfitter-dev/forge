@@ -2,7 +2,51 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { CheckReceipt } from "../src/check-types.ts";
+import type { CheckReceipt, CheckSource } from "../src/check-types.ts";
+import { BASE, HEAD, REPOSITORY } from "./evidence-fixtures.ts";
+
+export const source = (overrides: Partial<CheckSource> = {}): CheckSource => ({
+  base: BASE,
+  coverage: "tracked-and-nonignored-untracked",
+  dirty: false,
+  head: HEAD,
+  indexDigest: "8".repeat(64),
+  mergeBase: BASE,
+  tree: "c".repeat(40),
+  untracked: 0,
+  worktreeDigest: "9".repeat(64),
+  ...overrides,
+});
+
+/** A persisted, stable, passing run of the aggregate check on the fixture PR. */
+export const receipt = (
+  overrides: Partial<CheckReceipt> = {}
+): CheckReceipt => ({
+  admission: "started",
+  cancellation: null,
+  cause: "unclassified",
+  check: { commandDigest: "f".repeat(64), id: "check" },
+  completion: "observed",
+  configAfter: "e".repeat(64),
+  configBefore: "e".repeat(64),
+  diagnostic: "command-passed",
+  durationMs: 1200,
+  evidence: "stable",
+  exitCode: 0,
+  finishedAt: "2026-01-01T00:00:02.000Z",
+  kind: "forge-check",
+  outcome: "passed",
+  receiptId: "receipt-1",
+  recording: { path: "/fixture/receipt.json", state: "persisted" },
+  repository: REPOSITORY,
+  runtime: { arch: "arm64", bun: "1.4.4", platform: "darwin" },
+  schemaVersion: 1,
+  signal: null,
+  sourceAfter: source(),
+  sourceBefore: source(),
+  startedAt: "2026-01-01T00:00:00.000Z",
+  ...overrides,
+});
 
 export const cli = path.resolve(import.meta.dir, "../src/forge-cli.ts");
 export const gitFixture = (root: string, ...args: string[]): string => {
