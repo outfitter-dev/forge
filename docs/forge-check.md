@@ -40,8 +40,6 @@ For a syntactically valid invocation, machine stdout is exactly one JSON object 
 
 Both child stdout and stderr stream to the caller's stderr; stdin is closed. Forge neither persists command output nor copies arbitrary exception text into receipts. Native output is untrusted and can contain secrets printed by project code; callers must protect their terminal/CI logs. The receipt uses fixed bounded diagnostic codes. It captures no environment, hostname, credential values or transcripts.
 
-Receipts live at `<worktree-git-directory>/forge-check/<receiptId>/receipt.json`, outside the source tree and Git's tracked files. A linked worktree uses its own Git administrative directory, not the common hooks directory. Receipt directories and files request owner-only permissions. Publication writes an exclusive temporary file and renames it atomically. `recording.state: "persisted"` describes successful publication, not authentication or fsync/crash durability. The returned path is an informational local reference, not authority for a consumer to read arbitrary paths; resolve it only inside an independently trusted invocation's artifact directory. No transport or automatic import is implemented.
-
 | CLI exit | Meaning |
 | --- | --- |
 | 0 | Command exited 0, before/after evidence is stable, final record published. |
@@ -52,6 +50,16 @@ Receipts live at `<worktree-git-directory>/forge-check/<receiptId>/receipt.json`
 | 130 | Cancellation was requested and terminal attempt observation was recorded. |
 
 Recording failure takes precedence over other CLI exits. Child exit codes remain in `exitCode`; they are not CLI exit codes. Forced termination of Forge itself may produce no JSON and a host/shell signal exit instead of 4. Consumers must treat absent final output as unknown, not retry permission.
+
+## Storage lifetime and readers
+
+Receipts live at `<worktree-git-directory>/forge-check/<receiptId>/receipt.json`, outside Git's tracked files. A linked worktree uses its own Git administrative directory, not the common Git directory. Removing the linked worktree removes its receipts; another worktree at the same commit does not share that receipt store, and a fresh clone starts without those receipts. If Git cannot resolve an administrative directory, as in a non-colocated Jujutsu workspace, the command reports `receipt-write-failed` and exits 3 before running the project command; there is no Jujutsu fallback.
+
+Receipt directories and files request owner-only permissions. Publication writes an exclusive temporary file and renames it atomically. `recording.state: "persisted"` describes successful publication, not authentication or fsync/crash durability. The returned path is an informational local reference, not authority to read an arbitrary file. `forge check` does not transport or import receipts.
+
+[Forge gate](forge-gate.md#invocation) reads the files its caller supplies with `--receipt`; it does not discover receipts or follow their embedded `recording.path`. The [Buildkite verifier](buildkite-pipeline.md#project-receipt-verification) checks supplied bytes against the trusted runner's stdout capture, not against the project worktree's copy. A caller that retains a receipt beyond the life of a worktree or CI checkout must handle that transfer at the trusted boundary.
+
+The review ledger is separate. The gate caller must provide an absolute `--state` directory outside checkouts and job workspaces. There is no default or environment override, and the ledger does not share the check receipt directory.
 
 ## What the record establishes
 
