@@ -1,0 +1,4 @@
+{
+  "stableTag": "stable",
+  "prereleaseTags": [{ "identifier": "beta", "tag": "preview" }]
+}

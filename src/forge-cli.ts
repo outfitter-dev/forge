@@ -9,6 +9,10 @@ import { GATE_SYNOPSIS } from "./gate-arguments.ts";
 import { gateExitCode } from "./gate-document.ts";
 import { receiptExitCode, runCheck } from "./run-check.ts";
 import { runGate } from "./run-gate.ts";
+import {
+  RELEASE_VERSION_SYNOPSIS,
+  runReleaseVersion,
+} from "./run-release-version.ts";
 
 const CHECK_USAGE =
   "Usage: forge check [--config <file>] [--base <commit-oid>]";
@@ -85,6 +89,14 @@ if (command === "buildkite") {
   });
   console.log(JSON.stringify(document));
   process.exitCode = gateExitCode(document);
+} else if (command === "release") {
+  const document = await runReleaseVersion(args);
+  console.log(JSON.stringify(document));
+  if ("decision" in document) {
+    process.exitCode = document.decision === "pass" ? 0 : 1;
+  } else {
+    process.exitCode = 2;
+  }
 } else {
-  inputError(`${CHECK_USAGE} | ${GATE_SYNOPSIS}`);
+  inputError(`${CHECK_USAGE} | ${GATE_SYNOPSIS} | ${RELEASE_VERSION_SYNOPSIS}`);
 }
