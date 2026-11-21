@@ -101,6 +101,9 @@ test("Markdown advice runs independently of the existing CI check", () => {
   );
   expect(manifest.scripts.check).not.toContain("ropes");
   expect(manifest.scripts["ropes:markdown"]).toBe("rope check --strict");
+  expect(manifest.scripts["ropes:markdown:report"]).toBe(
+    "bun src/ropes-markdown-report.ts"
+  );
   expect(workflow).toMatchObject({
     jobs: {
       check: {
@@ -112,7 +115,7 @@ test("Markdown advice runs independently of the existing CI check", () => {
           expect.objectContaining({
             "continue-on-error": true,
             id: "markdown",
-            run: "bun run ropes:markdown",
+            run: "bun run ropes:markdown:report",
           }),
         ]),
       },
