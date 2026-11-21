@@ -16,10 +16,12 @@
     "format:check": "oxfmt --check .",
     "forge": "bun src/forge-cli.ts",
     "check:hook": "lefthook run pre-push --no-auto-install --force",
-    "ropes:markdown": "rope check --strict"
+    "ropes:markdown": "rope check --strict",
+    "ropes:markdown:report": "bun src/ropes-markdown-report.ts"
   },
   "devDependencies": {
     "@ropes/cli": "0.1.0-pilot.0",
+    "@ropes/core": "0.1.0-pilot.0",
     "@types/bun": "1.4.4",
     "jose": "6.2.16",
     "lefthook": "2.2.2",

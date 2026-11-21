@@ -53,7 +53,7 @@ The pinned rumdl checks Markdown style and Lychee checks local links offline. Th
 
 To regenerate the managed Markdown files, bootstrap the [Ropes source for this release](https://github.com/outfitter-dev/ropes/tree/f46e84e86c956a8f4dfce7641df41413fbf27408), set `ROPES_SOURCE` to the absolute path of that checkout, and run `mise exec -- bun "$ROPES_SOURCE/packages/cinch/src/cli.ts" doctor --fix` from Forge. The generated headers refer to that source command.
 
-The GitHub **Ropes Markdown (advisory)** job reports findings in its log and runs alongside `bun run forge check`. The local command keeps Ropes’ exit codes so you can distinguish findings from a missing tool or incomplete check.
+The GitHub **Ropes Markdown (advisory)** job reports findings in its log and runs alongside `bun run forge check`. The job reads JSON from Ropes and validates it with the matching core parser before rendering the human report. Run `mise exec -- bun run ropes:markdown:report` to exercise the same path locally. Both commands keep Ropes’ exit codes so you can distinguish findings from an incomplete check.
 
 ## Start here
 

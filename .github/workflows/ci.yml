@@ -43,7 +43,7 @@ jobs:
       - name: Report the Markdown baseline
         id: markdown
         continue-on-error: true
-        run: bun run ropes:markdown
+        run: bun run ropes:markdown:report
       - name: Summarize the Markdown check
         if: ${{ !cancelled() }}
         env:
