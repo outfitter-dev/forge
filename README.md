@@ -39,6 +39,20 @@ bun run forge check
 
 The commands check lint with oxlint (warnings fail), formatting with oxfmt, strict types with `bun check --no-script`, and Bun tests. Lint and formatting use Ultracite presets with Markdown prose wrapping disabled. [Tooling qualification and editor guidance](docs/tooling.md) records the accepted Ranger reference, strict/config-file checks, and the decision to omit a separate editor TypeScript pin. Run `bun run format` to apply formatting. [Forge check](docs/forge-check.md) invokes the existing `bun run check` aggregate from explicit `forge.json` configuration and records local execution observations. CLI, direct hook qualification and CI use that same operation; receipts do not authenticate a producer or skip CI. [Verification evidence](docs/verification-evidence.md) is a separate pure operation that derives lint, test and build gate evidence from those receipts under a check mapping the trusted caller supplies. Hooks are configured without installation during dependency setup; activation requires checkout-owner coordination. No secrets or global machine setup are needed.
 
+## Advisory Markdown check
+
+Forge pins `@ropes/cli@0.1.0-pilot.0`. With Bun and mise available, run this check from the repository root after bootstrap.
+
+```sh
+mise install
+mise exec -- bun run ropes:markdown
+mise exec -- bun run rope explain docs/session-closeout.md
+```
+
+The pinned rumdl checks Markdown style and Lychee checks local links offline. The dated session closeout keeps its original prose and still gets local link checks. The initial [ROPE-19 baseline](https://linear.app/outfitter/issue/ROPE-19) covered 42 Markdown files and reported one list-spacing finding in `docs/review-ledger-store.md`, with all checks completing.
+
+The GitHub **Ropes Markdown (advisory)** job reports findings in its log and runs alongside `bun run forge check`. The local command keeps Ropes’ exit codes so you can distinguish findings from a missing tool or incomplete check.
+
 ## Start here
 
 - [Design tenets](docs/tenets.md): how we build—modularity, contracts, observability, testability, and evolution.

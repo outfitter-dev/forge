@@ -1,0 +1,6 @@
+[tools]
+lychee = { version = "0.24.2", version_prefix = "lychee-v", libc = "musl" }
+rumdl = "0.3.5"
+
+[tool_alias]
+lychee = "github:lycheeverse/lychee"

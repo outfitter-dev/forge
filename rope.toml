@@ -1,0 +1,16 @@
+pilot = 0
+include = ["**/*.md"]
+
+[markdown]
+enabled = true
+links = true
+
+[toml]
+enabled = false
+
+# Keep the dated closeout's prose as recorded, and still check its local links.
+[[overrides]]
+paths = ["docs/session-closeout.md"]
+
+[overrides.markdown]
+enabled = false
