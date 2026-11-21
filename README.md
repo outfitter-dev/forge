@@ -51,6 +51,8 @@ mise exec -- bun run rope explain docs/session-closeout.md
 
 The pinned rumdl checks Markdown style and Lychee checks local links offline. The dated session closeout keeps its original prose and still gets local link checks. The initial [ROPE-19 baseline](https://linear.app/outfitter/issue/ROPE-19) covered 42 Markdown files and reported one list-spacing finding in `docs/review-ledger-store.md`, with all checks completing.
 
+To regenerate the managed Markdown files, bootstrap the [Ropes source for this release](https://github.com/outfitter-dev/ropes/tree/f46e84e86c956a8f4dfce7641df41413fbf27408), set `ROPES_SOURCE` to the absolute path of that checkout, and run `mise exec -- bun "$ROPES_SOURCE/packages/cinch/src/cli.ts" doctor --fix` from Forge. The generated headers refer to that source command.
+
 The GitHub **Ropes Markdown (advisory)** job reports findings in its log and runs alongside `bun run forge check`. The local command keeps Ropes’ exit codes so you can distinguish findings from a missing tool or incomplete check.
 
 ## Start here
