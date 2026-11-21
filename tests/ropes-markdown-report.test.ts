@@ -1,4 +1,14 @@
 import { expect, test } from "bun:test";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { markdownReport } from "../src/ropes-markdown-report.ts";
 
@@ -53,4 +63,59 @@ test("rejects unknown versions, malformed input, and exit mismatches", () => {
   expect(() => markdownReport(JSON.stringify(frame), 1)).toThrow(
     "exit code disagrees"
   );
+});
+
+test("the report command preserves a finding exit and surfaces an empty result", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "forge-ropes-report-"));
+  const source = path.join(import.meta.dir, "..");
+  const entry = path.join("src", "ropes-markdown-report.ts");
+  try {
+    mkdirSync(path.join(root, "src"));
+    copyFileSync(path.join(source, entry), path.join(root, entry));
+    symlinkSync(
+      path.join(source, "node_modules"),
+      path.join(root, "node_modules")
+    );
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ scripts: { "ropes:markdown": "bun fixture.ts" } })
+    );
+    const run = (program: string) => {
+      writeFileSync(path.join(root, "fixture.ts"), program);
+      return Bun.spawnSync([process.execPath, entry], {
+        cwd: root,
+        env: { PATH: process.env.PATH },
+      });
+    };
+
+    const findings = {
+      ...frame,
+      outcome: "findings",
+      steps: [
+        {
+          adapter: "rumdl",
+          findings: [],
+          path: "README.md",
+          status: "findings",
+        },
+      ],
+    };
+    const finding = run(
+      `console.log(JSON.stringify(${JSON.stringify(findings)})); process.exitCode = 1;`
+    );
+    expect(finding.exitCode).toBe(1);
+    expect(finding.stdout.toString()).toContain(
+      "Findings remain. Exit code 1."
+    );
+
+    const missing = run(
+      'console.error("fixture setup failed"); process.exitCode = 2;'
+    );
+    expect(missing.exitCode).toBe(2);
+    expect(missing.stderr.toString()).toContain("fixture setup failed");
+    expect(missing.stderr.toString()).toContain("without a check result");
+    expect(missing.stdout.toString()).toBe("");
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
 });

@@ -4,6 +4,12 @@ import { exitCodeOf, parseResult } from "@ropes/core";
 import { renderHuman } from "@ropes/core/render";
 
 export const markdownReport = (stdout: string, exitCode: number): string => {
+  if (stdout.trim() === "") {
+    throw new Error(
+      `Ropes exited with code ${exitCode} without a check result.`
+    );
+  }
+
   let input: unknown;
   try {
     input = JSON.parse(stdout);
