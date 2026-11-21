@@ -23,3 +23,30 @@ jobs:
       - run: bun run forge check
       - name: Qualify evaluator CLI on offline fixtures
         run: bun test tests/cli.test.ts
+  ropes-markdown:
+    name: Ropes Markdown (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+        with:
+          version: 2026.11.10
+          install_args: rumdl lychee
+      - run: bun install --frozen-lockfile
+      - name: Report the Markdown baseline
+        id: markdown
+        continue-on-error: true
+        run: bun run ropes:markdown
+      - name: Summarize the Markdown check
+        if: ${{ !cancelled() }}
+        env:
+          MARKDOWN_OUTCOME: ${{ steps.markdown.outcome }}
+        run: |
+          printf 'Ropes Markdown (advisory): %s. See the job log for findings or tool errors.\n' "${MARKDOWN_OUTCOME:-not run}" >> "$GITHUB_STEP_SUMMARY"

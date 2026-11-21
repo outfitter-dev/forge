@@ -95,6 +95,74 @@ test("package and CI invoke the same CLI while retaining evaluator qualification
   });
 });
 
+test("Markdown advice runs independently of the existing CI check", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(path.join(source, ".github/workflows/ci.yml"), "utf-8")
+  );
+  expect(manifest.scripts.check).not.toContain("ropes");
+  expect(manifest.scripts["ropes:markdown"]).toBe("rope check --strict");
+  expect(workflow).toMatchObject({
+    jobs: {
+      check: {
+        steps: expect.arrayContaining([{ run: "bun run forge check" }]),
+      },
+      "ropes-markdown": {
+        "continue-on-error": true,
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            "continue-on-error": true,
+            id: "markdown",
+            run: "bun run ropes:markdown",
+          }),
+        ]),
+      },
+    },
+  });
+  expect(workflow).not.toMatchObject({
+    jobs: { check: { needs: expect.anything() } },
+  });
+});
+
+test("Ropes keeps local link checks on the dated session closeout", () => {
+  const closeout = "docs/session-closeout.md";
+  const result = Bun.spawnSync(
+    [
+      process.execPath,
+      path.join(source, "node_modules/.bin/rope"),
+      "explain",
+      "README.md",
+      closeout,
+      "--json",
+    ],
+    { cwd: source, env: { PATH: process.env.PATH } }
+  );
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.toString());
+  }
+  const plan: unknown = JSON.parse(result.stdout.toString());
+  expect(plan).toMatchObject({
+    paths: [
+      {
+        path: "README.md",
+        steps: [{ adapter: "rumdl" }, { adapter: "lychee" }],
+      },
+      {
+        path: closeout,
+        policy: expect.arrayContaining([
+          expect.objectContaining({
+            key: "markdown.enabled",
+            source: expect.objectContaining({
+              key: "overrides.0.markdown.enabled",
+            }),
+            value: false,
+          }),
+        ]),
+        steps: [{ adapter: "lychee" }],
+      },
+    ],
+  });
+});
+
 test("explicit empty dependency trust blocks hook-install lifecycle in offline local packages", () => {
   expect(manifest.trustedDependencies).toEqual([]);
   for (const trust of [[], ["lefthook"]]) {
