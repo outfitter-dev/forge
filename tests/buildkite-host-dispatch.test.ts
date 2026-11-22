@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -89,7 +89,7 @@ const jwk = {
 };
 
 beforeAll(async () => {
-  root = await mkdtemp(path.join(tmpdir(), "forge-dispatch-"));
+  root = await mkdtemp(path.join(await realpath(tmpdir()), "forge-dispatch-"));
   host = path.join(root, "host");
   install = path.join(root, "install");
   await Promise.all([mkdir(host), mkdir(install)]);
