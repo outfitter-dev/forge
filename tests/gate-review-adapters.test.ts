@@ -13,6 +13,7 @@ import {
   seedLedger,
   workspace,
 } from "./gate-test-harness.ts";
+import { registry } from "./review-collection-fixtures.ts";
 
 afterEach(cleanupGateWorkspace);
 
@@ -111,4 +112,19 @@ test("schema 2 requires the explicit adapter list", () => {
   expect(result.exitCode).toBe(2);
   expect(issues(result)[0]?.path).toBe("gatePolicy.reviewAdapters");
   expect(result.requests).toHaveLength(0);
+});
+
+test("the shared policy parser checks reviewer eligibility for every registered adapter", () => {
+  expect(() =>
+    parseGatePolicy(
+      policy([
+        {
+          adapter: "secondary",
+          configuration: {},
+          reviewer: "unknown-reviewer",
+        },
+      ]),
+      registry()
+    )
+  ).toThrow("gatePolicy.reviewAdapters[0].reviewer");
 });

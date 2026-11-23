@@ -1,3 +1,4 @@
+import type { AgentReviewPolicy } from "./evidence-types.ts";
 import {
   array,
   invalid,
@@ -10,6 +11,7 @@ import type {
   GateReviewAdapterPolicy,
   ReviewAdapterRegistry,
 } from "./review-collection-types.ts";
+import { agentReviewPolicy } from "./validate-agent-review.ts";
 
 /** Policy selects ordered adapters installed by trusted code. */
 export const parseGateReviewAdapters = (
@@ -18,6 +20,9 @@ export const parseGateReviewAdapters = (
   registry: ReviewAdapterRegistry = reviewAdapterRegistry
 ): GateReviewAdapterPolicy[] => {
   const entries = array(value, "gatePolicy.reviewAdapters");
+  if (entries.length > 0) {
+    agentReviewPolicy(evidence.agentReview, "gatePolicy.evidence.agentReview");
+  }
   const adapters = new Set<string>();
   const reviewers = new Set<string>();
   return entries.map((entry, index) => {
@@ -38,6 +43,13 @@ export const parseGateReviewAdapters = (
       invalid(`${path}.adapter`, "duplicate adapter");
     }
     const reviewer = text(source.reviewer, `${path}.reviewer`);
+    if (
+      !(evidence.agentReview as AgentReviewPolicy).reviewers.some(
+        (candidate) => candidate.reviewer === reviewer
+      )
+    ) {
+      invalid(`${path}.reviewer`, "expected an eligible reviewer");
+    }
     if (reviewers.has(reviewer)) {
       invalid(`${path}.reviewer`, "duplicate reviewer");
     }
