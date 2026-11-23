@@ -34,7 +34,7 @@ Status on November 13, 2026 is independence basis accepted by Matt and bounded l
 
 The Forge lead selected a finite 15-minute hosted wait to allow review startup and execution while retaining a deadline. The roughly one-minute disposable observation establishes one observed duration. The selected wait is a policy bound, with timeout semantics defined by the collector. Later adverse findings remain blocking after that bound.
 
-The corresponding `codexReview` extension is explicit trusted configuration.
+The corresponding schema 1 `codexReview` extension records the original trusted configuration.
 
 ```json
 {
@@ -49,7 +49,7 @@ The corresponding `codexReview` extension is explicit trusted configuration.
 }
 ```
 
-The matching eligible hosted reviewer entry must use the selected key and wait. The invoker authenticates a current complete supplied finding ledger covering all reporting reviewers, including sources such as Devin, and preserves accepted history. Unknown coverage stays non-passing. The root [`forge-gate.json`](../forge-gate.json) carries this entry with the declared collector, verification and reviewer issuer identities described under [Forge's own policy file](forge-gate.md#forges-own-policy-file). No lane reads it yet: FOR-38 still owns the production lane, its trusted installed source and its state location. The bounded local qualification uses its own explicitly identified runtime and producer. The production policy must load this entry from its trusted revision outside the proposed checkout.
+The matching eligible hosted reviewer entry must use the selected key and wait. The invoker authenticates a current complete supplied finding ledger covering all reporting reviewers, including sources such as Devin, and preserves accepted history. Unknown coverage stays non-passing. The root [`forge-gate.json`](../forge-gate.json) now expresses the same values through a schema 2 `reviewAdapters` entry. That entry uses `adapter: "codex-github"`, keeps `reviewer` beside the adapter ID, and places the account, finding-history and independence fields in `configuration`. The [review adapter policy](forge-gate.md#review-adapter-policy) defines the current syntax and explicit schema 1 compatibility. Collector, verification and reviewer issuer identities retain their meanings under [Forge's own policy file](forge-gate.md#forges-own-policy-file). No lane reads it yet: FOR-38 still owns the production lane, its trusted installed source and its state location. The bounded local qualification uses its own explicitly identified runtime and producer. The production policy must load this entry from its trusted revision outside the proposed checkout.
 
 [FOR-37](https://linear.app/outfitter/issue/FOR-37) retains the decisions, vendor-documentation check, raw observation pointers and collector design. That check found no supported machine-readable contract for the markers below. Their format is observed. The observed clean review and adverse review came from Forge PRs 26 and 27.
 

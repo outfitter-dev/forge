@@ -121,7 +121,7 @@ test.each<[string, unknown, string]>([
   ["text", MARKER, "gatePolicy"],
   [
     "another schema version",
-    gatePolicy({ schemaVersion: 2 }),
+    gatePolicy({ schemaVersion: 3 }),
     "gatePolicy.schemaVersion",
   ],
   [

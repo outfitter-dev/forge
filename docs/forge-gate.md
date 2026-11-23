@@ -45,7 +45,7 @@ Every flag takes one value. A missing required flag, an unknown flag, a repeated
 
 A CI lane supplies both expected revisions from trusted admission. In Buildkite, it must bind `--expected-head` to the exact commit on which Buildkite will post the status and obtain `--expected-base` from trusted pull request admission. Build input alone cannot authenticate these values. A different collected head or base stops with `not-collected` at stage `subject`, preserves any existing ledger, and exits 3. An invocation that omits both pins retains its existing collection behavior.
 
-With Codex collection disabled, an absent `--review-evidence` supplies no agent attempts or ladder and leaves finding evidence unknown, so `agent-review` fails. With Codex collection enabled and `findingHistory: "codex-only"`, complete accepted collector history can satisfy the gate without that flag. `findingHistory: "supplied-global-ledger"` requires current complete trusted supplied history. An explicitly supplied unknown history remains unknown during composition and blocks. Without any `--receipt` the three verification gates fail the same way.
+With Codex collection disabled, an absent `--review-evidence` supplies no agent attempts or ladder and leaves finding evidence unknown, so `agent-review` fails. With Codex collection enabled and `findingHistory: "adapter-only"` under schema 2 (`"codex-only"` under schema 1), complete accepted collector history can satisfy the gate without that flag. `findingHistory: "supplied-global-ledger"` requires current complete trusted supplied history. An explicitly supplied unknown history remains unknown during composition and blocks. Without any `--receipt` the three verification gates fail the same way.
 
 ### The token
 
@@ -59,8 +59,9 @@ The policy is a strict format of its own. Every level takes exactly the fields s
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "forge-gate-policy",
+  "reviewAdapters": [],
   "evidence": {
     "schemaVersion": 2,
     "repository": "example/project",
@@ -110,7 +111,9 @@ The policy is a strict format of its own. Every level takes exactly the fields s
 
 | Field | Meaning |
 | --- | --- |
-| `schemaVersion`, `kind` | Exactly `1` and `forge-gate-policy`. |
+| `schemaVersion`, `kind` | Schema `1` or `2`, and exactly `forge-gate-policy`. |
+| `reviewAdapters` | Required in schema 2, with an explicit array of supported collector configurations. An empty array disables optional collection. |
+| `codexReview` | Optional collector extension for schema 1. Schema 2 uses `reviewAdapters`. |
 | `evidence` | An `EvidencePolicyV2`, the [evaluator's policy](evidence-evaluator.md#policy), passed to the evaluator as it is. This format checks only that it is an object with `schemaVersion: 2`, an `owner/name` `repository`, and a `collector` and a `verification` that are each exactly a nonempty `producer` and a 64-character lowercase hexadecimal `runtimeFingerprint`. The evaluator validates the rest, and it does so only after the pull request is collected. |
 | `checks` | For each of `lint`, `test` and `build`, the declared check ID that satisfies it: the [`CheckReceiptExpectation.checks`](verification-evidence.md#expectation-and-result) mapping. Each is nonempty with no space at either end. Several gates may name one ID. |
 | `mergeAuthorization` | How a repository adopts the collector's rule for `mergeAuthorized`. `rule` must be exactly `same-repository-unless-held`. `holdLabel` is the label that withholds landing, printable ASCII with no space at either end, and is what the collector is given. |
@@ -123,7 +126,7 @@ The parser is `parseGatePolicy` in [gate-policy.ts](../src/gate-policy.ts).
 
 Forge's own production policy is [`forge-gate.json`](../forge-gate.json) at the repository root ([FOR-38](https://linear.app/outfitter/issue/FOR-38)). No lane reads it yet. It takes effect only when a trusted lane passes it as `--policy` from a trusted revision, and that lane, its installed source and its state are still owed by FOR-38. Local qualification policies identify their actual local execution and retain their advisory scope.
 
-The file's `evidence.repository` is `outfitter-dev/forge`. Its `checks` map `lint`, `test` and `build` to `check`, the one check ID [`forge.json`](../forge.json) declares. Its merge authorization is `same-repository-unless-held` with hold label `forge:hold`. Its only eligible reviewer is the hosted `codex-github`, and that reviewer entry's wait and the `codexReview` extension are the [adopted Codex entry](hosted-reviewer-attestations.md#adopted-policy-entry) value for value: reviewer key, bot account, wait, independence basis and finding-history requirement. No local reviewer is adopted for Forge, so `instructions` is empty.
+The file's `evidence.repository` is `outfitter-dev/forge`. Its `checks` map `lint`, `test` and `build` to `check`, the one check ID [`forge.json`](../forge.json) declares. Its merge authorization is `same-repository-unless-held` with hold label `forge:hold`. Its only eligible reviewer is the hosted `codex-github`, and that reviewer entry's wait and the `reviewAdapters` entry are the [adopted Codex entry](hosted-reviewer-attestations.md#adopted-policy-entry) value for value: reviewer key, bot account, wait, independence basis and finding-history requirement. No local reviewer is adopted for Forge, so `instructions` is empty.
 
 **Identities.** The file names four lane roles. Each `runtimeFingerprint` is the lowercase hexadecimal SHA-256 of the UTF-8 bytes of the role's descriptor, with nothing before or after them.
 
@@ -157,6 +160,29 @@ The hashing is in [codex-review-evidence.ts](../src/codex-review-evidence.ts), t
 - A `follow-up-review` resolution that is on an entry when it is first supplied is stored with it and judged again on every run against the attempts collected or supplied. It is accepted while it names a credible attempt on the same head and base under the reviewer issuer's identity, so an entry first supplied with one can pass on a later run once that attempt is present. Nothing produces such a resolution, the [local qualification](codex-command-qualification.md#findings-and-source-coverage) rejected attributing a fix to the generic hosted review, and after a push it is stale and cannot be replaced through this input. That qualification cleared its retained Devin finding through a separate eligible local reviewer and a trusted write to the ledger store, and this policy and this command have neither.
 
 `bun test tests/forge-gate-policy-file.test.ts` keeps the file equal to the values this section states, which are copied into the test. It reads neither this document nor the adopted entry, so either can drift from the file without a failure. It parses the committed file with `parseGatePolicy`, recomputes each fingerprint from its descriptor, compares the Codex values with the test's copy of the adopted entry and the repository and check ID with `forge.json`, evaluates facts issued under the file's identities, and runs the real command with the file as `--policy`, with and without a complete finding ledger. The bump and limit behavior described above was confirmed by running the real command when this section was written, and this test does not pin it.
+
+## Review adapter policy
+
+Policy schema version 2 expresses collection through an explicit `reviewAdapters` array. Forge's root policy uses this format. The supported adapter ID is `codex-github`, with one eligible hosted reviewer and its existing account, independence and finding-history configuration.
+
+```jsonc
+"schemaVersion": 2,
+"reviewAdapters": [
+  {
+    "adapter": "codex-github",
+    "reviewer": "codex-github",
+    "configuration": {
+      "botAccountId": 199175422,
+      "findingHistory": "supplied-global-ledger",
+      "independence": null
+    }
+  }
+]
+```
+
+An empty array disables optional review collection. Unknown adapter IDs, duplicate entries, unsupported fields, missing arrays and mixed policy versions are input errors before GitHub reads. This version supports one configured collector. Ordered fallback and additional collector adapters remain FOR-45 work.
+
+Schema 1 policies retain the `codexReview` extension described below. The parser explicitly normalizes schema 2 into the existing runtime policy, so collector requests, issuer identities, stored findings and gate output keep their current meaning. The runtime and output field migration remains separate FOR-45 work. Use `adapter-only` in schema 2 for the existing `codex-only` coverage claim. That claim still asserts complete reporting history for the selected adapter plus persisted entries. `supplied-global-ledger` still requires a current complete supplied ledger. Neither a format migration nor an empty collector list supplies missing review evidence.
 
 ## Optional Codex collector policy
 

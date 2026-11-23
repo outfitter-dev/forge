@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "forge-gate-policy",
   "evidence": {
     "schemaVersion": 2,
@@ -29,19 +29,28 @@
       }
     }
   },
-  "checks": { "lint": "check", "test": "check", "build": "check" },
-  "codexReview": {
-    "reviewer": "codex-github",
-    "botAccountId": 199175422,
-    "findingHistory": "supplied-global-ledger",
-    "independence": {
-      "id": "forge/codex-github/2026-11-13",
-      "policyRevision": "linear-comment:ab87b5a1-593e-44e8-bd41-c109eb96265a",
-      "statement": "separate-hosted-invocation-without-inherited-author-context"
-    }
+  "checks": {
+    "lint": "check",
+    "test": "check",
+    "build": "check"
   },
   "mergeAuthorization": {
     "rule": "same-repository-unless-held",
     "holdLabel": "forge:hold"
-  }
+  },
+  "reviewAdapters": [
+    {
+      "adapter": "codex-github",
+      "reviewer": "codex-github",
+      "configuration": {
+        "botAccountId": 199175422,
+        "findingHistory": "supplied-global-ledger",
+        "independence": {
+          "id": "forge/codex-github/2026-11-13",
+          "policyRevision": "linear-comment:ab87b5a1-593e-44e8-bd41-c109eb96265a",
+          "statement": "separate-hosted-invocation-without-inherited-author-context"
+        }
+      }
+    }
+  ]
 }

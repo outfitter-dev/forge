@@ -30,15 +30,13 @@ export interface GateCodexReviewPolicy {
 
 const eligibleReviewer = (
   name: string,
-  evidence: GatePolicy["evidence"]
+  evidence: GatePolicy["evidence"],
+  path = "gatePolicy.codexReview.reviewer"
 ): Extract<ReviewerPolicy, { rung: "hosted" }> => {
   const policy = evidence.agentReview as AgentReviewPolicy;
   const reviewer = policy.reviewers.find((entry) => entry.reviewer === name);
   if (reviewer?.rung !== "hosted") {
-    return invalid(
-      "gatePolicy.codexReview.reviewer",
-      "expected exactly one eligible hosted reviewer"
-    );
+    return invalid(path, "expected exactly one eligible hosted reviewer");
   }
   return reviewer;
 };
@@ -46,18 +44,19 @@ const eligibleReviewer = (
 /** A distinct explicit collector-policy statement, scoped to the wrapper's repository and reviewer. */
 export const parseGateCodexReviewPolicy = (
   value: unknown,
-  evidence: GatePolicy["evidence"]
+  evidence: GatePolicy["evidence"],
+  path = "gatePolicy.codexReview",
+  reviewerPath = `${path}.reviewer`
 ): GateCodexReviewPolicy => {
   agentReviewPolicy(evidence.agentReview, "gatePolicy.evidence.agentReview");
-  const path = "gatePolicy.codexReview";
   const source = object(value, path, [
     "reviewer",
     "botAccountId",
     "independence",
     "findingHistory",
   ]);
-  const reviewer = text(source.reviewer, `${path}.reviewer`);
-  eligibleReviewer(reviewer, evidence);
+  const reviewer = text(source.reviewer, reviewerPath);
+  eligibleReviewer(reviewer, evidence, reviewerPath);
   count(source.botAccountId, `${path}.botAccountId`);
   if (source.botAccountId === 0) {
     invalid(`${path}.botAccountId`, "expected a positive account ID");
