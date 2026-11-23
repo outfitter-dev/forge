@@ -5,13 +5,13 @@ import type {
   PullRequestSubject,
   ReviewFindingLedger,
 } from "./evidence-types.ts";
-import { invalid, text } from "./evidence-validation-primitives.ts";
+import { invalid, object, text } from "./evidence-validation-primitives.ts";
 import {
   parseStoredFindings,
   retainsFindings,
 } from "./review-ledger-findings.ts";
 
-/** Evaluator facts shared by review collectors. Provider observations stay on the concrete result. */
+/** Plain enumerable data shared by review collectors. Provider observations stay on the concrete result. */
 export interface CollectedReviewEvidence {
   agentReviews: AgentReviewAttempt[];
   reviewFindings: ReviewFindingLedger;
@@ -37,18 +37,27 @@ export const collectReviewAdapter = <Result extends CollectedReviewEvidence>(
   adapter: ReviewAdapter<Result>,
   input: ReviewAdapterInput
 ): Result => {
-  text(adapter.reviewer, "reviewAdapter.reviewer");
+  const reviewer = text(adapter.reviewer, "reviewAdapter.reviewer");
   const before = parseStoredFindings(input.findings);
   const result = adapter.collect(structuredClone(input));
+  object(result, "reviewAdapter.result", Object.keys(result));
+  if (
+    Reflect.ownKeys(result).length !== Object.keys(result).length ||
+    Object.values(Object.getOwnPropertyDescriptors(result)).some(
+      (descriptor) => !Object.hasOwn(descriptor, "value")
+    )
+  ) {
+    invalid("reviewAdapter.result", "expected enumerable data fields");
+  }
   const after = parseStoredFindings(result.reviewFindings);
   if (!retainsFindings(before, after)) {
     invalid("reviewFindings", "review adapter discarded an accepted finding");
   }
   const foreignBefore = before.findings.filter(
-    (finding) => finding.reviewer !== adapter.reviewer
+    (finding) => finding.reviewer !== reviewer
   );
   const foreignAfter = after.findings.filter(
-    (finding) => finding.reviewer !== adapter.reviewer
+    (finding) => finding.reviewer !== reviewer
   );
   if (
     foreignBefore.length !== foreignAfter.length ||
@@ -61,9 +70,7 @@ export const collectReviewAdapter = <Result extends CollectedReviewEvidence>(
       "review adapter changed another reviewer's findings"
     );
   }
-  if (
-    result.agentReviews.some((attempt) => attempt.reviewer !== adapter.reviewer)
-  ) {
+  if (result.agentReviews.some((attempt) => attempt.reviewer !== reviewer)) {
     invalid(
       "agentReviews",
       "review adapter reported another reviewer's attempt"

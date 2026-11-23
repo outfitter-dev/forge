@@ -161,3 +161,57 @@ test("an adapter can update its own native finding resolution", () => {
   );
   expect(stable.findings.findings[0]?.resolution).toBeNull();
 });
+
+test("an adapter cannot report another reviewer's attempt", () => {
+  expect(() =>
+    collectReviewAdapter(
+      {
+        collect: (given) => ({
+          agentReviews: [localAttempt({ reviewer: HOSTED })],
+          reviewFindings: given.findings,
+          reviewLadder: null,
+        }),
+        reviewer: LOCAL,
+      },
+      input()
+    )
+  ).toThrow("reported another reviewer's attempt");
+});
+
+test("inherited adapter metadata is refused instead of silently discarded", () => {
+  class Result implements CollectedReviewEvidence {
+    agentReviews = [];
+    reviewFindings = input().findings;
+    reviewLadder = null;
+    get observations() {
+      return { source: this.reviewFindings };
+    }
+  }
+  expect(() =>
+    collectReviewAdapter(
+      { collect: () => new Result(), reviewer: LOCAL },
+      input()
+    )
+  ).toThrow("expected a JSON object");
+});
+
+test("non-enumerable adapter metadata is refused instead of silently discarded", () => {
+  expect(() =>
+    collectReviewAdapter(
+      {
+        collect: (given) =>
+          Object.defineProperty(
+            {
+              agentReviews: [],
+              reviewFindings: given.findings,
+              reviewLadder: null,
+            },
+            "observations",
+            { value: { source: "native-review" } }
+          ),
+        reviewer: LOCAL,
+      },
+      input()
+    )
+  ).toThrow("expected enumerable data fields");
+});
