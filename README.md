@@ -1,6 +1,6 @@
 # Forge
 
-Shared engineering automation for repositories with explicit product policy and authority, including `outfitter-dev` and personal `galligan` consumers. Forge is intended to house reusable GitHub Actions, Buildkite integration, worker setup, local CI operations, and future Dagger or Turbo integration where useful. Matt selected public source reuse on November 11, 2026; the repository remains private until a separately authorized visibility change after [public-readiness preparation](docs/public-readiness.md).
+Shared engineering automation for repositories with explicit product policy and authority, including `outfitter-dev` and personal `galligan` consumers. Forge is intended to house reusable GitHub Actions, Buildkite integration, worker setup, local CI operations, and future Dagger or Turbo integration where useful. The repository is public under MIT. [Public-readiness preparation](docs/public-readiness.md) records the earlier distribution decision and preservation work.
 
 Some historical evidence links target private repositories or Linear records and may be unavailable to outside readers. They remain provenance references, not public dependencies or promises of access.
 
@@ -57,13 +57,26 @@ The GitHub **Ropes Markdown (advisory)** job reports findings in its log and run
 
 ## Start here
 
-- [Design tenets](docs/tenets.md): how we build—modularity, contracts, observability, testability, and evolution.
-- [Automation contract](docs/automation-contract.md): required behavior for evidence, authority, trust boundaries, and adoption.
-- [Canonical CI and release patterns](docs/ci-release-patterns.md): audited source evidence, selected operation/adapter boundaries and product-owned behavior; extraction guidance without adoption or Belay-retirement claims.
-- [Implementation handoff](docs/handoff.md): scope, boundaries, evidence, cross-owner reuse, and the first implementation slice.
-- [Legacy Forge retirement](docs/legacy-forge.md): preserved old repository, local checkout, and linked worktree.
-- [Worker lifecycle plan](docs/worker-lifecycle-plan.md): proposed ownership, preservation, lifecycle, and bounded capacity qualification; no deployment authorization.
-- [Human approval qualification brief](docs/human-approval-qualification.md): proposed disposable consumer, actor policy, scenarios, access decisions, and evidence; no live qualification authorization.
+[Implementation handoff](docs/handoff.md) records the current milestone, open decisions and next owners. The immediate milestone is FOR-38's first live trusted Buildkite gate on a Forge pull request.
+
+### Governing guidance
+
+- [Design tenets](docs/tenets.md) govern construction and modularity.
+- [Automation contract](docs/automation-contract.md) governs evidence, authority, trust boundaries and adoption.
+- [Repository instructions](AGENTS.md) govern development, delivery authority and failure recovery.
+
+### Current references and plans
+
+- [Forge check](docs/forge-check.md), [Forge gate](docs/forge-gate.md) and [Buildkite pipeline](docs/buildkite-pipeline.md) describe the implemented commands and their adoption limits.
+- [Review ledger store](docs/review-ledger-store.md) and [pull request collection](docs/pull-request-collection.md) define collection and persistence contracts.
+- [Canonical CI and release patterns](docs/ci-release-patterns.md) records extraction choices and product ownership. [Release composition](docs/release-composition.md) identifies the remaining consumer qualification.
+- [Buildkite lane configuration](docs/buildkite-lanes-plan.md), [worker lifecycle](docs/worker-lifecycle-plan.md), [configured-bot findings](docs/configured-bot-findings-proposal.md) and [human approval qualification](docs/human-approval-qualification.md) retain plans and decisions awaiting adoption.
+
+### Dated qualification and historical records
+
+- [Hosted review command qualification](docs/codex-command-qualification.md), [guidance qualification](docs/codex-guidance-qualification.md) and [Devin findings discovery](docs/devin-findings-discovery.md) record the tested provider boundaries.
+- [Pilot qualification](docs/pilot-qualification.md), [session closeout](docs/session-closeout.md) and [tokens shadow trial](docs/tokens-shadow-qualification.md) preserve the original experiments and their limits.
+- [Tooling qualification](docs/tooling.md), [distribution qualification](docs/distribution-qualification.md), [public-readiness preparation](docs/public-readiness.md) and [legacy Forge retirement](docs/legacy-forge.md) retain setup and preservation evidence.
 
 The previous project named Forge is archived at [outfitter-dev/forge-old](https://github.com/outfitter-dev/forge-old). Its durable multi-agent operating-model design is historical material, not the specification for this new project. Existing `outfitter-dev/actions` and the Buildkite pilot remain operational; migration is explicit future work.
 
