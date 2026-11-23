@@ -9,6 +9,7 @@ import {
 } from "./evidence-validation-primitives.ts";
 import { parseGateCodexReviewPolicy } from "./gate-codex-policy.ts";
 import type { GateCodexReviewPolicy } from "./gate-codex-policy.ts";
+import { parseGateReviewAdapters } from "./gate-review-adapters.ts";
 import type { CheckReceiptExpectation } from "./normalize-check-receipts.ts";
 
 /**
@@ -86,7 +87,7 @@ const holdLabel = (value: unknown, path: string): string => {
 };
 
 /**
- * Checks decoded JSON against the gate policy format and returns it as a new
+ * Checks schema 1 or 2 JSON and returns the schema 1 runtime representation as a new
  * object. Every level takes exactly its own fields, except `evidence`, whose
  * remaining fields are the evaluator's to check. An issue names a field and
  * what was expected, and never holds the field's value.
@@ -102,8 +103,17 @@ export const parseGatePolicy = (value: unknown): GatePolicy => {
     "checks",
     "mergeAuthorization",
     "codexReview",
+    "reviewAdapters",
   ]);
-  choice(root.schemaVersion, "gatePolicy.schemaVersion", [1]);
+  choice(root.schemaVersion, "gatePolicy.schemaVersion", [1, 2]);
+  const legacy = root.schemaVersion === 1;
+  const unsupported = legacy ? "reviewAdapters" : "codexReview";
+  if (Object.hasOwn(root, unsupported)) {
+    invalid(
+      `gatePolicy.${unsupported}`,
+      "unsupported for this policy schema version"
+    );
+  }
   choice(root.kind, "gatePolicy.kind", [KIND]);
   const checks = object(root.checks, "gatePolicy.checks", [
     "lint",
@@ -118,9 +128,14 @@ export const parseGatePolicy = (value: unknown): GatePolicy => {
   // A policy that names no rule, or another one, has not adopted this one.
   choice(authorization.rule, "gatePolicy.mergeAuthorization.rule", [RULE]);
   const checkedEvidence = evidence(root.evidence, "gatePolicy.evidence");
-  const codexReview = Object.hasOwn(root, "codexReview")
-    ? parseGateCodexReviewPolicy(root.codexReview, checkedEvidence)
-    : undefined;
+  let codexReview: GateCodexReviewPolicy | undefined;
+  if (legacy) {
+    codexReview = Object.hasOwn(root, "codexReview")
+      ? parseGateCodexReviewPolicy(root.codexReview, checkedEvidence)
+      : undefined;
+  } else {
+    codexReview = parseGateReviewAdapters(root.reviewAdapters, checkedEvidence);
+  }
   return {
     checks: {
       build: text(checks.build, "gatePolicy.checks.build"),

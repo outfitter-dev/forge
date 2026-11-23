@@ -123,7 +123,7 @@ The parser is `parseGatePolicy` in [gate-policy.ts](../src/gate-policy.ts).
 
 Forge's own production policy is [`forge-gate.json`](../forge-gate.json) at the repository root ([FOR-38](https://linear.app/outfitter/issue/FOR-38)). No lane reads it yet. It takes effect only when a trusted lane passes it as `--policy` from a trusted revision, and that lane, its installed source and its state are still owed by FOR-38. Local qualification policies identify their actual local execution and retain their advisory scope.
 
-The file's `evidence.repository` is `outfitter-dev/forge`. Its `checks` map `lint`, `test` and `build` to `check`, the one check ID [`forge.json`](../forge.json) declares. Its merge authorization is `same-repository-unless-held` with hold label `forge:hold`. Its only eligible reviewer is the hosted `codex-github`, and that reviewer entry's wait and the `codexReview` extension are the [adopted Codex entry](hosted-reviewer-attestations.md#adopted-policy-entry) value for value: reviewer key, bot account, wait, independence basis and finding-history requirement. No local reviewer is adopted for Forge, so `instructions` is empty.
+The file's `evidence.repository` is `outfitter-dev/forge`. Its `checks` map `lint`, `test` and `build` to `check`, the one check ID [`forge.json`](../forge.json) declares. Its merge authorization is `same-repository-unless-held` with hold label `forge:hold`. Its only eligible reviewer is the hosted `codex-github`, and that reviewer entry's wait and the `reviewAdapters` entry are the [adopted Codex entry](hosted-reviewer-attestations.md#adopted-policy-entry) value for value: reviewer key, bot account, wait, independence basis and finding-history requirement. No local reviewer is adopted for Forge, so `instructions` is empty.
 
 **Identities.** The file names four lane roles. Each `runtimeFingerprint` is the lowercase hexadecimal SHA-256 of the UTF-8 bytes of the role's descriptor, with nothing before or after them.
 
@@ -157,6 +157,29 @@ The hashing is in [codex-review-evidence.ts](../src/codex-review-evidence.ts), t
 - A `follow-up-review` resolution that is on an entry when it is first supplied is stored with it and judged again on every run against the attempts collected or supplied. It is accepted while it names a credible attempt on the same head and base under the reviewer issuer's identity, so an entry first supplied with one can pass on a later run once that attempt is present. Nothing produces such a resolution, the [local qualification](codex-command-qualification.md#findings-and-source-coverage) rejected attributing a fix to the generic hosted review, and after a push it is stale and cannot be replaced through this input. That qualification cleared its retained Devin finding through a separate eligible local reviewer and a trusted write to the ledger store, and this policy and this command have neither.
 
 `bun test tests/forge-gate-policy-file.test.ts` keeps the file equal to the values this section states, which are copied into the test. It reads neither this document nor the adopted entry, so either can drift from the file without a failure. It parses the committed file with `parseGatePolicy`, recomputes each fingerprint from its descriptor, compares the Codex values with the test's copy of the adopted entry and the repository and check ID with `forge.json`, evaluates facts issued under the file's identities, and runs the real command with the file as `--policy`, with and without a complete finding ledger. The bump and limit behavior described above was confirmed by running the real command when this section was written, and this test does not pin it.
+
+## Review adapter policy
+
+Policy schema version 2 expresses collection through an explicit `reviewAdapters` array. Forge's root policy uses this format. The supported adapter ID is `codex-github`, with one eligible hosted reviewer and its existing account, independence and finding-history configuration.
+
+```jsonc
+"schemaVersion": 2,
+"reviewAdapters": [
+  {
+    "adapter": "codex-github",
+    "reviewer": "codex-github",
+    "configuration": {
+      "botAccountId": 199175422,
+      "findingHistory": "supplied-global-ledger",
+      "independence": null
+    }
+  }
+]
+```
+
+An empty array disables optional review collection. Unknown adapter IDs, duplicate entries, unsupported fields, missing arrays and mixed policy versions are input errors before GitHub reads. This version supports one configured collector. Ordered fallback and additional collector adapters remain FOR-45 work.
+
+Schema 1 policies retain the `codexReview` extension described below. The parser explicitly normalizes schema 2 into the existing runtime policy, so collector requests, issuer identities, stored findings and gate output keep their current meaning. The runtime and output field migration remains separate FOR-45 work. Use `adapter-only` in schema 2 for the existing `codex-only` coverage claim. That claim still asserts complete reporting history for the selected adapter plus persisted entries. `supplied-global-ledger` still requires a current complete supplied ledger. Neither a format migration nor an empty collector list supplies missing review evidence.
 
 ## Optional Codex collector policy
 
