@@ -214,6 +214,35 @@ test.each([
   "%s project evidence stays withheld and blocks every mapped verification gate",
   (scenario) => {
     const input = projectRun(scenario === "failed" ? "exit 17" : "exit 0");
+    if (scenario === "failed") {
+      expect(input.capture.runnerExitCode).toBe(1);
+      expect(input.job).toMatchObject({ exitStatus: 1, state: "failed" });
+      const observed: unknown = JSON.parse(
+        new TextDecoder().decode(input.bytes)
+      );
+      expect(observed).toMatchObject({
+        admission: "started",
+        check: { commandDigest: input.expectation.commandDigest, id: "check" },
+        completion: "observed",
+        configAfter: input.expectation.configDigest,
+        configBefore: input.expectation.configDigest,
+        evidence: "stable",
+        exitCode: 17,
+        outcome: "failed",
+        recording: { state: "persisted" },
+        repository,
+        sourceAfter: {
+          base: input.admission.base,
+          dirty: false,
+          head: input.admission.head,
+        },
+        sourceBefore: {
+          base: input.admission.base,
+          dirty: false,
+          head: input.admission.head,
+        },
+      });
+    }
     const supplied = {
       ...input,
       ...(scenario === "missing" ? { bytes: null } : {}),
