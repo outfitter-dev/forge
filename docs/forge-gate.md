@@ -45,7 +45,7 @@ Every flag takes one value. A missing required flag, an unknown flag, a repeated
 
 A CI lane supplies both expected revisions from trusted admission. In Buildkite, it must bind `--expected-head` to the exact commit on which Buildkite will post the status and obtain `--expected-base` from trusted pull request admission. Build input alone cannot authenticate these values. A different collected head or base stops with `not-collected` at stage `subject`, preserves any existing ledger, and exits 3. An invocation that omits both pins retains its existing collection behavior.
 
-With Codex collection disabled, an absent `--review-evidence` supplies no agent attempts or ladder and leaves finding evidence unknown, so `agent-review` fails. With Codex collection enabled and `findingHistory: "codex-only"`, complete accepted collector history can satisfy the gate without that flag. `findingHistory: "supplied-global-ledger"` requires current complete trusted supplied history. An explicitly supplied unknown history remains unknown during composition and blocks. Without any `--receipt` the three verification gates fail the same way.
+With Codex collection disabled, an absent `--review-evidence` supplies no agent attempts or ladder and leaves finding evidence unknown, so `agent-review` fails. With Codex collection enabled and `findingHistory: "adapter-only"` under schema 2 (`"codex-only"` under schema 1), complete accepted collector history can satisfy the gate without that flag. `findingHistory: "supplied-global-ledger"` requires current complete trusted supplied history. An explicitly supplied unknown history remains unknown during composition and blocks. Without any `--receipt` the three verification gates fail the same way.
 
 ### The token
 
@@ -59,8 +59,9 @@ The policy is a strict format of its own. Every level takes exactly the fields s
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "forge-gate-policy",
+  "reviewAdapters": [],
   "evidence": {
     "schemaVersion": 2,
     "repository": "example/project",
@@ -110,7 +111,9 @@ The policy is a strict format of its own. Every level takes exactly the fields s
 
 | Field | Meaning |
 | --- | --- |
-| `schemaVersion`, `kind` | Exactly `1` and `forge-gate-policy`. |
+| `schemaVersion`, `kind` | Schema `1` or `2`, and exactly `forge-gate-policy`. |
+| `reviewAdapters` | Required in schema 2, with an explicit array of supported collector configurations. An empty array disables optional collection. |
+| `codexReview` | Optional collector extension for schema 1. Schema 2 uses `reviewAdapters`. |
 | `evidence` | An `EvidencePolicyV2`, the [evaluator's policy](evidence-evaluator.md#policy), passed to the evaluator as it is. This format checks only that it is an object with `schemaVersion: 2`, an `owner/name` `repository`, and a `collector` and a `verification` that are each exactly a nonempty `producer` and a 64-character lowercase hexadecimal `runtimeFingerprint`. The evaluator validates the rest, and it does so only after the pull request is collected. |
 | `checks` | For each of `lint`, `test` and `build`, the declared check ID that satisfies it: the [`CheckReceiptExpectation.checks`](verification-evidence.md#expectation-and-result) mapping. Each is nonempty with no space at either end. Several gates may name one ID. |
 | `mergeAuthorization` | How a repository adopts the collector's rule for `mergeAuthorized`. `rule` must be exactly `same-repository-unless-held`. `holdLabel` is the label that withholds landing, printable ASCII with no space at either end, and is what the collector is given. |
