@@ -61,6 +61,7 @@ export const collectedCodexReview = (
           summary: parseCodexSummary(comments, config.botAccountId),
           threads: input.reviewThreads,
         }),
+      reviewer: config.reviewer.reviewer,
     },
     {
       findings: input.ledger.reviewFindings,

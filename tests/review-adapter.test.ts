@@ -12,6 +12,8 @@ import {
   finding,
   HOSTED,
   localAttempt,
+  LOCAL,
+  nativeResolution,
   passingFactsV2,
   policyV2,
 } from "./agent-review-fixtures.ts";
@@ -29,6 +31,7 @@ const secondAdapter: ReviewAdapter<CollectedReviewEvidence> = {
     reviewFindings: stable.findings,
     reviewLadder: null,
   }),
+  reviewer: LOCAL,
 };
 
 test("a clean second adapter keeps an earlier unresolved finding blocking through the gate", () => {
@@ -63,6 +66,7 @@ test("an adapter cannot remove earlier findings by mutating its input", () => {
             reviewLadder: null,
           };
         },
+        reviewer: LOCAL,
       },
       stable
     )
@@ -82,8 +86,78 @@ test("the adapter boundary rejects duplicate finding identities", () => {
           },
           reviewLadder: null,
         }),
+        reviewer: LOCAL,
       },
       input()
     )
   ).toThrow("unique reviewer and finding IDs");
+});
+
+test("an adapter cannot resolve another reviewer's persisted finding", () => {
+  expect(() =>
+    collectReviewAdapter(
+      {
+        collect: (given) => ({
+          agentReviews: [],
+          reviewFindings: {
+            ...given.findings,
+            findings: given.findings.findings.map((entry) => ({
+              ...entry,
+              resolution: nativeResolution(),
+            })),
+          },
+          reviewLadder: null,
+        }),
+        reviewer: LOCAL,
+      },
+      input()
+    )
+  ).toThrow("changed another reviewer's findings");
+});
+
+test("an adapter cannot add a foreign native finding", () => {
+  expect(() =>
+    collectReviewAdapter(
+      {
+        collect: (given) => ({
+          agentReviews: [],
+          reviewFindings: {
+            ...given.findings,
+            findings: [
+              ...given.findings.findings,
+              finding({ id: "foreign-new", reviewer: HOSTED }),
+            ],
+          },
+          reviewLadder: null,
+        }),
+        reviewer: LOCAL,
+      },
+      input()
+    )
+  ).toThrow("changed another reviewer's findings");
+});
+
+test("an adapter can update its own native finding resolution", () => {
+  const stable = input();
+  const collected = collectReviewAdapter(
+    {
+      collect: (given) => ({
+        agentReviews: [],
+        reviewFindings: {
+          ...given.findings,
+          findings: given.findings.findings.map((entry) => ({
+            ...entry,
+            resolution: nativeResolution(),
+          })),
+        },
+        reviewLadder: null,
+      }),
+      reviewer: HOSTED,
+    },
+    stable
+  );
+  expect(collected.reviewFindings.findings[0]?.resolution).toEqual(
+    nativeResolution()
+  );
+  expect(stable.findings.findings[0]?.resolution).toBeNull();
 });
