@@ -38,7 +38,7 @@ export const normalizeReviewObservation = (
         result.reviewFindings.findings.some(
           (finding) =>
             finding.reviewer === entry.reviewer.reviewer &&
-            finding.resolution === null
+            attempt.findingIds?.includes(finding.id) === true
         )
       ) {
         continue;

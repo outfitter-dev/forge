@@ -2,13 +2,14 @@ import { afterEach, expect, test } from "bun:test";
 
 import { parseGateArguments } from "../src/gate-arguments.ts";
 import { BASE, HEAD } from "./evidence-fixtures.ts";
-import { codexPass, codexPolicy } from "./gate-codex-fixtures.ts";
+import { codexPass, codexPolicy, comments } from "./gate-codex-fixtures.ts";
 import {
   cleanupGateWorkspace,
   gateArgs,
   run,
   seedLedger,
   workspace,
+  ledgerText,
 } from "./gate-test-harness.ts";
 
 afterEach(cleanupGateWorkspace);
@@ -130,4 +131,57 @@ test("output negotiation leaves expected-revision admission parsing intact", () 
       });
     }
   }
+});
+
+test.each([429, 503])(
+  "single-source HTTP %s keeps the transport-only outcome in both output versions",
+  (status) => {
+    const ws = workspace();
+    const before = seedLedger(ws);
+    const args = gateArgs(ws, { policy: codexPolicy(), review: null });
+    for (const version of [1, 2] as const) {
+      const result = run(ws, args, {
+        outputVersion: version,
+        script: {
+          passes: [
+            codexPass({
+              comments: {
+                body: { message: "PRIVATE PROVIDER OUTAGE" },
+                status,
+              },
+            }),
+          ],
+        },
+      });
+      expect(result.exitCode).toBe(3);
+      expect(result.document).toMatchObject({
+        collection: { reason: "read-failed", status: "unavailable" },
+        read: { code: "request-failed", status },
+        stage: "collection",
+        status: "not-collected",
+      });
+      expect(ledgerText(ws)).toBe(before);
+      expect(result.stdout).not.toContain("PRIVATE PROVIDER OUTAGE");
+    }
+  }
+);
+
+test("an explicitly unavailable review after a successful transport remains an evaluated collection exhaustion", () => {
+  const ws = workspace();
+  seedLedger(ws);
+  const result = run(
+    ws,
+    gateArgs(ws, { policy: codexPolicy(), review: null }),
+    { script: { passes: [codexPass({ comments: { body: comments() } })] } }
+  );
+  expect(result.exitCode).toBe(1);
+  expect(result.document).toMatchObject({
+    reviewAdapters: {
+      adapters: [{ state: "unavailable" }],
+      exhausted: true,
+      reason: "review-adapters-exhausted",
+    },
+    status: "evaluated",
+  });
+  expect(JSON.parse(ledgerText(ws)).reviewFindings.recorded).toBe(true);
 });

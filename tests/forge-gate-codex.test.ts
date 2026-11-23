@@ -306,9 +306,9 @@ test("malformed supplied finding history retains invalid-input", () => {
   expect(issues(ran)[0]?.path).toBe("facts.pullRequest.reviewFindings");
 });
 
-test("adapter source failures retain transport status and make global history unknown", () => {
+test("a single-source transport failure keeps retry details and preserves the ledger", () => {
   const ws = workspace();
-  seedLedger(ws);
+  const before = seedLedger(ws);
   const ran = run(ws, gateArgs(ws, { policy: codexPolicy(), review: null }), {
     script: {
       passes: [
@@ -318,13 +318,13 @@ test("adapter source failures retain transport status and make global history un
       ],
     },
   });
-  expect(ran.exitCode).toBe(1);
-  expect(evaluated(ran).reviewAdapters?.adapters[0]).toMatchObject({
-    diagnostics: ["source-unavailable"],
-    observations: { read: { code: "request-failed", status: 503 } },
-    state: "unavailable",
+  expect(ran.exitCode).toBe(3);
+  expect(notCollected(ran)).toMatchObject({
+    collection: { reason: "read-failed", status: "unavailable" },
+    read: { code: "request-failed", status: 503 },
+    stage: "collection",
   });
-  expect(JSON.parse(ledgerText(ws)).reviewFindings.recorded).toBe(false);
+  expect(ledgerText(ws)).toBe(before);
   expect(ran.stdout).not.toContain(BODY_MARKER);
 });
 
@@ -438,4 +438,41 @@ test("a changed pull request head cannot reuse the prior summary or snapshot", (
       .commitSha
   ).toBe(HEAD);
   expect(gate(ran, "agent-review").codes).toContain("review-pending");
+});
+
+test("resolved reported findings do not create a permanent synthetic blocker", () => {
+  const ws = workspace();
+  seedLedger(ws);
+  const first = run(ws, gateArgs(ws, { policy: codexPolicy(), review: null }), {
+    script: {
+      passes: [
+        codexPass({
+          comments: {
+            body: comments(
+              comment({
+                has_any_findings: true,
+                has_unresolved_findings: false,
+              })
+            ),
+          },
+          threads: { body: threads(thread(true)) },
+        }),
+      ],
+    },
+  });
+  expect(first.exitCode).toBe(1);
+  const { findings } = JSON.parse(ledgerText(ws)).reviewFindings;
+  expect(findings).toHaveLength(1);
+  expect(findings[0]).toMatchObject({
+    id: "T1",
+    kind: "finding",
+    resolution: { kind: "native" },
+  });
+  const next = run(ws, gateArgs(ws, { policy: codexPolicy(), review: null }), {
+    script: {
+      passes: [codexPass({ threads: { body: threads(thread(true)) } })],
+    },
+  });
+  expect(next.exitCode).toBe(0);
+  expect(JSON.parse(ledgerText(ws)).reviewFindings.findings).toHaveLength(1);
 });

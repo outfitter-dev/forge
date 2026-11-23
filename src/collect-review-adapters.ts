@@ -54,6 +54,20 @@ export const observeReviewAdapters = async (
   return observations;
 };
 
+/** A sole source's transport failure retains the established retry envelope and precedes every ledger write. */
+export const requireSingleReviewSourceRead = (
+  sources: ReviewSourceObservation[]
+): void => {
+  const [source] = sources;
+  if (
+    sources.length === 1 &&
+    source?.status === "unavailable" &&
+    source.read !== null
+  ) {
+    throw new GitHubReadError(source.read.code, source.read.status);
+  }
+};
+
 const unavailableAttempt = (
   config: ReviewCollectionConfiguration,
   input: ReviewObservationInput

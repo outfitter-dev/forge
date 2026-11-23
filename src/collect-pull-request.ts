@@ -13,7 +13,10 @@ import type {
   PullRequestReads,
   PullRequestCommentReads,
 } from "./collect-pull-request-types.ts";
-import { observeReviewAdapters } from "./collect-review-adapters.ts";
+import {
+  observeReviewAdapters,
+  requireSingleReviewSourceRead,
+} from "./collect-review-adapters.ts";
 import { collectedPullRequestReviews } from "./collected-pull-request-reviews.ts";
 import {
   InvalidEvidenceError,
@@ -269,6 +272,7 @@ export const collectPullRequest = async (
       adapterReads,
       registry
     );
+    requireSingleReviewSourceRead(observations);
     const { pullRequest, servedAt, servedTime } = await readPullRequest(
       reads,
       request
@@ -313,6 +317,7 @@ export const collectPullRequest = async (
       adapterReads,
       registry
     );
+    requireSingleReviewSourceRead(observationsAgain);
     const { assignments, humanReviews, ledger } = humanReviewEvidence({
       ...timeline,
       ledger: request.ledger,
