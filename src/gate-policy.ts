@@ -8,9 +8,13 @@ import {
   text,
 } from "./evidence-validation-primitives.ts";
 import { parseGateCodexReviewPolicy } from "./gate-codex-policy.ts";
-import type { GateCodexReviewPolicy } from "./gate-codex-policy.ts";
 import { parseGateReviewAdapters } from "./gate-review-adapters.ts";
 import type { CheckReceiptExpectation } from "./normalize-check-receipts.ts";
+import { reviewAdapterRegistry } from "./review-adapter-registry.ts";
+import type {
+  GateReviewAdapterPolicy,
+  ReviewAdapterRegistry,
+} from "./review-collection-types.ts";
 
 /**
  * The trusted policy `forge gate` judges one pull request under. The invoker
@@ -18,7 +22,7 @@ import type { CheckReceiptExpectation } from "./normalize-check-receipts.ts";
  * under evaluation; nothing here can check that.
  */
 export interface GatePolicy {
-  schemaVersion: 1;
+  schemaVersion: 2;
   kind: "forge-gate-policy";
   /**
    * An `EvidencePolicyV2`, passed to the evaluator as it is. Only the fields
@@ -33,7 +37,7 @@ export interface GatePolicy {
   /** For each verification gate, the declared check ID that satisfies it. */
   checks: CheckReceiptExpectation["checks"];
   /** Explicit optional hosted collector adoption, distinct from eligible evaluator reviewers. */
-  codexReview?: GateCodexReviewPolicy;
+  reviewAdapters: GateReviewAdapterPolicy[];
   /**
    * How a repository adopts the collector's rule for `mergeAuthorized`: the
    * head branch is in the base repository and the pull request does not carry
@@ -87,14 +91,17 @@ const holdLabel = (value: unknown, path: string): string => {
 };
 
 /**
- * Checks schema 1 or 2 JSON and returns the schema 1 runtime representation as a new
+ * Checks schema 1 or 2 JSON and returns the neutral runtime representation as a new
  * object. Every level takes exactly its own fields, except `evidence`, whose
  * remaining fields are the evaluator's to check. An issue names a field and
  * what was expected, and never holds the field's value.
  *
  * @throws {InvalidEvidenceError} With the path of the first field that is not as described.
  */
-export const parseGatePolicy = (value: unknown): GatePolicy => {
+export const parseGatePolicy = (
+  value: unknown,
+  registry: ReviewAdapterRegistry = reviewAdapterRegistry
+): GatePolicy => {
   // Checked on a detached copy, so what is returned is what was checked.
   const root = object(structuredClone(value), "gatePolicy", [
     "schemaVersion",
@@ -128,21 +135,37 @@ export const parseGatePolicy = (value: unknown): GatePolicy => {
   // A policy that names no rule, or another one, has not adopted this one.
   choice(authorization.rule, "gatePolicy.mergeAuthorization.rule", [RULE]);
   const checkedEvidence = evidence(root.evidence, "gatePolicy.evidence");
-  let codexReview: GateCodexReviewPolicy | undefined;
+  let reviewAdapters: GateReviewAdapterPolicy[];
   if (legacy) {
-    codexReview = Object.hasOwn(root, "codexReview")
-      ? parseGateCodexReviewPolicy(root.codexReview, checkedEvidence)
-      : undefined;
+    reviewAdapters = [];
+    if (Object.hasOwn(root, "codexReview")) {
+      if (!Object.hasOwn(registry, "codex-github")) {
+        invalid("gatePolicy.codexReview", "legacy adapter is not installed");
+      }
+      const configuration = parseGateCodexReviewPolicy(
+        root.codexReview,
+        checkedEvidence
+      );
+      reviewAdapters.push({
+        adapter: "codex-github",
+        configuration,
+        reviewer: configuration.reviewer,
+      });
+    }
   } else {
-    codexReview = parseGateReviewAdapters(root.reviewAdapters, checkedEvidence);
+    reviewAdapters = parseGateReviewAdapters(
+      root.reviewAdapters,
+      checkedEvidence,
+      registry
+    );
   }
+
   return {
     checks: {
       build: text(checks.build, "gatePolicy.checks.build"),
       lint: text(checks.lint, "gatePolicy.checks.lint"),
       test: text(checks.test, "gatePolicy.checks.test"),
     },
-    ...(codexReview === undefined ? {} : { codexReview }),
     evidence: checkedEvidence,
     kind: KIND,
     mergeAuthorization: {
@@ -152,6 +175,7 @@ export const parseGatePolicy = (value: unknown): GatePolicy => {
       ),
       rule: RULE,
     },
-    schemaVersion: 1,
+    reviewAdapters,
+    schemaVersion: 2,
   };
 };

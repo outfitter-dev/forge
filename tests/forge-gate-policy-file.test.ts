@@ -106,7 +106,7 @@ test("the only eligible reviewer is the adopted hosted Codex entry, with a reser
 });
 
 test("the Codex collector policy is the adopted entry", () => {
-  expect(committed().codexReview).toStrictEqual({
+  expect(committed().reviewAdapters[0]?.configuration).toStrictEqual({
     botAccountId: 199_175_422,
     findingHistory: "supplied-global-ledger",
     independence: {

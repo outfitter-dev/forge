@@ -6,20 +6,28 @@ import type {
 } from "./collect-pull-request-types.ts";
 import { collectPullRequest } from "./collect-pull-request.ts";
 import { evaluateEvidence } from "./evaluate-evidence.ts";
+import { invalid } from "./evidence-validation-primitives.ts";
 import { GATE_USAGE, parseGateArguments } from "./gate-arguments.ts";
-import { gateCodexCollection } from "./gate-codex-policy.ts";
 import type { GateDocument, GateLedgerStop } from "./gate-document.ts";
 import {
   acceptedFindingHistory,
   ingestFindingHistory,
 } from "./gate-finding-history.ts";
 import { readGateInputs } from "./gate-inputs.ts";
+import { gateOutputDocument, gateOutputVersion } from "./gate-output.ts";
+import type { GateOutputDocument } from "./gate-output.ts";
 import { gateReviewEvidence } from "./gate-review-evidence.ts";
 import {
   GitHubReadError,
   githubPullRequestReads,
 } from "./github-pull-request-reads.ts";
 import { normalizeCheckReceipts } from "./normalize-check-receipts.ts";
+import {
+  captureReviewAdapterRegistry,
+  registeredReviewAdapter,
+  reviewAdapterRegistry,
+} from "./review-adapter-registry.ts";
+import type { ReviewAdapterRegistry } from "./review-collection-types.ts";
 import { ReviewLedgerError } from "./review-ledger-entry.ts";
 import {
   readReviewLedger,
@@ -42,9 +50,11 @@ export interface GateInvocation {
   cwd: string;
   /** The token is read from `FORGE_GITHUB_TOKEN` here and from nowhere else. */
   env: Record<string, string | undefined>;
+  /** Trusted code may supply additional registered adapters. The CLI uses its installed registry. */
+  adapterRegistry?: ReviewAdapterRegistry;
 }
 
-const FRAME = { kind: "forge-gate", schemaVersion: 1 } as const;
+const FRAME = { kind: "forge-gate", schemaVersion: 2 } as const;
 
 /** Carries a ledger refusal out of the flow. It never leaves this module. */
 class LedgerStoppedError extends Error {
@@ -104,7 +114,9 @@ const gate = async ({
   args,
   cwd,
   env,
+  adapterRegistry = reviewAdapterRegistry,
 }: GateInvocation): Promise<GateDocument> => {
+  const adapters = captureReviewAdapterRegistry(adapterRegistry);
   const parsed = parseGateArguments(args);
   if (!parsed.valid) {
     return {
@@ -114,7 +126,7 @@ const gate = async ({
       usage: GATE_USAGE,
     };
   }
-  const read = await readGateInputs(parsed.arguments, env, cwd);
+  const read = await readGateInputs(parsed.arguments, env, cwd, adapters);
   if (!read.valid) {
     return { ...FRAME, issues: read.issues, status: "invalid-input" };
   }
@@ -142,17 +154,23 @@ const gate = async ({
     })
   );
   const suppliedFindings = acceptedFindingHistory(reviewEvidence);
-  const codexReview = gateCodexCollection(
-    policy,
-    runId,
-    MAX_COMMENT_PAGES,
-    suppliedFindings
-  );
+  const reviewAdapters = policy.reviewAdapters.map((adoption) => {
+    const definition =
+      registeredReviewAdapter(adapters, adoption.adapter) ??
+      invalid("gatePolicy.reviewAdapters.adapter", "adapter is not installed");
+    return definition.configure(
+      adoption,
+      policy.evidence,
+      runId,
+      MAX_COMMENT_PAGES,
+      suppliedFindings
+    );
+  });
   const collection = await collectPullRequest(
     {
       // Passing the policy's label is what adopts the collector's rule for
       // `mergeAuthorized`; a policy without one was refused above.
-      ...(codexReview === undefined ? {} : { codexReview }),
+      ...(reviewAdapters.length === 0 ? {} : { reviewAdapters }),
       holdLabel: policy.mergeAuthorization.holdLabel,
       ledger: entry,
       maxThreadPages: MAX_THREAD_PAGES,
@@ -164,7 +182,8 @@ const gate = async ({
       pullRequest,
       repository,
     },
-    github.reads
+    github.reads,
+    adapters
   );
   if (collection.status !== "collected") {
     return {
@@ -205,6 +224,12 @@ const gate = async ({
     collection.ledger.reviewFindings,
     suppliedFindings
   );
+  if (
+    collection.reviewAdapters !== undefined &&
+    !collection.reviewAdapters.reviewFindings.recorded
+  ) {
+    collection.ledger.reviewFindings.recorded = false;
+  }
   // Evidence from a collection whose ledger was not stored must not be
   // evaluated: its bindings and its snapshot would be recorded nowhere.
   const stored = await ledgerStep("ledger-store", () =>
@@ -230,7 +255,9 @@ const gate = async ({
         ...collection.evidence,
         ...gateReviewEvidence(
           collection.ledger.reviewFindings,
-          collection.codexReview,
+          collection.reviewAdapters === undefined
+            ? undefined
+            : { ...collection.reviewAdapters, reviewLadder: null },
           reviewEvidence
         ),
         checks,
@@ -247,13 +274,13 @@ const gate = async ({
   const { subject } = collection.evidence;
   return {
     ...FRAME,
-    ...(collection.codexReview === undefined || policy.codexReview === undefined
+    ...(collection.reviewAdapters === undefined
       ? {}
       : {
-          codexReview: {
-            diagnostics: collection.codexReview.diagnostics,
-            findingHistory: policy.codexReview.findingHistory,
-            observations: collection.codexReview.observations,
+          reviewAdapters: {
+            adapters: collection.reviewAdapters.adapters,
+            exhausted: collection.reviewAdapters.exhausted,
+            reason: collection.reviewAdapters.reason,
           },
         }),
     eligible: evaluation.eligible,
@@ -282,12 +309,16 @@ const gate = async ({
  */
 export const runGate = async (
   invocation: GateInvocation
-): Promise<GateDocument> => {
+): Promise<GateOutputDocument> => {
+  const outputVersion = gateOutputVersion(invocation.args);
+  let document: GateDocument;
   try {
-    return await gate(invocation);
+    document = await gate(invocation);
   } catch (error) {
-    return error instanceof LedgerStoppedError
-      ? { ...FRAME, ...error.stop, status: "not-collected" }
-      : { ...FRAME, stage: "internal", status: "not-collected" };
+    document =
+      error instanceof LedgerStoppedError
+        ? { ...FRAME, ...error.stop, status: "not-collected" }
+        : { ...FRAME, stage: "internal", status: "not-collected" };
   }
+  return gateOutputDocument(document, outputVersion);
 };

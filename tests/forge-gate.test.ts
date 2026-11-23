@@ -555,7 +555,7 @@ test.each<[string, GateScript, Record<string, unknown>, number]>([
     expect(ran.exitCode).toBe(3);
     expect<unknown>(notCollected(ran)).toStrictEqual({
       kind: "forge-gate",
-      schemaVersion: 1,
+      schemaVersion: 2,
       stage: "collection",
       status: "not-collected",
       ...expected,
@@ -610,7 +610,7 @@ test.each<[string, (ws: Workspace) => string, string]>([
     expect<unknown>(notCollected(ran)).toStrictEqual({
       code,
       kind: "forge-gate",
-      schemaVersion: 1,
+      schemaVersion: 2,
       stage: "ledger-read",
       status: "not-collected",
     });
@@ -631,7 +631,7 @@ test("an existing lock file stops the run after collection: exit 3, nothing eval
   expect(notCollected(ran)).toStrictEqual({
     code: "ledger-busy",
     kind: "forge-gate",
-    schemaVersion: 1,
+    schemaVersion: 2,
     stage: "ledger-store",
     status: "not-collected",
   });
@@ -662,7 +662,7 @@ test("an entry stored by another collection in between is a conflict: exit 3, no
   expect(notCollected(ran)).toStrictEqual({
     code: "conflict",
     kind: "forge-gate",
-    schemaVersion: 1,
+    schemaVersion: 2,
     stage: "ledger-store",
     status: "not-collected",
   });
@@ -694,7 +694,7 @@ test.each([
     expect(ran.exitCode).toBe(3);
     expect(notCollected(ran)).toStrictEqual({
       kind: "forge-gate",
-      schemaVersion: 1,
+      schemaVersion: 2,
       stage: "internal",
       status: "not-collected",
     });
@@ -713,7 +713,7 @@ const expectRefused = (ws: Workspace, ran: Ran, where: string) => {
 };
 
 const USAGE =
-  "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>]";
+  "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>] [--output-version <1|2>]";
 
 const REQUIRED = [
   "--repository",
@@ -732,7 +732,7 @@ test.each(REQUIRED)(
     expect(ran.document).toStrictEqual({
       issues: [{ message: "required", path: flag }],
       kind: "forge-gate",
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: "invalid-input",
       usage: USAGE,
     });

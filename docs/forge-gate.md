@@ -10,10 +10,10 @@ It composes operations that already exist, in one fixed order:
 - [collects the pull request](pull-request-collection.md) from GitHub's API, read-only
 - stores the ledger entry the collection returned
 - turns the `forge check` receipts it was given into [verification evidence](verification-evidence.md)
-- joins optional collected Codex evidence and supplied agent-review evidence with accepted persisted findings
+- joins optional adapter-collected review evidence and supplied agent-review evidence with accepted persisted findings
 - calls the [evidence evaluator](evidence-evaluator.md) and prints its result
 
-It reports. It does not post a status, a comment or a label, it does not merge, and it does not enforce anything. It makes no request that writes to GitHub. It runs no check and no review. It reads `forge check` receipts and supplied review evidence as files, and optionally collects existing Codex output from GitHub. It writes the ledger entry in the state directory. It has no retry, cache, daemon or scheduler.
+It reports. It does not post a status, a comment or a label, it does not merge, and it does not enforce anything. It makes no request that writes to GitHub. It runs no check and no review. It reads `forge check` receipts and supplied review evidence as files, and optionally collects existing review output through installed adapters. It writes the ledger entry in the state directory. It has no retry, cache, daemon or scheduler.
 
 ## Invocation
 
@@ -25,7 +25,8 @@ FORGE_GITHUB_TOKEN=<token> bun src/forge-cli.ts gate \
   --state <directory> \
   --run-id <id> \
   [--receipt <file>]... \
-  [--review-evidence <file>]
+  [--review-evidence <file>] \
+  [--output-version <1|2>]
 ```
 
 `bun run forge gate ...` is the same command through the package script. A lane and a person give the same flags; only where the values come from differs. Run it from a trusted revision of Forge, never from the checkout of the pull request being judged.
@@ -41,6 +42,7 @@ Every flag takes one value. A missing required flag, an unknown flag, a repeated
 | `--run-id` | The invoker's identifier for this run: a CI build ID, or anything for a local run. It becomes `provenance.runId` of the collected evidence. Nonempty, with no space at either end. |
 | `--receipt` | A file holding one [`forge check` receipt](forge-check.md) as JSON. Give it once per receipt, or not at all. |
 | `--review-evidence` | A file holding `{ "agentReviews": [...], "reviewFindings": {...}, "reviewLadder": ... }`: exactly the three [agent-review fields](evidence-evaluator.md#agent-review-under-schema-version-2) of a version 2 pull request, and no other key. The evaluator validates the content. |
+| `--output-version` | Optional `1` or `2`. Omission preserves the version 1 envelope consumed by existing Ranger installations. Version 2 exposes neutral adapter diagnostics. |
 | `--expected-head`, `--expected-base` | Optional admission pins, supplied together as full lowercase 40-character commit IDs. After collection, both must equal the subject collected from GitHub before any ledger replacement or evaluation. |
 
 A CI lane supplies both expected revisions from trusted admission. In Buildkite, it must bind `--expected-head` to the exact commit on which Buildkite will post the status and obtain `--expected-base` from trusted pull request admission. Build input alone cannot authenticate these values. A different collected head or base stops with `not-collected` at stage `subject`, preserves any existing ledger, and exits 3. An invocation that omits both pins retains its existing collection behavior.
@@ -165,28 +167,34 @@ The hashing is in [codex-review-evidence.ts](../src/codex-review-evidence.ts), t
 
 Policy schema version 2 expresses collection through an explicit `reviewAdapters` array. Forge's root policy uses this format. The supported adapter ID is `codex-github`, with one eligible hosted reviewer and its existing account, independence and finding-history configuration.
 
-```jsonc
-"schemaVersion": 2,
-"reviewAdapters": [
-  {
-    "adapter": "codex-github",
-    "reviewer": "codex-github",
-    "configuration": {
-      "botAccountId": 199175422,
-      "findingHistory": "supplied-global-ledger",
-      "independence": null
+```json
+{
+  "schemaVersion": 2,
+  "reviewAdapters": [
+    {
+      "adapter": "codex-github",
+      "reviewer": "codex-github",
+      "configuration": {
+        "botAccountId": 199175422,
+        "findingHistory": "supplied-global-ledger",
+        "independence": null
+      }
     }
-  }
-]
+  ]
+}
 ```
 
-An empty array disables optional review collection. Unknown adapter IDs, duplicate entries, unsupported fields, missing arrays and mixed policy versions are input errors before GitHub reads. This version supports one configured collector. Ordered fallback and additional collector adapters remain FOR-45 work.
+An empty array disables optional review collection. Unknown adapter IDs, duplicate entries, unsupported fields, missing arrays and mixed policy versions are input errors before GitHub reads. Trusted code registers the supported adapters. The installed registry contains `codex-github`. Offline fixtures register a second adapter to verify ordering and failure handling.
 
-Schema 1 policies retain the `codexReview` extension described below. The parser explicitly normalizes schema 2 into the existing runtime policy, so collector requests, issuer identities, stored findings and gate output keep their current meaning. The runtime and output field migration remains separate FOR-45 work. Use `adapter-only` in schema 2 for the existing `codex-only` coverage claim. That claim still asserts complete reporting history for the selected adapter plus persisted entries. `supplied-global-ledger` still requires a current complete supplied ledger. Neither a format migration nor an empty collector list supplies missing review evidence.
+Schema 1 policies are explicitly translated into the neutral runtime configuration. Their `codexReview.findingHistory: "codex-only"` claim maps to schema 2’s `adapter-only` claim with the same issuer, wait, attestation and finding identities. Mixed shapes are refused. `supplied-global-ledger` requires a current complete supplied ledger. An empty collector list preserves the starting ledger’s unknown or complete state.
+
+Adapters run in configured order. `unavailable` and `unreadable` results advance to the next adapter. A pending, failed or passing result ends attempt selection. Every configured source is still observed so a later adverse report reaches the finding ledger even when an earlier reviewer passed. A failed verdict with a durable source and no detailed findings creates an `adverse-review` blocker. Each adapter can update only its own findings. Switching reviewers preserves all foreign finding identities and resolutions.
+
+A sole configured source’s transport failure stops collection before ledger storage and retains the transport code and HTTP status for Ranger’s retry classification. A successful response that reports an unavailable or unreadable review remains an adapter result. With multiple configured sources, a source outage permits collection to continue while keeping history unknown. Source gaps keep global finding history unknown, including when a supplied ledger claims completeness. Stable shared pull-request, timeline and thread reads remain required. The command records fixed adapter diagnostics and sanitized transport details. When every configured adapter is unavailable or unreadable, `reviewAdapters.reason` is `review-adapters-exhausted`. This describes the configured collection choices. Ranger owns executing reviewers and attesting exhaustion of its broader review ladder.
 
 ## Optional Codex collector policy
 
-`GatePolicy.codexReview` is an optional explicit collector-policy extension. Its fields are distinct from the evaluator’s eligible-reviewer list.
+Schema 1’s `codexReview` input is retained as an explicit compatibility format. Its fields are distinct from the evaluator’s eligible-reviewer list.
 
 | Field | Meaning |
 | --- | --- |
@@ -205,14 +213,14 @@ The invoker guarantees that the entire wrapper policy, including this extension,
 
 The invoker authenticates review-evidence files from protected trusted sources outside the proposed checkout. Accepted unique supplied findings are ingested before the same snapshot/bindings/findings CAS. New entries retain their typed resolutions. Exact existing entries deduplicate. A changed origin or resolution preserves the stored origin and sets its resolution to `null`, so external conflicts can add or reopen durable blockers but cannot clear an existing blocker or rewrite its origin. Omission on a later run preserves accepted entries. Malformed or duplicate finding histories are not ingested and remain non-passing through evaluator validation. Supplied attempts are appended without deduplication. Explicitly supplied unknown finding history remains blocking, including under `"codex-only"`. Whole native unresolved threads independently block mergeability.
 
-Only a stored accepted collection can reach evaluation. Comment read failures retain the transport code and HTTP status in `not-collected.read`. CAS conflicts return `not-collected` with no evaluation or source record. An evaluated enabled result adds `codexReview: { findingHistory, diagnostics, observations }` beside the evaluator result. That record retains scoped attestation ID/policy revision and normalized source identities, state, flags, timestamps and threads, with comment bodies stripped. The evaluator input still contains only normalized evidence.
+Only a stored accepted collection can reach evaluation. Multiple-source outages preserve existing findings and mark current history unknown. A sole-source transport failure returns `not-collected` before replacing the ledger. CAS conflicts return `not-collected` with no evaluation or source record. An evaluated enabled result adds the neutral `reviewAdapters` record with ordered states, selection flags, diagnostics and adapter-specific observations. The Codex adapter retains attestation ID/policy revision, source identities, state, flags, timestamps and threads, with comment bodies stripped. The evaluator receives normalized evidence.
 
 ## Flow
 
 1. Validate the arguments, the token, the state directory, the policy file, each receipt file and the review-evidence file. The policy must parse, each receipt must be readable JSON, and the review evidence must be a JSON object with exactly its three keys. Any failure is invalid input, and at that point nothing has been requested from GitHub and nothing has been read from or created in the state directory.
 2. Read the machine's clock once, as a whole-second UTC time.
 3. Read the stored ledger entry for this pull request from `<state>/review-ledger`, giving the store that time. A pull request with no entry has the empty one.
-4. Collect the pull request from GitHub, giving the collector the stored entry, the policy’s hold label and collector provenance with the `--run-id`. When `codexReview` is configured, also supply its resolved hosted reviewer configuration and retain the comment-read capability. The [optional collection flow](pull-request-collection.md#optional-codex-collection) establishes complete comments, source stability, the effective snapshot and updated findings.
+4. Collect the pull request from GitHub, giving the collector the stored entry, the policy’s hold label and collector provenance with the `--run-id`. Resolve each configured adapter from trusted code and retain its source capabilities. The [adapter collection flow](pull-request-collection.md#review-adapter-collection) observes each source twice around the shared subject collection, then normalizes its findings and selected attempts.
 5. If the collection did not end as `collected`, stop: not collected. When expected revisions were supplied, compare them with the collected head and base and stop on a mismatch. Nothing is stored in either case.
 6. Ingest accepted trusted supplied findings into the returned ledger under the conflict rules above, then store that entry, in place of the one read in step 3. If another run stored an entry in between (`conflict`), the lock file exists (`ledger-busy`) or the store refuses for any other reason, stop: not collected. Evidence from a collection whose ledger was not stored is never evaluated, because the bindings and snapshot it relies on would be recorded nowhere.
 7. Normalize the receipts under the policy's `checks` mapping and `evidence.verification` identity.
@@ -225,7 +233,13 @@ Step 9 comes after steps 4 and 6. Supplied review-evidence content and evidence-
 
 ## Output
 
-Stdout is exactly one JSON document on one line, followed by a newline, in every case. The command writes nothing else to stdout and nothing to stderr. Bun's package runner prints the command it invokes to stderr, so `bun run forge gate ...` shows the arguments there; the direct entry point does not. Every document has `kind: "forge-gate"`, `schemaVersion: 1` and a `status`. The TypeScript contract is [`GateDocument`](../src/gate-document.ts). The examples below are laid out for reading.
+Stdout is exactly one JSON document on one line, followed by a newline, in every case. The command writes nothing else to stdout and nothing to stderr. Bun's package runner prints the command it invokes to stderr, so `bun run forge gate ...` shows the arguments there; the direct entry point does not. Every document has `kind: "forge-gate"` and a `status`. The default `schemaVersion` is 1. Select `--output-version 2` for the neutral adapter record. The TypeScript contract is [`GateDocument`](../src/gate-document.ts). The examples below are laid out for reading.
+
+### Output migration
+
+`--output-version 1` and the default preserve the established envelope across evaluated, not-collected and invalid-input results. A single Codex adapter retains the original optional `codexReview` metadata. Version 1 omits collection diagnostics for other or multiple adapters. Its evaluator facts, eligibility and exit code match version 2.
+
+`--output-version 2` replaces the optional provider-specific output with `reviewAdapters`. It exposes every configured adapter’s state, selection, observations and exhaustion diagnostic. The examples below show this version. The Buildkite status-refresh reader explicitly accepts both known versions for their unchanged status and revision facts. Ranger installations that accept only version 1 continue using the default until their parser is upgraded. Invalid or repeated output selections return an invalid-input result in the established version 1 envelope.
 
 ### `evaluated`
 
@@ -244,7 +258,7 @@ A draft pull request with everything else in order:
 ```json
 {
   "kind": "forge-gate",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "evaluated",
   "eligible": false,
   "subject": {
@@ -310,7 +324,7 @@ The pull request was not judged. Exit 3, always: never 0 and never 1. `stage` sa
 ```json
 {
   "kind": "forge-gate",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "not-collected",
   "stage": "collection",
   "collection": { "status": "unavailable", "reason": "read-failed" },
@@ -321,7 +335,7 @@ The pull request was not judged. Exit 3, always: never 0 and never 1. `stage` sa
 ```json
 {
   "kind": "forge-gate",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "not-collected",
   "stage": "ledger-store",
   "code": "conflict"
@@ -342,17 +356,17 @@ What the command was given could not be used. Exit 2.
 ```json
 {
   "kind": "forge-gate",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "invalid-input",
   "issues": [{ "path": "--state", "message": "required" }],
-  "usage": "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>]"
+  "usage": "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>] [--output-version <1|2>]"
 }
 ```
 
 ```json
 {
   "kind": "forge-gate",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "invalid-input",
   "issues": [
     {

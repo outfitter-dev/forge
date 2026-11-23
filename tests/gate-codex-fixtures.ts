@@ -1,3 +1,5 @@
+import type { CodexReviewEvidenceResult } from "../src/codex-review-evidence-types.ts";
+import type { GateEvaluated } from "../src/gate-document.ts";
 import { HOSTED } from "./agent-review-fixtures.ts";
 import { HEAD } from "./evidence-fixtures.ts";
 import { gatePolicy, pass } from "./gate-fixtures.ts";
@@ -68,3 +70,22 @@ export const codexPass = (
   overrides: Partial<ScriptedPass> = {}
 ): ScriptedPass =>
   pass({ comments: { body: comments(comment()) }, ...overrides });
+
+/** Adapter-specific metadata is interpreted only after selecting its registered ID. */
+export const adapterRecord = (document: GateEvaluated) => {
+  const entry = document.reviewAdapters?.adapters.find(
+    (item) => item.adapter === "codex-github"
+  );
+  if (entry === undefined) {
+    return;
+  }
+  const observations =
+    entry.observations as CodexReviewEvidenceResult["observations"] & {
+      findingHistory: string | null;
+    };
+  return {
+    ...entry,
+    findingHistory: observations.findingHistory,
+    observations,
+  };
+};

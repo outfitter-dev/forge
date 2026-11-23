@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { GateDocument } from "../src/gate-document.ts";
+import type { GateOutputDocument } from "../src/gate-output.ts";
 import { evaluateEvidence } from "../src/index.ts";
 import type { GateName } from "../src/index.ts";
 import { BASE, HEAD, REPOSITORY } from "./evidence-fixtures.ts";
@@ -136,6 +136,8 @@ export interface RecordedRequest {
 }
 
 export interface RunOptions {
+  /** Null exercises the production default without adding an output selection. */
+  outputVersion?: 1 | 2 | null;
   script?: GateScript;
   /** `null` leaves the variable unset. */
   token?: string | null;
@@ -175,6 +177,9 @@ export const run = (
       cli,
       "gate",
       ...args,
+      ...(args.includes("--output-version") || options.outputVersion === null
+        ? []
+        : ["--output-version", String(options.outputVersion ?? 2)]),
     ],
     {
       cwd: options.cwd ?? ws.work,
@@ -191,8 +196,12 @@ export const run = (
   expect(stderr).toBe("");
   expect(stdout.endsWith("\n")).toBe(true);
   expect(stdout.slice(0, -1)).not.toContain("\n");
-  const document: GateDocument = JSON.parse(stdout);
-  expect(document).toMatchObject({ kind: "forge-gate", schemaVersion: 1 });
+  const document: GateOutputDocument = JSON.parse(stdout);
+  expect(document).toMatchObject({
+    kind: "forge-gate",
+    schemaVersion:
+      options.outputVersion === null ? 1 : (options.outputVersion ?? 2),
+  });
   if (document.status === "evaluated") {
     const { evaluation } = document;
     expect(child.exitCode).toBe(document.eligible ? 0 : 1);
@@ -231,7 +240,7 @@ export const run = (
 export type Ran = ReturnType<typeof run>;
 
 export const evaluated = (ran: Ran) => {
-  if (ran.document.status !== "evaluated") {
+  if (ran.document.status !== "evaluated" || ran.document.schemaVersion !== 2) {
     throw new Error(`not evaluated: ${ran.stdout}`);
   }
   return ran.document;

@@ -1,6 +1,6 @@
 import type {
   PullRequestCodexReviewConfig,
-  PullRequestCollectionRequest,
+  LegacyPullRequestCollectionRequest,
   PullRequestCollectionResult,
   PullRequestCommentReads,
   PullRequestReads,
@@ -30,8 +30,8 @@ export const config = (
   };
 };
 export const request = (
-  overrides: Partial<PullRequestCollectionRequest> = {}
-): PullRequestCollectionRequest => ({
+  overrides: Partial<LegacyPullRequestCollectionRequest> = {}
+): LegacyPullRequestCollectionRequest => ({
   codexReview: config(),
   holdLabel: "forge:hold",
   ledger: {

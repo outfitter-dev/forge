@@ -9,6 +9,7 @@ import {
 import { BASE, HEAD } from "./evidence-fixtures.ts";
 import {
   adoption,
+  adapterRecord,
   codexPass,
   codexPolicy,
   thread,
@@ -200,7 +201,7 @@ test.each([
     expect(ran.exitCode).toBe(complete ? 0 : 1);
     expect(facts(ran).reviewFindings.recorded).toBe(complete);
     expect(JSON.parse(ledgerText(ws)).reviewFindings.recorded).toBe(complete);
-    expect(evaluated(ran).codexReview?.findingHistory).toBe(
+    expect(adapterRecord(evaluated(ran))?.findingHistory).toBe(
       "supplied-global-ledger"
     );
     if (!complete) {
@@ -219,7 +220,7 @@ test("codex-only ownership accepts explicit empty supplied history without other
   );
   expect(ran.exitCode).toBe(0);
   expect(facts(ran).agentReviews).toHaveLength(1);
-  expect(evaluated(ran).codexReview?.findingHistory).toBe("codex-only");
+  expect(adapterRecord(evaluated(ran))?.findingHistory).toBe("adapter-only");
 });
 
 test("malformed supplied findings remain invalid input and are not ingested", () => {

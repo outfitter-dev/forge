@@ -1,7 +1,10 @@
 import type { ReviewFindingLedger } from "./evidence-types.ts";
 import type { ReviewEvidence } from "./gate-inputs.ts";
 import type { CollectedReviewEvidence } from "./review-adapter.ts";
-import { gateReviewFindings } from "./review-ledger-findings.ts";
+import {
+  gateReviewFindings,
+  parseStoredFindings,
+} from "./review-ledger-findings.ts";
 
 /** Absence supplies no extra completeness claim when the collector owns complete history. */
 export const gateReviewEvidence = (
@@ -21,12 +24,23 @@ export const gateReviewEvidence = (
     reviewFindings: { findings: [], recorded: false },
     reviewLadder: null,
   };
+  let reviewFindings = gateReviewFindings(findings, external.reviewFindings);
+  if (collected?.reviewFindings.recorded === false) {
+    try {
+      reviewFindings = {
+        ...parseStoredFindings(reviewFindings),
+        recorded: false,
+      };
+    } catch {
+      // Preserve malformed supplied evidence for the evaluator's invalid-input response.
+    }
+  }
   return {
     agentReviews:
       collected !== undefined && Array.isArray(external.agentReviews)
         ? [...collected.agentReviews, ...external.agentReviews]
         : external.agentReviews,
-    reviewFindings: gateReviewFindings(findings, external.reviewFindings),
+    reviewFindings,
     reviewLadder: external.reviewLadder,
   };
 };

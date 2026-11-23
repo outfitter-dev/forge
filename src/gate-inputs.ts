@@ -10,6 +10,7 @@ import {
 import type { GateArguments } from "./gate-arguments.ts";
 import { parseGatePolicy } from "./gate-policy.ts";
 import type { GatePolicy } from "./gate-policy.ts";
+import type { ReviewAdapterRegistry } from "./review-collection-types.ts";
 
 /** The one place the GitHub token is read from. */
 export const TOKEN_VARIABLE = "FORGE_GITHUB_TOKEN";
@@ -136,7 +137,8 @@ const reviewEvidence = (value: unknown): ReviewEvidence => {
 export const readGateInputs = async (
   args: GateArguments,
   env: Record<string, string | undefined>,
-  cwd: string
+  cwd: string,
+  registry?: ReviewAdapterRegistry
 ): Promise<GateInputsResult> => {
   // Bun can log Authorization headers before the transport can redact them.
   if (Object.keys(env).includes("BUN_CONFIG_VERBOSE_FETCH")) {
@@ -155,7 +157,7 @@ export const readGateInputs = async (
   if (!policyFile.readable) {
     return refused("--policy", UNREADABLE);
   }
-  const policy = checked(() => parseGatePolicy(policyFile.value));
+  const policy = checked(() => parseGatePolicy(policyFile.value, registry));
   if ("issue" in policy) {
     return { issues: [policy.issue], valid: false };
   }

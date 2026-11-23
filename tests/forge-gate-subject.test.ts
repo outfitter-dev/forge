@@ -49,7 +49,7 @@ test.each<[string, string, string, "head-mismatch" | "base-mismatch"]>([
     expect(notCollected(ran)).toEqual({
       code,
       kind: "forge-gate",
-      schemaVersion: 1,
+      schemaVersion: 2,
       stage: "subject",
       status: "not-collected",
     });

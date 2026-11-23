@@ -4,6 +4,7 @@ import { HOSTED, policyV2 } from "./agent-review-fixtures.ts";
 import { BASE, HEAD } from "./evidence-fixtures.ts";
 import {
   adoption,
+  adapterRecord,
   BODY_MARKER,
   codexPass,
   codexPolicy,
@@ -55,12 +56,14 @@ test("normal CLI collects a complete clean review without an external evidence f
     verdict: "passed",
   });
   expect(facts(ran).reviewFindings).toEqual({ findings: [], recorded: true });
-  expect(evaluated(ran).codexReview?.observations.attestation).toMatchObject({
-    id: "fixture-independence",
-    policyRevision: "f".repeat(40),
-    repository: "example/project",
-    reviewer: HOSTED,
-  });
+  expect(adapterRecord(evaluated(ran))?.observations.attestation).toMatchObject(
+    {
+      id: "fixture-independence",
+      policyRevision: "f".repeat(40),
+      repository: "example/project",
+      reviewer: HOSTED,
+    }
+  );
   expect(JSON.parse(ledgerText(ws)).reviewFindings).toEqual({
     findings: [],
     recorded: true,
@@ -118,7 +121,7 @@ test("null attestation leaves completed hosted evidence unqualified for independ
   expect(ran.exitCode).toBe(1);
   expect(facts(ran).agentReviews[0]?.context).toBe("unknown");
   expect(gate(ran, "agent-review").codes).toContain("review-not-independent");
-  expect(evaluated(ran).codexReview?.observations.attestation).toBeNull();
+  expect(adapterRecord(evaluated(ran))?.observations.attestation).toBeNull();
 });
 
 test.each([
@@ -156,7 +159,9 @@ test("a first snapshot is stored but cannot qualify an older summary", () => {
     script: { passes: [codexPass()] },
   });
   expect(ran.exitCode).toBe(1);
-  expect(evaluated(ran).codexReview?.diagnostics).toContain("summary-unbound");
+  expect(adapterRecord(evaluated(ran))?.diagnostics).toContain(
+    "summary-unbound"
+  );
   expect(JSON.parse(ledgerText(ws)).observedRevision.observedAt).toBe(
     "2024-01-01T01:00:00Z"
   );
@@ -301,7 +306,7 @@ test("malformed supplied finding history retains invalid-input", () => {
   expect(issues(ran)[0]?.path).toBe("facts.pullRequest.reviewFindings");
 });
 
-test("comment read failures retain transport status and produce no ledger update", () => {
+test("a single-source transport failure keeps retry details and preserves the ledger", () => {
   const ws = workspace();
   const before = seedLedger(ws);
   const ran = run(ws, gateArgs(ws, { policy: codexPolicy(), review: null }), {
@@ -323,9 +328,9 @@ test("comment read failures retain transport status and produce no ledger update
   expect(ran.stdout).not.toContain(BODY_MARKER);
 });
 
-test("changing comments prevents both ledger storage and evaluation", () => {
+test("changing adapter comments prevents a clean review and marks history unknown", () => {
   const ws = workspace();
-  const before = seedLedger(ws);
+  seedLedger(ws);
   const ran = run(ws, gateArgs(ws, { policy: codexPolicy(), review: null }), {
     script: {
       passes: [
@@ -336,11 +341,12 @@ test("changing comments prevents both ledger storage and evaluation", () => {
       ],
     },
   });
-  expect(notCollected(ran)).toMatchObject({
-    collection: { reason: "comments-changed", status: "changed" },
-    stage: "collection",
+  expect(ran.exitCode).toBe(1);
+  expect(evaluated(ran).reviewAdapters?.adapters[0]).toMatchObject({
+    diagnostics: ["source-changed"],
+    state: "unreadable",
   });
-  expect(ledgerText(ws)).toBe(before);
+  expect(JSON.parse(ledgerText(ws)).reviewFindings.recorded).toBe(false);
 });
 
 test("a findings CAS conflict discards collected evidence and source metadata", () => {
@@ -428,7 +434,45 @@ test("a changed pull request head cannot reuse the prior summary or snapshot", (
   expect(facts(ran).subject.headSha).toBe(changed);
   expect(facts(ran).agentReviews[0]?.state).toBe("pending");
   expect(
-    evaluated(ran).codexReview?.observations.summary.state?.codeReview.commitSha
+    adapterRecord(evaluated(ran))?.observations.summary.state?.codeReview
+      .commitSha
   ).toBe(HEAD);
   expect(gate(ran, "agent-review").codes).toContain("review-pending");
+});
+
+test("resolved reported findings do not create a permanent synthetic blocker", () => {
+  const ws = workspace();
+  seedLedger(ws);
+  const first = run(ws, gateArgs(ws, { policy: codexPolicy(), review: null }), {
+    script: {
+      passes: [
+        codexPass({
+          comments: {
+            body: comments(
+              comment({
+                has_any_findings: true,
+                has_unresolved_findings: false,
+              })
+            ),
+          },
+          threads: { body: threads(thread(true)) },
+        }),
+      ],
+    },
+  });
+  expect(first.exitCode).toBe(1);
+  const { findings } = JSON.parse(ledgerText(ws)).reviewFindings;
+  expect(findings).toHaveLength(1);
+  expect(findings[0]).toMatchObject({
+    id: "T1",
+    kind: "finding",
+    resolution: { kind: "native" },
+  });
+  const next = run(ws, gateArgs(ws, { policy: codexPolicy(), review: null }), {
+    script: {
+      passes: [codexPass({ threads: { body: threads(thread(true)) } })],
+    },
+  });
+  expect(next.exitCode).toBe(0);
+  expect(JSON.parse(ledgerText(ws)).reviewFindings.findings).toHaveLength(1);
 });

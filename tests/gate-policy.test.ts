@@ -51,7 +51,8 @@ test("a valid policy is returned whole", () => {
       holdLabel: HOLD,
       rule: "same-repository-unless-held",
     },
-    schemaVersion: 1,
+    reviewAdapters: [],
+    schemaVersion: 2,
   });
 });
 
@@ -299,7 +300,9 @@ test("the documented policy is a valid policy whose evidence the evaluator accep
 });
 
 test("the documented outputs are forge-gate documents, and the usage line is the command's", () => {
-  const [, ...outputs] = documented();
+  const outputs = documented().filter(
+    (entry) => (entry as { kind?: string }).kind === "forge-gate"
+  );
   expect(outputs).toMatchObject([
     { status: "evaluated" },
     { stage: "collection", status: "not-collected" },
@@ -308,6 +311,6 @@ test("the documented outputs are forge-gate documents, and the usage line is the
     { status: "invalid-input" },
   ]);
   for (const output of outputs) {
-    expect(output).toMatchObject({ kind: "forge-gate", schemaVersion: 1 });
+    expect(output).toMatchObject({ kind: "forge-gate", schemaVersion: 2 });
   }
 });

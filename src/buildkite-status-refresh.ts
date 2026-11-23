@@ -1,7 +1,21 @@
 import { fullCommit } from "./buildkite-job.ts";
-import type { GateDocument, GateEvaluated } from "./gate-document.ts";
+import type {
+  GateDocument,
+  GateEvaluated,
+  GateNotCollected,
+  GateInvalidInput,
+} from "./gate-document.ts";
 import type { GitHubPullRequest } from "./github-pull-request-types.ts";
 import { isRecord } from "./github-response.ts";
+
+/** Version 1 status facts retain their meaning. Only version 2 carries neutral adapter diagnostics. */
+export type GateStatusDocument =
+  | GateDocument
+  | ({ kind: "forge-gate"; schemaVersion: 1 } & (
+      | GateEvaluated
+      | GateNotCollected
+      | GateInvalidInput
+    ));
 
 interface RefreshTarget {
   repository: string;
@@ -159,7 +173,7 @@ export const previewBuildkiteStatusRefresh = ({
   /** New trusted identifier for this evaluation, never a delivery field. */
   runId: string;
   /** The verified install's gate result, with qualified project evidence. */
-  gate: GateDocument | null;
+  gate: GateStatusDocument | null;
 }): RefreshPreview => {
   const subject = subjectOf(target, admitted);
   if (
@@ -182,7 +196,7 @@ export const previewBuildkiteStatusRefresh = ({
   }
   if (
     gate?.kind !== "forge-gate" ||
-    gate.schemaVersion !== 1 ||
+    (gate.schemaVersion !== 1 && gate.schemaVersion !== 2) ||
     gate.status !== "evaluated"
   ) {
     return { reason: "gate-unavailable", status: "withheld" };
