@@ -10,6 +10,7 @@ import type {
   GitHubIssueComment,
   GitHubReviewThread,
 } from "./github-pull-request-types.ts";
+import type { CollectedReviewEvidence } from "./review-adapter.ts";
 import type { ObservedRevision } from "./review-ledger.ts";
 
 /** An explicit trusted-policy claim. The pure operation cannot authenticate its source. */
@@ -68,9 +69,8 @@ export type CodexSummaryRecord = Pick<
   adverseComments: Omit<GitHubIssueComment, "body">[];
 };
 
-export interface CodexReviewEvidenceResult {
+export interface CodexReviewEvidenceResult extends CollectedReviewEvidence {
   agentReviews: [AgentReviewAttempt];
-  reviewFindings: ReviewFindingLedger;
   reviewLadder: null;
   diagnostics: CodexReviewDiagnostic[];
   /** Retained outside evaluator facts to explain attested context and source binding. */
