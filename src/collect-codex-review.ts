@@ -11,6 +11,7 @@ import type {
   GitHubIssueComment,
   GitHubReviewThread,
 } from "./github-pull-request-types.ts";
+import { collectReviewAdapter } from "./review-adapter.ts";
 import type { CanonicalReviewLedgerEntry } from "./review-ledger.ts";
 
 /** Capture one capability before awaiting reads so the caller cannot swap it during collection. */
@@ -44,17 +45,28 @@ export const collectedCodexReview = (
   if (config === undefined || comments === null) {
     return undefined;
   }
-  return codexReviewEvidence({
-    attestation: config.attestation,
-    botAccountId: config.botAccountId,
-    findings: input.ledger.reviewFindings,
-    findingsComplete: config.findingsComplete === true,
-    issuer: config.issuer,
-    reviewer: config.reviewer,
-    servedAt: input.servedAt,
-    snapshot: input.ledger.observedRevision,
-    subject: input.subject,
-    summary: parseCodexSummary(comments, config.botAccountId),
-    threads: input.reviewThreads,
-  });
+  return collectReviewAdapter(
+    {
+      collect: (stable) =>
+        codexReviewEvidence({
+          attestation: config.attestation,
+          botAccountId: config.botAccountId,
+          findings: stable.findings,
+          findingsComplete: config.findingsComplete === true,
+          issuer: config.issuer,
+          reviewer: config.reviewer,
+          servedAt: stable.servedAt,
+          snapshot: input.ledger.observedRevision,
+          subject: stable.subject,
+          summary: parseCodexSummary(comments, config.botAccountId),
+          threads: input.reviewThreads,
+        }),
+      reviewer: config.reviewer.reviewer,
+    },
+    {
+      findings: input.ledger.reviewFindings,
+      servedAt: input.servedAt,
+      subject: input.subject,
+    }
+  );
 };

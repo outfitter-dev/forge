@@ -1,12 +1,12 @@
-import type { CodexReviewEvidenceResult } from "./codex-review-evidence-types.ts";
 import type { ReviewFindingLedger } from "./evidence-types.ts";
 import type { ReviewEvidence } from "./gate-inputs.ts";
+import type { CollectedReviewEvidence } from "./review-adapter.ts";
 import { gateReviewFindings } from "./review-ledger-findings.ts";
 
 /** Absence supplies no extra completeness claim when the collector owns complete history. */
 export const gateReviewEvidence = (
   findings: ReviewFindingLedger,
-  collected: CodexReviewEvidenceResult | undefined,
+  collected: CollectedReviewEvidence | undefined,
   supplied: ReviewEvidence | null
 ): ReviewEvidence => {
   if (collected !== undefined && supplied === null) {
