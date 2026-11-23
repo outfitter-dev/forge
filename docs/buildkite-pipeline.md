@@ -106,6 +106,24 @@ Passing evidence also requires independent expectations for the command digest, 
 
 This function does not authenticate Buildkite records or the capture store itself. The future adapters must select a unique current job attempt and its authoritative capture, preserve the job ID and digest for audit, enforce the size bound while reading, and refuse missing or ambiguous records. Before live use, approve and qualify the protected capture channel and digest storage, job-attempt selection, artifact upload/read permissions, and how trusted execution expectations are approved and maintained. No adapter, network call, credential, status write or gate hook is included here.
 
+## Receipt handoff qualification
+
+`qualifyBuildkiteGateReceipt` joins the verifier to the existing gate receipt input. Supply the same independently selected admission, authenticated job outcome, protected stdout capture and execution expectation as the verifier. It takes a bounded copy of the artifact bytes before verification. Retain its `verification` result with the job and capture record. Only a non-null `receipt` may be written to a protected, job-specific file and passed to `forge gate --receipt`; write those bytes exactly, without decoding and reserializing them. Keep that file inaccessible to the project account and immutable through the gate read. A `verified: true` result with an empty `checks` list withholds the receipt, including when execution pins disagree or expectations are unavailable. A failed job also withholds the receipt.
+
+Run the disposable integration proof from a bootstrapped checkout with the pinned Bun version:
+
+```sh
+./scripts/bootstrap.sh
+bun test tests/buildkite-gate-receipt.test.ts
+bun run forge check
+```
+
+The proof builds the actual project runner from the selected Forge source, runs it against clean disposable Git proposals with an empty environment, captures stdout including its newline, and passes qualified bytes into the real gate CLI under the committed `forge-gate.json`. It seeds a separate ledger for the admitted pair and serves recorded GitHub review responses through the existing offline transport harness. Command and raw configuration digests are selected from the fixture definition before execution; runtime and verification producer come from the test runtime and committed policy. The test checks the exact receipt bytes, current head/base and gate outcome. Full source and policy revisions remain the commits selected for the test invocation.
+
+The passing proposal yields an eligible gate and exit zero. A command exiting 17 yields runner exit one and `job-nonpassing`; its withheld receipt makes lint, test and build each report `missing-evidence`, with gate exit one. Missing or oversized bytes, a digest mismatch, unavailable expectations and execution-pin mismatch also withhold the receipt and block those gates. An expected head or base differing from the collected PR yields exit three and leaves the ledger unchanged. The binding and rejection diagnostics preserve the failure cause even where the gate sees unavailable verification.
+
+Buildkite job authentication, OS separation, protected capture custody, artifact collection and GitHub observations are fixture boundaries in this proof. Live qualification must establish each on the actual workers before using this handoff for status publication. The operator still needs to select a unique current job attempt and authoritative capture, enforce artifact bounds while reading, keep the qualified bytes and policy outside proposal control, and pass the admitted pair as `--expected-head` and `--expected-base`. The proof supplies no status publisher or worker hook.
+
 ## Status refresh preview
 
 `selectBuildkiteStatusRefresh` recognizes submitted or dismissed reviews, resolved or reopened review threads, and changes to the configured hold label. A delivery names only the configured repository and PR number to reread. It does not supply revisions, authorize a build, resolve findings, or prove that the condition described in the event still holds. Any eventual adapter must authenticate GitHub deliveries and qualify which events it subscribes to. Comments and rebuild authorization are outside this preview.

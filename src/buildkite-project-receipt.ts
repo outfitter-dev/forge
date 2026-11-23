@@ -90,7 +90,7 @@ const JOB_IDENTITY_FIELDS = [
   "pullRequest",
   "head",
 ] as const;
-const MAX_RECEIPT_BYTES = 64 * 1024;
+export const BUILDKITE_MAX_RECEIPT_BYTES = 64 * 1024;
 const RUNTIME_FIELDS = ["bun", "platform", "arch"] as const;
 const sha256 = (value: unknown): value is string => isLowerHexDigest(value, 64);
 const identifier = (value: unknown): value is string =>
@@ -226,7 +226,7 @@ export const verifyBuildkiteProjectReceipt = ({
   ) {
     return { reason: "capture-mismatch", verified: false };
   }
-  if (!bytes?.byteLength || bytes.byteLength > MAX_RECEIPT_BYTES) {
+  if (!bytes?.byteLength || bytes.byteLength > BUILDKITE_MAX_RECEIPT_BYTES) {
     return { reason: "receipt-unavailable", verified: false };
   }
   if (digest(bytes) !== capture.receiptSha256) {
