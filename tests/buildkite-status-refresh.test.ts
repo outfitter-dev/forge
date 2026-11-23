@@ -4,8 +4,8 @@ import {
   previewBuildkiteStatusRefresh,
   selectBuildkiteStatusRefresh,
 } from "../src/buildkite-status-refresh.ts";
+import type { GateStatusDocument } from "../src/buildkite-status-refresh.ts";
 import { evaluateEvidence } from "../src/evaluate-evidence.ts";
-import type { GateDocument } from "../src/gate-document.ts";
 import type { GitHubPullRequest } from "../src/github-pull-request-types.ts";
 import { passingFactsV2, policyV2 } from "./agent-review-fixtures.ts";
 import {
@@ -71,7 +71,7 @@ const gateFor = (
     runId,
     status: "evaluated",
     subject,
-  } satisfies GateDocument;
+  } satisfies GateStatusDocument;
 };
 
 const preview = (
@@ -265,3 +265,12 @@ test("a missing or unevaluated gate yields no status preview", () => {
     })
   ).toEqual({ reason: "gate-unavailable", status: "withheld" });
 });
+
+test.each([1, 2] as const)(
+  "version %s gate status facts are explicitly compatible",
+  (schemaVersion) => {
+    expect(
+      preview({ gate: { ...gateFor("fresh"), schemaVersion } })
+    ).toMatchObject({ eligible: true, status: "preview" });
+  }
+);

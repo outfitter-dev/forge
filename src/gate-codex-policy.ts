@@ -102,7 +102,9 @@ export const gateCodexCollection = (
   maxCommentPages: number,
   supplied: ReviewFindingLedger | null = null
 ): PullRequestCodexReviewConfig | undefined => {
-  const configured = policy.codexReview;
+  const configured = policy.reviewAdapters.find(
+    (entry) => entry.adapter === "codex-github"
+  )?.configuration as GateCodexReviewPolicy | undefined;
   if (configured === undefined) {
     return undefined;
   }

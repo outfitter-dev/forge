@@ -3,6 +3,7 @@ import { codexReviewEvidence } from "./codex-review-evidence.ts";
 import { parseCodexSummary } from "./codex-summary.ts";
 import type {
   PullRequestCodexReviewConfig,
+  CompatiblePullRequestCollectionRequest,
   PullRequestCommentReads,
 } from "./collect-pull-request-types.ts";
 import type { PullRequestSubject } from "./evidence-types.ts";
@@ -70,3 +71,9 @@ export const collectedCodexReview = (
     }
   );
 };
+
+/** Explicit legacy request interpretation. Modern requests carry only reviewAdapters. */
+export const legacyReviewConfiguration = (
+  request: CompatiblePullRequestCollectionRequest
+): PullRequestCodexReviewConfig | undefined =>
+  "codexReview" in request ? request.codexReview : undefined;

@@ -19,7 +19,7 @@ Hosted Codex review has [bounded qualification evidence](codex-command-qualifica
 | Work | Accountable owner and next action |
 | --- | --- |
 | [FOR-38 trusted Buildkite lane](https://linear.app/outfitter/issue/FOR-38) | Forge delivery owner prepares protected project capture, authenticated artifact collection, gate hooks and durable state. Matt approves the concrete Forge pipeline and GitHub App configuration before the operator applies it. The operator completes OIDC/WIF credential delivery and queue restrictions, then qualifies isolation and the first live status under that configuration. |
-| [FOR-45 review adapters](https://linear.app/outfitter/issue/FOR-45) | Forge delivery owner moves collection behind the shared adapter contract before live consumer acceptance. Codex remains the first qualified source. |
+| [FOR-45 review adapters](https://linear.app/outfitter/issue/FOR-45) | Forge implements ordered collection through the shared adapter contract. Codex is the installed source. Ranger must accept version 2 gate documents before producer adoption, and additional providers still need qualification. |
 | [FOR-39 required status](https://linear.app/outfitter/issue/FOR-39) | Forge delivery owner prepares repository enforcement after the trusted lane can produce the status. |
 | [FOR-40 live consumer acceptance](https://linear.app/outfitter/issue/FOR-40) | Forge and Climb owners qualify the complete gate and consumer workflow after the lane, enforcement and review adapters are ready. |
 | [ROPE-86 canary qualification](https://linear.app/outfitter/issue/ROPE-86) | Ropes owns approved publication. Forge owns a fresh public-registry consumer check before changing its production pilot pins. |

@@ -2,19 +2,22 @@ import { isDeepStrictEqual } from "node:util";
 
 import { parseCodexReviewConfiguration } from "./codex-review-configuration.ts";
 import {
-  collectedCodexReview,
   commentReadCapability,
+  legacyReviewConfiguration,
   readCollectionComments,
 } from "./collect-codex-review.ts";
 import type {
   PullRequestCollectionFailure,
-  PullRequestCollectionRequest,
+  CompatiblePullRequestCollectionRequest,
   PullRequestCollectionResult,
   PullRequestReads,
   PullRequestCommentReads,
 } from "./collect-pull-request-types.ts";
+import { observeReviewAdapters } from "./collect-review-adapters.ts";
+import { collectedPullRequestReviews } from "./collected-pull-request-reviews.ts";
 import {
   InvalidEvidenceError,
+  array,
   choice,
   object,
   provenance,
@@ -38,6 +41,12 @@ import {
   parseReviews,
   parseReviewThreadPage,
 } from "./parse-github-pull-request.ts";
+import {
+  captureReviewAdapterRegistry,
+  reviewAdapterRegistry,
+} from "./review-adapter-registry.ts";
+import { validateReviewAdapters } from "./review-collection-configuration.ts";
+import type { ReviewAdapterRegistry } from "./review-collection-types.ts";
 import { wholeSecondUtc } from "./utc-instant.ts";
 
 /** Carries a failure out of a read. It never leaves this module. */
@@ -71,12 +80,22 @@ const positiveInteger = (value: number): boolean =>
 const HOLD_LABEL = /^[!-~](?:[ -~]*[!-~])?$/u;
 
 /** The ledger is not checked here: rejecting a corrupted entry is for its store. */
-const validRequest = (request: PullRequestCollectionRequest): boolean => {
+const validRequest = (
+  request: CompatiblePullRequestCollectionRequest,
+  registry: ReviewAdapterRegistry
+): boolean => {
   try {
     repository(request.repository, "repository");
     provenance(request.provenance, "provenance");
+    if (Object.hasOwn(request, "reviewAdapters")) {
+      if (Object.hasOwn(request, "codexReview")) {
+        return false;
+      }
+      array(request.reviewAdapters, "reviewAdapters");
+      validateReviewAdapters(request.reviewAdapters ?? [], registry);
+    }
     if (Object.hasOwn(request, "codexReview")) {
-      const config = object(request.codexReview, "codexReview", [
+      const config = object(legacyReviewConfiguration(request), "codexReview", [
         "reviewer",
         "issuer",
         "botAccountId",
@@ -121,7 +140,7 @@ const sameName = (left: string, right: string): boolean =>
 
 const readPullRequest = async (
   reads: PullRequestReads,
-  request: PullRequestCollectionRequest
+  request: CompatiblePullRequestCollectionRequest
 ): Promise<{
   pullRequest: GitHubPullRequest;
   servedAt: string;
@@ -219,24 +238,36 @@ const readThreads = async (
  * so the two reads of the reviews lie either side of both pull request reads.
  */
 export const collectPullRequest = async (
-  input: PullRequestCollectionRequest,
-  reads: PullRequestReads & Partial<PullRequestCommentReads>
+  input: CompatiblePullRequestCollectionRequest,
+  reads: PullRequestReads & Partial<PullRequestCommentReads>,
+  givenRegistry: ReviewAdapterRegistry = reviewAdapterRegistry
 ): Promise<PullRequestCollectionResult> => {
-  if (!validRequest(input)) {
+  const registry = captureReviewAdapterRegistry(givenRegistry);
+  if (!validRequest(input, registry)) {
     return { reason: "request-malformed", status: "invalid-request" };
   }
   // Taken before any read, so nothing done to the caller's request or ledger
   // while the reads are awaited changes what is collected.
   const request = structuredClone(input);
   const commentReads = commentReadCapability(reads);
-  if (request.codexReview !== undefined && commentReads === null) {
+  const adapterReads = {
+    ...commentReads,
+    pullRequest: reads.pullRequest.bind(reads),
+    reviewThreads: reads.reviewThreads.bind(reads),
+    reviews: reads.reviews.bind(reads),
+    timeline: reads.timeline.bind(reads),
+  };
+  const legacyConfig = legacyReviewConfiguration(request);
+  if (legacyConfig !== undefined && commentReads === null) {
     return { reason: "comment-read-missing", status: "unavailable" };
   }
   try {
     const reviews = await readReviews(reads);
-    const comments = await readCollectionComments(
-      request.codexReview,
-      commentReads
+    const comments = await readCollectionComments(legacyConfig, commentReads);
+    const observations = await observeReviewAdapters(
+      request.reviewAdapters,
+      adapterReads,
+      registry
     );
     const { pullRequest, servedAt, servedTime } = await readPullRequest(
       reads,
@@ -270,13 +301,18 @@ export const collectPullRequest = async (
     }
 
     const commentsAgain = await readCollectionComments(
-      request.codexReview,
+      legacyConfig,
       commentReads
     );
     if (!isDeepStrictEqual(comments, commentsAgain)) {
       return { reason: "comments-changed", status: "changed" };
     }
 
+    const observationsAgain = await observeReviewAdapters(
+      request.reviewAdapters,
+      adapterReads,
+      registry
+    );
     const { assignments, humanReviews, ledger } = humanReviewEvidence({
       ...timeline,
       ledger: request.ledger,
@@ -292,16 +328,14 @@ export const collectPullRequest = async (
       kind: "pull_request" as const,
       repository: request.repository,
     };
-    const codexReview = collectedCodexReview(request.codexReview, comments, {
-      ledger,
-      reviewThreads,
-      servedAt,
-      subject,
-    });
-    if (codexReview !== undefined) {
-      ledger.reviewFindings = structuredClone(codexReview.reviewFindings);
-    }
+    const collectedReviews = collectedPullRequestReviews(
+      request,
+      { comments, first: observations, second: observationsAgain },
+      { ledger, reviewThreads, servedAt, subject },
+      registry
+    );
     return {
+      ...collectedReviews,
       evidence: {
         assignments,
         draft: pullRequest.draft,
@@ -320,7 +354,6 @@ export const collectPullRequest = async (
         unresolvedThreads: reviewThreads.filter((thread) => !thread.isResolved)
           .length,
       },
-      ...(codexReview === undefined ? {} : { codexReview }),
       ledger,
       reviewThreads,
       status: "collected",

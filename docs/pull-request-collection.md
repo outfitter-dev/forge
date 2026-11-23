@@ -35,7 +35,7 @@ if (result.status === "collected") {
 | `provenance` | The collector's producer ID, runtime fingerprint and run ID, copied onto the evidence. Evaluator policy compares it with `policy.collector`. |
 | `ledger` | The `ReviewLedgerEntry` the last accepted collection of this pull request returned, or an empty entry for a pull request never collected. |
 | `maxThreadPages` | The most review-thread pages one pass may read, a positive integer. |
-| `codexReview` | Optional explicit [Codex collection configuration](#optional-codex-collection). Absent preserves the existing four-read flow and result shape. |
+| `reviewAdapters` | Optional ordered registered-adapter configurations. Each names its adapter ID, eligible reviewer, issuer, opaque validated configuration and finding-history completeness claim. Absent preserves the four-read flow. |
 
 The request is copied before the first read, so changing it or its ledger while the collection runs changes nothing. The request's ledger is never modified.
 
@@ -257,9 +257,19 @@ The parser retains its `unresolved` page count for existing callers and adds `th
 
 Both passes read every thread, including resolved threads and threads from earlier heads. The complete ordered list must agree, so same-count thread substitutions, author changes and resolution swaps stop as `threads-changed`. Duplicate thread IDs within or across pages and repeated pagination cursors stop as unreadable. A list exceeding the configured page bound stays unavailable. Page boundaries may differ between passes when the resulting ordered list agrees. These observations establish no hosted-review verdict or finding-ledger entry by themselves.
 
+## Review adapter collection
+
+The normal request uses `reviewAdapters`. The optional third argument to `collectPullRequest` is a registry supplied by trusted code. A request can select an installed adapter by ID. Its configuration is validated before reads, and the request and source capabilities are captured before awaiting source observations.
+
+Each adapter observes its own extra source during both collection passes. Shared pull-request, review, timeline and thread failures retain the collector’s existing failure path. Adapter source failures produce fixed unavailable or unreadable diagnostics. Successful complete observations normalize behind the shared adapter boundary. All configured adapters contribute reported findings. Only ordered attempts up to the first pending, failed or passing result are selected for gate satisfaction. Source gaps keep history unknown even if another selected review passes or external evidence claims completeness.
+
+A successful modern result carries `reviewAdapters` with the selected attempts, updated finding ledger, ordered diagnostics, and whether the configured collection choices were exhausted. The canonical ledger is still persisted by the caller through the existing compare-and-swap flow. Raw source bodies and thrown messages stay out of diagnostics.
+
+The legacy direct request is isolated as `LegacyPullRequestCollectionRequest`. It retains the established source read order, failure behavior and `codexReview` result for existing callers. Mixing legacy and modern configuration is refused. The gate command translates legacy policy input to the modern adapter path, which emits the version 2 gate document.
+
 ## Optional Codex collection
 
-`PullRequestCollectionRequest.codexReview` adopts an optional collection capability for that invocation. Its `PullRequestCodexReviewConfig` has the hosted `reviewer` policy, matching `issuer` provenance, positive `botAccountId`, explicit independence `attestation` or `null`, positive `maxCommentPages`, and optional boolean `findingsComplete`. Shared configuration validation runs before reads. An invalid configuration is `invalid-request` / `request-malformed`. This configuration alone establishes no repository gate policy adoption.
+`LegacyPullRequestCollectionRequest.codexReview` retains an optional collection capability for that invocation. Its `PullRequestCodexReviewConfig` has the hosted `reviewer` policy, matching `issuer` provenance, positive `botAccountId`, explicit independence `attestation` or `null`, positive `maxCommentPages`, and optional boolean `findingsComplete`. Shared configuration validation runs before reads. An invalid configuration is `invalid-request` / `request-malformed`. This configuration alone establishes no repository gate policy adoption.
 
 The reads argument accepts `PullRequestReads & Partial<PullRequestCommentReads>`. Existing callers retain the four required reads. A configured invocation requires `issueComments(cursor)` and fails as `unavailable` / `comment-read-missing` before any read when it is missing. With no configuration, issue comments are never read and the successful result keeps exactly `status`, `evidence`, `ledger` and `reviewThreads`.
 

@@ -5,6 +5,10 @@ import type {
 import type { Provenance, PullRequestEvidenceOf } from "./evidence-types.ts";
 import type { GitHubReviewThread } from "./github-pull-request-types.ts";
 import type {
+  ReviewCollectionConfiguration,
+  ReviewCollectionResult,
+} from "./review-collection-types.ts";
+import type {
   CanonicalReviewLedgerEntry,
   ReviewLedgerEntry,
 } from "./review-ledger.ts";
@@ -49,8 +53,21 @@ export interface PullRequestCollectionRequest {
   ledger: ReviewLedgerEntry;
   /** The most review-thread pages one pass may read. */
   maxThreadPages: number;
-  codexReview?: PullRequestCodexReviewConfig;
+  reviewAdapters?: ReviewCollectionConfiguration[];
 }
+
+/** Explicit compatibility entrypoint for direct callers predating adapter collection. */
+export interface LegacyPullRequestCollectionRequest extends Omit<
+  PullRequestCollectionRequest,
+  "reviewAdapters"
+> {
+  codexReview?: PullRequestCodexReviewConfig;
+  reviewAdapters?: never;
+}
+
+export type CompatiblePullRequestCollectionRequest =
+  | PullRequestCollectionRequest
+  | LegacyPullRequestCollectionRequest;
 
 /** The pull-request evidence this operation supplies; other operations supply the rest. */
 export type CollectedPullRequestEvidence = Pick<
@@ -110,6 +127,7 @@ export type PullRequestCollectionResult =
       status: "collected";
       /** Present only when explicitly configured. Outside minimal evaluator facts. */
       codexReview?: CodexReviewEvidenceResult;
+      reviewAdapters?: ReviewCollectionResult;
       evidence: CollectedPullRequestEvidence;
       /** Stable full-list source observations, outside evaluator facts. */
       reviewThreads: GitHubReviewThread[];

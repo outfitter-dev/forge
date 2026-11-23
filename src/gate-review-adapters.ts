@@ -1,57 +1,57 @@
 import {
   array,
-  choice,
   invalid,
   object,
   text,
 } from "./evidence-validation-primitives.ts";
-import { parseGateCodexReviewPolicy } from "./gate-codex-policy.ts";
-import type { GateCodexReviewPolicy } from "./gate-codex-policy.ts";
 import type { GatePolicy } from "./gate-policy.ts";
+import { reviewAdapterRegistry } from "./review-adapter-registry.ts";
+import type {
+  GateReviewAdapterPolicy,
+  ReviewAdapterRegistry,
+} from "./review-collection-types.ts";
 
-/** Schema 2 currently configures one supported collector; ordered fallback is a separate operation. */
+/** Policy selects ordered adapters installed by trusted code. */
 export const parseGateReviewAdapters = (
   value: unknown,
-  evidence: GatePolicy["evidence"]
-): GateCodexReviewPolicy | undefined => {
-  const path = "gatePolicy.reviewAdapters";
-  const entries = array(value, path);
-  const seen = new Set<string>();
-  const configured = entries.map((entry, index) => {
-    const location = `${path}[${index}]`;
-    const source = object(entry, location, [
+  evidence: GatePolicy["evidence"],
+  registry: ReviewAdapterRegistry = reviewAdapterRegistry
+): GateReviewAdapterPolicy[] => {
+  const entries = array(value, "gatePolicy.reviewAdapters");
+  const adapters = new Set<string>();
+  const reviewers = new Set<string>();
+  return entries.map((entry, index) => {
+    const path = `gatePolicy.reviewAdapters[${index}]`;
+    const source = object(entry, path, [
       "adapter",
       "reviewer",
       "configuration",
     ]);
-    const adapter = text(source.adapter, `${location}.adapter`);
-    if (seen.has(adapter)) {
-      invalid(`${location}.adapter`, "duplicate adapter");
+    const adapter = text(source.adapter, `${path}.adapter`);
+    const definition = Object.hasOwn(registry, adapter)
+      ? registry[adapter]
+      : undefined;
+    if (definition === undefined) {
+      return invalid(`${path}.adapter`, "adapter is not installed");
     }
-    seen.add(adapter);
-    choice(adapter, `${location}.adapter`, ["codex-github"]);
-    const config = object(source.configuration, `${location}.configuration`, [
-      "botAccountId",
-      "findingHistory",
-      "independence",
-    ]);
-    choice(config.findingHistory, `${location}.configuration.findingHistory`, [
-      "adapter-only",
-      "supplied-global-ledger",
-    ]);
-    return parseGateCodexReviewPolicy(
-      {
-        ...config,
-        findingHistory:
-          config.findingHistory === "adapter-only"
-            ? "codex-only"
-            : config.findingHistory,
-        reviewer: source.reviewer,
-      },
-      evidence,
-      `${location}.configuration`,
-      `${location}.reviewer`
-    );
+    if (adapters.has(adapter)) {
+      invalid(`${path}.adapter`, "duplicate adapter");
+    }
+    const reviewer = text(source.reviewer, `${path}.reviewer`);
+    if (reviewers.has(reviewer)) {
+      invalid(`${path}.reviewer`, "duplicate reviewer");
+    }
+    adapters.add(adapter);
+    reviewers.add(reviewer);
+    return {
+      adapter,
+      configuration: definition.parsePolicy(
+        source.configuration,
+        reviewer,
+        evidence,
+        `${path}.configuration`
+      ),
+      reviewer,
+    };
   });
-  return configured[0];
 };

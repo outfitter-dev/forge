@@ -94,3 +94,13 @@ export type {
   ReviewAdapter,
   ReviewAdapterInput,
 } from "./review-adapter.ts";
+
+export { reviewAdapterRegistry } from "./review-adapter-registry.ts";
+export type {
+  GateReviewAdapterPolicy,
+  ReviewAdapterDefinition,
+  ReviewAdapterRegistry,
+  ReviewCollectionConfiguration,
+  ReviewCollectionResult,
+  ReviewCollectionState,
+} from "./review-collection-types.ts";

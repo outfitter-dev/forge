@@ -192,7 +192,7 @@ export const run = (
   expect(stdout.endsWith("\n")).toBe(true);
   expect(stdout.slice(0, -1)).not.toContain("\n");
   const document: GateDocument = JSON.parse(stdout);
-  expect(document).toMatchObject({ kind: "forge-gate", schemaVersion: 1 });
+  expect(document).toMatchObject({ kind: "forge-gate", schemaVersion: 2 });
   if (document.status === "evaluated") {
     const { evaluation } = document;
     expect(child.exitCode).toBe(document.eligible ? 0 : 1);
