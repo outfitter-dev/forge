@@ -3,7 +3,7 @@ import path from "node:path";
 import type { ValidationIssue } from "./evidence-types.ts";
 
 export const GATE_SYNOPSIS =
-  "forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>]";
+  "forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>] [--output-version <1|2>]";
 export const GATE_USAGE = `Usage: ${GATE_SYNOPSIS}`;
 
 export interface GateArguments {
@@ -39,6 +39,7 @@ const FLAGS = new Set<string>([
   "--review-evidence",
   "--expected-head",
   "--expected-base",
+  "--output-version",
 ]);
 
 /**
@@ -105,6 +106,12 @@ export const parseGateArguments = (args: string[]): GateArgumentsResult => {
     return { issues, valid: false };
   }
   const one = (flag: string): string => given.get(flag)?.[0] ?? "";
+  if (
+    given.has("--output-version") &&
+    !["1", "2"].includes(one("--output-version"))
+  ) {
+    issues.push({ message: "expected 1 or 2", path: "--output-version" });
+  }
   const repository = one("--repository");
   const pullRequest = pullRequestNumber(one("--pull-request"));
   const state = one("--state");

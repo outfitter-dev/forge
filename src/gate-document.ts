@@ -1,5 +1,6 @@
 import type { PullRequestCollectionFailure } from "./collect-pull-request-types.ts";
 import type { EvaluationResult, ValidationIssue } from "./evidence-types.ts";
+import type { GateOutputDocument } from "./gate-output.ts";
 import type { GitHubReadFailure } from "./github-pull-request-reads.ts";
 import type { CheckReceiptNormalization } from "./normalize-check-receipts.ts";
 import type { ReviewCollectionResult } from "./review-collection-types.ts";
@@ -79,7 +80,7 @@ export type GateDocument = { kind: "forge-gate"; schemaVersion: 2 } & (
 );
 
 /** 0 only for an evaluated, eligible pull request. Not collected is never 0 or 1. */
-export const gateExitCode = (document: GateDocument): 0 | 1 | 2 | 3 => {
+export const gateExitCode = (document: GateOutputDocument): 0 | 1 | 2 | 3 => {
   if (document.status === "evaluated") {
     return document.eligible ? 0 : 1;
   }

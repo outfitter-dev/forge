@@ -713,7 +713,7 @@ const expectRefused = (ws: Workspace, ran: Ran, where: string) => {
 };
 
 const USAGE =
-  "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>]";
+  "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>] [--output-version <1|2>]";
 
 const REQUIRED = [
   "--repository",

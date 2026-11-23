@@ -265,7 +265,7 @@ Each adapter observes its own extra source during both collection passes. Shared
 
 A successful modern result carries `reviewAdapters` with the selected attempts, updated finding ledger, ordered diagnostics, and whether the configured collection choices were exhausted. The canonical ledger is still persisted by the caller through the existing compare-and-swap flow. Raw source bodies and thrown messages stay out of diagnostics.
 
-The legacy direct request is isolated as `LegacyPullRequestCollectionRequest`. It retains the established source read order, failure behavior and `codexReview` result for existing callers. Mixing legacy and modern configuration is refused. The gate command translates legacy policy input to the modern adapter path, which emits the version 2 gate document.
+The legacy direct request is isolated as `LegacyPullRequestCollectionRequest`. It retains the established source read order, failure behavior and `codexReview` result for existing callers. Mixing legacy and modern configuration is refused. The gate command translates legacy policy input to the modern adapter path, which offers neutral version 2 diagnostics through `--output-version 2` while preserving the default version 1 envelope.
 
 ## Optional Codex collection
 

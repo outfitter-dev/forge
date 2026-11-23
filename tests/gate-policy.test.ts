@@ -311,6 +311,6 @@ test("the documented outputs are forge-gate documents, and the usage line is the
     { status: "invalid-input" },
   ]);
   for (const output of outputs) {
-    expect(output).toMatchObject({ kind: "forge-gate", schemaVersion: 1 });
+    expect(output).toMatchObject({ kind: "forge-gate", schemaVersion: 2 });
   }
 });

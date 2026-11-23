@@ -25,7 +25,8 @@ FORGE_GITHUB_TOKEN=<token> bun src/forge-cli.ts gate \
   --state <directory> \
   --run-id <id> \
   [--receipt <file>]... \
-  [--review-evidence <file>]
+  [--review-evidence <file>] \
+  [--output-version <1|2>]
 ```
 
 `bun run forge gate ...` is the same command through the package script. A lane and a person give the same flags; only where the values come from differs. Run it from a trusted revision of Forge, never from the checkout of the pull request being judged.
@@ -41,6 +42,7 @@ Every flag takes one value. A missing required flag, an unknown flag, a repeated
 | `--run-id` | The invoker's identifier for this run: a CI build ID, or anything for a local run. It becomes `provenance.runId` of the collected evidence. Nonempty, with no space at either end. |
 | `--receipt` | A file holding one [`forge check` receipt](forge-check.md) as JSON. Give it once per receipt, or not at all. |
 | `--review-evidence` | A file holding `{ "agentReviews": [...], "reviewFindings": {...}, "reviewLadder": ... }`: exactly the three [agent-review fields](evidence-evaluator.md#agent-review-under-schema-version-2) of a version 2 pull request, and no other key. The evaluator validates the content. |
+| `--output-version` | Optional `1` or `2`. Omission preserves the version 1 envelope consumed by existing Ranger installations. Version 2 exposes neutral adapter diagnostics. |
 | `--expected-head`, `--expected-base` | Optional admission pins, supplied together as full lowercase 40-character commit IDs. After collection, both must equal the subject collected from GitHub before any ledger replacement or evaluation. |
 
 A CI lane supplies both expected revisions from trusted admission. In Buildkite, it must bind `--expected-head` to the exact commit on which Buildkite will post the status and obtain `--expected-base` from trusted pull request admission. Build input alone cannot authenticate these values. A different collected head or base stops with `not-collected` at stage `subject`, preserves any existing ledger, and exits 3. An invocation that omits both pins retains its existing collection behavior.
@@ -231,11 +233,13 @@ Step 9 comes after steps 4 and 6. Supplied review-evidence content and evidence-
 
 ## Output
 
-Stdout is exactly one JSON document on one line, followed by a newline, in every case. The command writes nothing else to stdout and nothing to stderr. Bun's package runner prints the command it invokes to stderr, so `bun run forge gate ...` shows the arguments there; the direct entry point does not. Every new document has `kind: "forge-gate"`, `schemaVersion: 2` and a `status`. The TypeScript contract is [`GateDocument`](../src/gate-document.ts). The examples below are laid out for reading.
+Stdout is exactly one JSON document on one line, followed by a newline, in every case. The command writes nothing else to stdout and nothing to stderr. Bun's package runner prints the command it invokes to stderr, so `bun run forge gate ...` shows the arguments there; the direct entry point does not. Every document has `kind: "forge-gate"` and a `status`. The default `schemaVersion` is 1. Select `--output-version 2` for the neutral adapter record. The TypeScript contract is [`GateDocument`](../src/gate-document.ts). The examples below are laid out for reading.
 
 ### Output migration
 
-Version 2 replaces the optional provider-specific `codexReview` output with `reviewAdapters`. Consumers must accept version 2 across evaluated, not-collected and invalid-input documents before this producer change is adopted. The Buildkite status-refresh reader explicitly accepts versions 1 and 2 for their unchanged status and revision facts. It leaves adapter diagnostics to version-aware consumers. Ranger consumer compatibility is a rollout dependency for changing the default producer version.
+`--output-version 1` and the default preserve the established envelope across evaluated, not-collected and invalid-input results. A single Codex adapter retains the original optional `codexReview` metadata. Version 1 omits collection diagnostics for other or multiple adapters. Its evaluator facts, eligibility and exit code match version 2.
+
+`--output-version 2` replaces the optional provider-specific output with `reviewAdapters`. It exposes every configured adapter’s state, selection, observations and exhaustion diagnostic. The examples below show this version. The Buildkite status-refresh reader explicitly accepts both known versions for their unchanged status and revision facts. Ranger installations that accept only version 1 continue using the default until their parser is upgraded. Invalid or repeated output selections return an invalid-input result in the established version 1 envelope.
 
 ### `evaluated`
 
@@ -355,7 +359,7 @@ What the command was given could not be used. Exit 2.
   "schemaVersion": 2,
   "status": "invalid-input",
   "issues": [{ "path": "--state", "message": "required" }],
-  "usage": "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>]"
+  "usage": "Usage: forge gate --repository <owner/name> --pull-request <number> --policy <file> --state <directory> --run-id <id> [--receipt <file>]... [--review-evidence <file>] [--expected-head <commit> --expected-base <commit>] [--output-version <1|2>]"
 }
 ```
 

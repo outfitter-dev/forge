@@ -14,6 +14,8 @@ import {
   ingestFindingHistory,
 } from "./gate-finding-history.ts";
 import { readGateInputs } from "./gate-inputs.ts";
+import { gateOutputDocument, gateOutputVersion } from "./gate-output.ts";
+import type { GateOutputDocument } from "./gate-output.ts";
 import { gateReviewEvidence } from "./gate-review-evidence.ts";
 import {
   GitHubReadError,
@@ -307,12 +309,16 @@ const gate = async ({
  */
 export const runGate = async (
   invocation: GateInvocation
-): Promise<GateDocument> => {
+): Promise<GateOutputDocument> => {
+  const outputVersion = gateOutputVersion(invocation.args);
+  let document: GateDocument;
   try {
-    return await gate(invocation);
+    document = await gate(invocation);
   } catch (error) {
-    return error instanceof LedgerStoppedError
-      ? { ...FRAME, ...error.stop, status: "not-collected" }
-      : { ...FRAME, stage: "internal", status: "not-collected" };
+    document =
+      error instanceof LedgerStoppedError
+        ? { ...FRAME, ...error.stop, status: "not-collected" }
+        : { ...FRAME, stage: "internal", status: "not-collected" };
   }
+  return gateOutputDocument(document, outputVersion);
 };

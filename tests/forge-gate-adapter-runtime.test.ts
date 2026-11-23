@@ -66,14 +66,19 @@ const configuredPolicy = () => {
 const invoke = async (
   source: ScriptedPass,
   review: unknown = null,
-  secondaryOutage = false
+  secondaryOutage = false,
+  outputVersion: 1 | 2 = 2
 ) => {
   const ws = workspace();
   seedLedger(ws);
   mockSource(source);
   const document = await runGate({
     adapterRegistry: registry("passed", secondaryOutage),
-    args: gateArgs(ws, { policy: configuredPolicy(), review }),
+    args: [
+      ...gateArgs(ws, { policy: configuredPolicy(), review }),
+      "--output-version",
+      String(outputVersion),
+    ],
     cwd: ws.work,
     env: { FORGE_GITHUB_TOKEN: TOKEN },
   });
@@ -101,7 +106,7 @@ test("the real gate evaluates a fallback review with neutral schema-two diagnost
   expect(gateExitCode(document)).toBe(0);
   expect(document.schemaVersion).toBe(2);
   expect(document).not.toHaveProperty("codexReview");
-  if (document.status === "evaluated") {
+  if (document.status === "evaluated" && document.schemaVersion === 2) {
     expect(
       document.reviewAdapters?.adapters.map((entry) => [
         entry.state,
@@ -129,6 +134,7 @@ test("a supplied empty complete ledger cannot erase a newly unreadable source on
   expect(document.status).toBe("evaluated");
   if (
     document.status === "evaluated" &&
+    document.schemaVersion === 2 &&
     document.evaluation.input.facts.event === "pull_request" &&
     document.evaluation.input.facts.schemaVersion === 2
   ) {
@@ -150,7 +156,7 @@ test("a supplied empty complete ledger cannot erase a newly unreadable source on
 test("an outage in a secondary source still blocks a primary clean review in the real gate", async () => {
   const { document } = await invoke(codexPass(), null, true);
   expect(gateExitCode(document)).toBe(1);
-  if (document.status === "evaluated") {
+  if (document.status === "evaluated" && document.schemaVersion === 2) {
     expect(
       document.reviewAdapters?.adapters.map((entry) => [
         entry.state,
@@ -160,5 +166,19 @@ test("an outage in a secondary source still blocks a primary clean review in the
       ["passed", true],
       ["unavailable", false],
     ]);
+  }
+});
+
+test("multi-adapter v1 output preserves decisions while omitting unsupported diagnostics", async () => {
+  const { document: legacy } = await invoke(codexPass(), null, false, 1);
+  const { document: modern } = await invoke(codexPass(), null, false, 2);
+  expect(legacy.schemaVersion).toBe(1);
+  expect(modern.schemaVersion).toBe(2);
+  expect(legacy).not.toHaveProperty("reviewAdapters");
+  expect(legacy).not.toHaveProperty("codexReview");
+  expect(modern).toHaveProperty("reviewAdapters");
+  expect(gateExitCode(legacy)).toBe(gateExitCode(modern));
+  if (legacy.status === "evaluated" && modern.status === "evaluated") {
+    expect(legacy.evaluation).toEqual(modern.evaluation);
   }
 });
