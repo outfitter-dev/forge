@@ -67,7 +67,12 @@ export const classifyFindingReport = (
 ): FindingReportClassification => {
   const adverseState = report.state === "CHANGES_REQUESTED";
   const { surface } = report;
-  if (surface === "issue-comment" && formats.includes("codex-summary-v1")) {
+  if (
+    surface === "issue-comment" &&
+    formats.includes("codex-summary-v1") &&
+    (report.body.includes("<!-- codex-pull-request-review-summary") ||
+      report.body.includes("<!-- codex-review-state"))
+  ) {
     return codexFindingReport(report, accountId);
   }
   // A count without a finding map cannot account for each native report.

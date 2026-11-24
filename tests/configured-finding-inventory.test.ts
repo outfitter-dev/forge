@@ -481,3 +481,36 @@ test("many nested Codex prefixes are scanned without parsing overlapping report 
     )
   ).toEqual({ adverse: true, known: false });
 });
+
+const cursorQuota =
+  "<h3>Bugbot couldn't run - usage limit reached</h3>\n\nBugbot is counted against Cursor usage for this user or team, and this run hit a usage or spend limit.\n\nA user or team admin can review and increase usage limits in the [Cursor dashboard](https://www.cursor.com/dashboard/spending).\n\n(requestId: 12345678-1234-1234-1234-123456789abc)";
+
+test.each([codex(), cursorQuota])(
+  "each allowed format remains recognized when a source supports both",
+  (body) => {
+    expect(
+      classifyFindingReport(
+        report({ body, surface: "issue-comment" }),
+        ["codex-summary-v1", "cursor-summary-v1"],
+        actor.id
+      )
+    ).toEqual({ adverse: false, known: true });
+  }
+);
+
+test.each([
+  `${codex()}\n${cursorQuota}`,
+  `<!-- codex-review-state:v1\n${cursorQuota}`,
+  `${cursorQuota}\n<!-- codex-pull-request-review-summary`,
+])(
+  "mixed or malformed Codex text cannot fall through to another clean format",
+  (body) => {
+    expect(
+      classifyFindingReport(
+        report({ body, surface: "issue-comment" }),
+        ["codex-summary-v1", "cursor-summary-v1"],
+        actor.id
+      ).known
+    ).toBe(false);
+  }
+);
