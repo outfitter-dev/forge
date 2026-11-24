@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { realpathSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { qualifyBuildkiteGateReceipt } from "../src/buildkite-gate-receipt.ts";
@@ -257,7 +257,10 @@ test("a shared protected root can capture and publish the gate handoff", async (
     throw new Error(result.reason);
   }
   expect(result.receiptFile).toBe(
-    path.join(input.captureRoot, `${input.admission.jobId}.receipt.json`)
+    path.join(
+      realpathSync(input.captureRoot),
+      `${input.admission.jobId}.receipt.json`
+    )
   );
   expect(gateRun(input, result).ran.exitCode).toBe(0);
 });
