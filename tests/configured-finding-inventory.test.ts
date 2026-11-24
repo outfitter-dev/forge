@@ -443,3 +443,41 @@ test("an unattributable changes-requested review preserves positive adverse evid
     },
   ]);
 });
+
+test.each([
+  `${codex()}\n${codex()}`,
+  `${codex()}\n<!-- codex-review-state:v1`,
+  codex().replace("codex-review-state:v1", "codex-review-state:v2"),
+  codex().replace(" -->", " malformed -->"),
+  `extra prose\n${codex()}`,
+  `${codex()}\nextra prose`,
+])("ambiguous or malformed Codex envelopes stay unknown", (body) => {
+  expect(
+    classifyFindingReport(
+      report({ body, surface: "issue-comment" }),
+      ["codex-summary-v1"],
+      actor.id
+    ).known
+  ).toBe(false);
+});
+
+test("multiple Codex blocks preserve positive adverse flags while coverage stays unknown", () => {
+  expect(
+    classifyFindingReport(
+      report({ body: `${codex()}\n${codex(true)}`, surface: "issue-comment" }),
+      ["codex-summary-v1"],
+      actor.id
+    )
+  ).toEqual({ adverse: true, known: false });
+});
+
+test("many nested Codex prefixes are scanned without parsing overlapping report bodies", () => {
+  const body = `${"<!-- codex-review-state:v1 ".repeat(10_000)}${codex(true)}`;
+  expect(
+    classifyFindingReport(
+      report({ body, surface: "issue-comment" }),
+      ["codex-summary-v1"],
+      actor.id
+    )
+  ).toEqual({ adverse: true, known: false });
+});
