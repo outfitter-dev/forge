@@ -935,6 +935,9 @@ test("valid options make no request until a read is called", () => {
     "pullRequest",
     "reviewThreads",
     "reviews",
+    "scopedReviewThreads",
+    "scopedReviews",
+    "scopedThreadComments",
     "timeline",
   ]);
   expect(requests).toHaveLength(0);

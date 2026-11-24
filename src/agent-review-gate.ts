@@ -185,19 +185,24 @@ export const evaluateAgentReview = (
   collectionBlocked: boolean
 ): { outcome: AgentReviewOutcome; reasons: GateReason[] } => {
   const attempts = pr.agentReviews;
-  const locate = (index: number) => `${path}.agentReviews[${index}]`;
-  const shortfalls = attempts.map((attempt, index) =>
+  const allAttempts = [...attempts, ...(pr.resolutionReviews ?? [])];
+  const locate = (index: number) =>
+    index < attempts.length
+      ? `${path}.agentReviews[${index}]`
+      : `${path}.resolutionReviews[${index - attempts.length}]`;
+  const shortfalls = allAttempts.map((attempt, index) =>
     credibilityProblems(attempt, pr, policy, locate(index))
   );
   const credible = new Set(
-    attempts.filter((_, index) => shortfalls[index]?.length === 0)
+    allAttempts.filter((_, index) => shortfalls[index]?.length === 0)
   );
   const { blockers, recorded, unresolved } = evaluateLedger(
     { credible, policy, pr },
     `${path}.reviewFindings`
   );
   if (
-    new Set(attempts.map((item) => item.attemptId)).size !== attempts.length
+    new Set(allAttempts.map((item) => item.attemptId)).size !==
+    allAttempts.length
   ) {
     blockers.push(
       reason(
@@ -209,7 +214,7 @@ export const evaluateAgentReview = (
   }
   const satisfiedBy: string[] = [];
   const diagnostics: GateReason[] = [];
-  for (const [index, attempt] of attempts.entries()) {
+  for (const [index, attempt] of allAttempts.entries()) {
     const reported = (attempt.findingIds ?? []).map((id) =>
       identity(attempt.reviewer, id)
     );
@@ -230,7 +235,7 @@ export const evaluateAgentReview = (
       reported.some((key) => unresolved.has(key) || !recorded.has(key)),
       locate(index)
     );
-    if (problems.length === 0) {
+    if (index < attempts.length && problems.length === 0) {
       satisfiedBy.push(attempt.attemptId);
     }
     diagnostics.push(...problems);

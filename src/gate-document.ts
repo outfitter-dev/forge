@@ -1,4 +1,5 @@
 import type { PullRequestCollectionFailure } from "./collect-pull-request-types.ts";
+import type { ConfiguredFindingInventoryResult } from "./configured-finding-inventory.ts";
 import type { EvaluationResult, ValidationIssue } from "./evidence-types.ts";
 import type { GateOutputDocument } from "./gate-output.ts";
 import type { GitHubReadFailure } from "./github-pull-request-reads.ts";
@@ -14,6 +15,8 @@ export interface GateEvaluated {
     ReviewCollectionResult,
     "adapters" | "exhausted" | "reason"
   >;
+  /** Exact source policy and current coverage claim, without provider body text. */
+  findingSources?: ConfiguredFindingInventoryResult["coverage"];
   eligible: boolean;
   /** The revision judged, as collected from GitHub. */
   subject: {

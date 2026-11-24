@@ -10,11 +10,15 @@ import {
 export const gateReviewEvidence = (
   findings: ReviewFindingLedger,
   collected: CollectedReviewEvidence | undefined,
-  supplied: ReviewEvidence | null
+  supplied: ReviewEvidence | null,
+  collectorOwnsFindings = false
 ): ReviewEvidence => {
-  if (collected !== undefined && supplied === null) {
+  if (supplied === null && (collected !== undefined || collectorOwnsFindings)) {
     return {
-      agentReviews: collected.agentReviews,
+      agentReviews: collected?.agentReviews ?? [],
+      ...(collected?.resolutionReviews === undefined
+        ? {}
+        : { resolutionReviews: collected.resolutionReviews }),
       reviewFindings: findings,
       reviewLadder: null,
     };
@@ -36,6 +40,9 @@ export const gateReviewEvidence = (
     }
   }
   return {
+    ...(collected?.resolutionReviews === undefined
+      ? {}
+      : { resolutionReviews: collected.resolutionReviews }),
     agentReviews:
       collected !== undefined && Array.isArray(external.agentReviews)
         ? [...collected.agentReviews, ...external.agentReviews]

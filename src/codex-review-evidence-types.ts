@@ -42,6 +42,8 @@ export interface CodexReviewEvidenceInput extends CodexReviewConfiguration {
   /** All threads, including earlier heads, after complete two-pass collection. */
   threads: readonly GitHubReviewThread[];
   findings: ReviewFindingLedger;
+  /** Scoped collection owns canonical finding identities and resolution. */
+  findingSourcesOwnHistory?: boolean;
   /**
    * Explicit caller attestation that all reporting sources it owns were fully
    * collected and prior accepted findings retained. Absent or false stays unknown.

@@ -66,7 +66,16 @@ export type ReviewerPolicy = ProducerPolicy & { reviewer: string } & (
     | { rung: "local" }
   );
 
+export interface FindingSourceAuthority {
+  policyRevision: string;
+  policyDigest: string;
+  reviewers: string[];
+  sourceAccounts: { reviewer: string; accountId: number; actorType: "Bot" }[];
+}
+
 export interface AgentReviewPolicy {
+  /** Configured reporters may resolve native threads, independently of review eligibility. */
+  findingSources?: FindingSourceAuthority;
   reviewers: ReviewerPolicy[];
   /** Trusted fixed guidance a local reviewer may be launched with. */
   instructions: ReviewInstructions[];
@@ -146,8 +155,15 @@ export interface AgentReviewAttempt {
   nativeRef: string | null;
 }
 
-/** The only two ways a ledger entry stops blocking. */
+/** Accepted resolution mechanisms, each checked against its own authority. */
 export type FindingResolution =
+  | {
+      kind: "configured-native";
+      provenance: Provenance;
+      nativeRef: string;
+      policyRevision: string;
+      policyDigest: string;
+    }
   | {
       /** Provider-native resolution a trusted collector observed for a hosted reviewer. */
       kind: "native";
@@ -169,6 +185,8 @@ export type FindingResolution =
  * `adverse-review` is a failed verdict whose details were not available.
  */
 export interface ReviewFinding {
+  /** Stable source identity recorded at the first accepted configured observation. */
+  reportingSource?: { accountId: number; actorType: "Bot" };
   kind: "finding" | "adverse-review";
   reviewer: string;
   id: string;
@@ -182,7 +200,30 @@ export interface ReviewFinding {
  * Persisted for the PR across attempts and revisions; absence is not resolution.
  * `recorded` is the trusted collector's completeness attestation, not proof.
  */
+export interface FindingCoverage {
+  /** Missing on historical scoped ledgers, which retain entries but supply no current completeness. */
+  subject?: PullRequestSubject;
+  provenance?: Provenance;
+  /** Exact legacy Codex origins freshly attributed through the installed collector and current service observation. */
+  legacySources?: LegacyFindingSourceBinding[];
+  policyRevision: string;
+  policyDigest: string;
+  sourceAccounts: { reviewer: string; accountId: number; actorType: "Bot" }[];
+  references: string[];
+}
+
+export interface LegacyFindingSourceBinding {
+  kind: ReviewFinding["kind"];
+  reviewer: string;
+  id: string;
+  attemptId: string;
+  nativeRef: string;
+  reportingSource: NonNullable<ReviewFinding["reportingSource"]>;
+}
+
 export interface ReviewFindingLedger {
+  /** Scope of this collection. Historical completeness never substitutes for a current read. */
+  coverage?: FindingCoverage;
   recorded: boolean;
   findings: ReviewFinding[];
 }
@@ -211,6 +252,8 @@ export interface PullRequestEvidenceOf<Review> {
 export type PullRequestEvidence = PullRequestEvidenceOf<AgentReviewEvidence>;
 
 export interface PullRequestEvidenceV2 extends PullRequestEvidenceOf<AgentReviewAttempt> {
+  /** Explicit targeted follow-ups may resolve scoped adverse entries without satisfying the clean-review requirement. */
+  resolutionReviews?: AgentReviewAttempt[];
   reviewFindings: ReviewFindingLedger;
   reviewLadder: ReviewLadder | null;
 }

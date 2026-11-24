@@ -59,6 +59,7 @@ export const codexReviewAdapter: ReviewAdapterDefinition = {
     >;
     const result = codexReviewEvidence({
       ...options,
+      findingSourcesOwnHistory: input.findingSources !== undefined,
       findings: input.findings,
       findingsComplete: config.findingsComplete,
       issuer: config.issuer,

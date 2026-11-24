@@ -6,6 +6,14 @@ import {
   legacyReviewConfiguration,
   readCollectionComments,
 } from "./collect-codex-review.ts";
+import {
+  findingReadCapability,
+  prepareFindingSources,
+  readConfiguredFindings,
+  retainFindingCoverage,
+  collectedFindingSources,
+  missingCollectionRead,
+} from "./collect-finding-sources.ts";
 import type {
   PullRequestCollectionFailure,
   CompatiblePullRequestCollectionRequest,
@@ -26,6 +34,8 @@ import {
   provenance,
   repository,
 } from "./evidence-validation-primitives.ts";
+import { parseFindingSourcesPolicy } from "./finding-source-policy.ts";
+import type { PullRequestFindingReads } from "./github-finding-observations.ts";
 import { GitHubReadError } from "./github-pull-request-reads.ts";
 import type {
   GitHubPullRequest,
@@ -90,6 +100,12 @@ const validRequest = (
   try {
     repository(request.repository, "repository");
     provenance(request.provenance, "provenance");
+    if (request.findingSources !== undefined) {
+      if (Object.hasOwn(request, "codexReview")) {
+        return false;
+      }
+      parseFindingSourcesPolicy(request.findingSources, "findingSources");
+    }
     if (Object.hasOwn(request, "reviewAdapters")) {
       if (Object.hasOwn(request, "codexReview")) {
         return false;
@@ -242,7 +258,8 @@ const readThreads = async (
  */
 export const collectPullRequest = async (
   input: CompatiblePullRequestCollectionRequest,
-  reads: PullRequestReads & Partial<PullRequestCommentReads>,
+  reads: PullRequestReads &
+    Partial<PullRequestCommentReads & PullRequestFindingReads>,
   givenRegistry: ReviewAdapterRegistry = reviewAdapterRegistry
 ): Promise<PullRequestCollectionResult> => {
   const registry = captureReviewAdapterRegistry(givenRegistry);
@@ -252,6 +269,7 @@ export const collectPullRequest = async (
   // Taken before any read, so nothing done to the caller's request or ledger
   // while the reads are awaited changes what is collected.
   const request = structuredClone(input);
+  prepareFindingSources(request);
   const commentReads = commentReadCapability(reads);
   const adapterReads = {
     ...commentReads,
@@ -261,8 +279,14 @@ export const collectPullRequest = async (
     timeline: reads.timeline.bind(reads),
   };
   const legacyConfig = legacyReviewConfiguration(request);
-  if (legacyConfig !== undefined && commentReads === null) {
-    return { reason: "comment-read-missing", status: "unavailable" };
+  const findingReads = findingReadCapability(reads);
+  const missingRead = missingCollectionRead(
+    request,
+    commentReads,
+    findingReads
+  );
+  if (missingRead !== null) {
+    return { reason: missingRead, status: "unavailable" };
   }
   try {
     const reviews = await readReviews(reads);
@@ -273,6 +297,10 @@ export const collectPullRequest = async (
       registry
     );
     requireSingleReviewSourceRead(observations);
+    const findingObservation = await readConfiguredFindings(
+      request,
+      findingReads
+    );
     const { pullRequest, servedAt, servedTime } = await readPullRequest(
       reads,
       request
@@ -318,6 +346,10 @@ export const collectPullRequest = async (
       registry
     );
     requireSingleReviewSourceRead(observationsAgain);
+    const findingObservationAgain = await readConfiguredFindings(
+      request,
+      findingReads
+    );
     const { assignments, humanReviews, ledger } = humanReviewEvidence({
       ...timeline,
       ledger: request.ledger,
@@ -333,14 +365,35 @@ export const collectPullRequest = async (
       kind: "pull_request" as const,
       repository: request.repository,
     };
+    const findingSources = collectedFindingSources(
+      request,
+      findingObservation,
+      findingObservationAgain,
+      subject,
+      ledger
+    );
+    const findingBaseline = structuredClone(ledger.reviewFindings);
     const collectedReviews = collectedPullRequestReviews(
       request,
       { comments, first: observations, second: observationsAgain },
       { ledger, reviewThreads, servedAt, subject },
       registry
     );
+    retainFindingCoverage(
+      findingSources,
+      findingBaseline,
+      ledger,
+      collectedReviews,
+      {
+        reviewThreads,
+        servedAt,
+        snapshot: ledger.observedRevision,
+        subject,
+      }
+    );
     return {
       ...collectedReviews,
+      ...findingSources,
       evidence: {
         assignments,
         draft: pullRequest.draft,

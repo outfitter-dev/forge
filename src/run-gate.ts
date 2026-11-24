@@ -17,6 +17,7 @@ import { readGateInputs } from "./gate-inputs.ts";
 import { gateOutputDocument, gateOutputVersion } from "./gate-output.ts";
 import type { GateOutputDocument } from "./gate-output.ts";
 import { gateReviewEvidence } from "./gate-review-evidence.ts";
+import type { PullRequestFindingReads } from "./github-finding-observations.ts";
 import {
   GitHubReadError,
   githubPullRequestReads,
@@ -87,7 +88,9 @@ const ledgerStep = async <T>(
  * them throws. The collector reports every thrown read as `read-failed`, so
  * without this an outage could not be told from a page bound that is too small.
  */
-const remembering = (reads: PullRequestReads & PullRequestCommentReads) => {
+const remembering = (
+  reads: PullRequestReads & PullRequestCommentReads & PullRequestFindingReads
+) => {
   let failure: { code: GitHubReadError["code"]; status: number | null } | null =
     null;
   const watch = async <T>(read: () => Promise<T>): Promise<T> => {
@@ -100,12 +103,24 @@ const remembering = (reads: PullRequestReads & PullRequestCommentReads) => {
       throw error;
     }
   };
-  const watched: PullRequestReads & PullRequestCommentReads = {
+  const threadComments = reads.scopedThreadComments?.bind(reads);
+  const watched: PullRequestReads &
+    PullRequestCommentReads &
+    PullRequestFindingReads = {
     issueComments: (cursor) => watch(() => reads.issueComments(cursor)),
     pullRequest: () => watch(() => reads.pullRequest()),
     reviewThreads: (cursor) => watch(() => reads.reviewThreads(cursor)),
     reviews: () => watch(() => reads.reviews()),
+    scopedReviewThreads: (cursor) =>
+      watch(() => reads.scopedReviewThreads(cursor)),
+    scopedReviews: (cursor) => watch(() => reads.scopedReviews(cursor)),
     timeline: () => watch(() => reads.timeline()),
+    ...(threadComments === undefined
+      ? {}
+      : {
+          scopedThreadComments: (threadId: string, cursor: string | null) =>
+            watch(() => threadComments(threadId, cursor)),
+        }),
   };
   return { failure: () => failure, reads: watched };
 };
@@ -153,7 +168,10 @@ const gate = async ({
       token,
     })
   );
-  const suppliedFindings = acceptedFindingHistory(reviewEvidence);
+  const suppliedFindings =
+    policy.findingSources === undefined
+      ? acceptedFindingHistory(reviewEvidence)
+      : null;
   const reviewAdapters = policy.reviewAdapters.map((adoption) => {
     const definition =
       registeredReviewAdapter(adapters, adoption.adapter) ??
@@ -171,6 +189,9 @@ const gate = async ({
       // Passing the policy's label is what adopts the collector's rule for
       // `mergeAuthorized`; a policy without one was refused above.
       ...(reviewAdapters.length === 0 ? {} : { reviewAdapters }),
+      ...(policy.findingSources === undefined
+        ? {}
+        : { findingSources: policy.findingSources }),
       holdLabel: policy.mergeAuthorization.holdLabel,
       ledger: entry,
       maxThreadPages: MAX_THREAD_PAGES,
@@ -220,10 +241,12 @@ const gate = async ({
       };
     }
   }
-  collection.ledger.reviewFindings = ingestFindingHistory(
-    collection.ledger.reviewFindings,
-    suppliedFindings
-  );
+  if (policy.findingSources === undefined) {
+    collection.ledger.reviewFindings = ingestFindingHistory(
+      collection.ledger.reviewFindings,
+      suppliedFindings
+    );
+  }
   if (
     collection.reviewAdapters !== undefined &&
     !collection.reviewAdapters.reviewFindings.recorded
@@ -258,7 +281,8 @@ const gate = async ({
           collection.reviewAdapters === undefined
             ? undefined
             : { ...collection.reviewAdapters, reviewLadder: null },
-          reviewEvidence
+          reviewEvidence,
+          policy.findingSources !== undefined
         ),
         checks,
       },
@@ -283,6 +307,9 @@ const gate = async ({
             reason: collection.reviewAdapters.reason,
           },
         }),
+    ...(collection.findingSources === undefined
+      ? {}
+      : { findingSources: collection.findingSources }),
     eligible: evaluation.eligible,
     evaluation,
     rejectedReceipts: rejected,

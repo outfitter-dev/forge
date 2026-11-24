@@ -2,7 +2,9 @@ import type {
   CodexReviewConfiguration,
   CodexReviewEvidenceResult,
 } from "./codex-review-evidence-types.ts";
+import type { ConfiguredFindingInventoryResult } from "./configured-finding-inventory.ts";
 import type { Provenance, PullRequestEvidenceOf } from "./evidence-types.ts";
+import type { FindingSourcesPolicy } from "./finding-source-policy.ts";
 import type { GitHubReviewThread } from "./github-pull-request-types.ts";
 import type {
   ReviewCollectionConfiguration,
@@ -54,6 +56,8 @@ export interface PullRequestCollectionRequest {
   /** The most review-thread pages one pass may read. */
   maxThreadPages: number;
   reviewAdapters?: ReviewCollectionConfiguration[];
+  /** Explicit trusted finding-source policy, independent of eligible clean reviewers. */
+  findingSources?: FindingSourcesPolicy;
 }
 
 /** Explicit compatibility entrypoint for direct callers predating adapter collection. */
@@ -114,7 +118,8 @@ export type PullRequestCollectionFailure =
         | "read-failed"
         | "thread-pages-exceeded"
         | "comment-pages-exceeded"
-        | "comment-read-missing";
+        | "comment-read-missing"
+        | "finding-read-missing";
     }
   | {
       status: "mismatch";
@@ -128,6 +133,7 @@ export type PullRequestCollectionResult =
       /** Present only when explicitly configured. Outside minimal evaluator facts. */
       codexReview?: CodexReviewEvidenceResult;
       reviewAdapters?: ReviewCollectionResult;
+      findingSources?: ConfiguredFindingInventoryResult["coverage"];
       evidence: CollectedPullRequestEvidence;
       /** Stable full-list source observations, outside evaluator facts. */
       reviewThreads: GitHubReviewThread[];

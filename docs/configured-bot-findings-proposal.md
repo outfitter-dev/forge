@@ -1,6 +1,6 @@
 # Proposed collection of configured bots’ findings
 
-Draft for Matt’s confirmation, November 18, 2026. Matt requested a proposal that counts configured bots’ review threads and explicitly handles findings reported elsewhere. This is the proposed amendment for the finding-source decision recorded on November 15 in [FOR-38](https://linear.app/outfitter/issue/FOR-38). Adoption requires Matt’s confirmation and a separately reviewed implementation and policy change.
+Approved for implementation and testing by Matt on November 24, 2026, following the November 18 proposal for the finding-source decision in [FOR-38](https://linear.app/outfitter/issue/FOR-38). The approved scope includes configured reporting bots’ findings and GitHub’s native thread-resolution authority described below. Live trial authorization and adoption require their recorded qualification. The [qualification record](configured-bot-findings-qualification.md) identifies actual observed identities, formats and open surface coverage.
 
 ## Proposed contract amendment
 

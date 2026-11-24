@@ -47,6 +47,9 @@ export const collectedPullRequestReviews = (
     sources.first,
     sources.second,
     {
+      ...(request.findingSources === undefined
+        ? {}
+        : { findingSources: request.findingSources }),
       findings: input.ledger.reviewFindings,
       reviewThreads: input.reviewThreads,
       servedAt: input.servedAt,

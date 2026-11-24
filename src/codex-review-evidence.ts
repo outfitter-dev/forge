@@ -32,6 +32,12 @@ const validInput = (input: CodexReviewEvidenceInput): void => {
   if (input.findingsComplete !== undefined) {
     choice(input.findingsComplete, "findingsComplete", [true, false]);
   }
+  if (input.findingSourcesOwnHistory !== undefined) {
+    choice(input.findingSourcesOwnHistory, "findingSourcesOwnHistory", [
+      true,
+      false,
+    ]);
+  }
   const served = instant(input.servedAt, "servedAt");
   if (input.snapshot !== null) {
     digest(input.snapshot.headSha, "snapshot.headSha", 40);

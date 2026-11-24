@@ -104,3 +104,21 @@ export type {
   ReviewCollectionResult,
   ReviewCollectionState,
 } from "./review-collection-types.ts";
+
+export { parseFindingSourcesPolicy } from "./finding-source-policy.ts";
+export type {
+  FindingSource,
+  FindingSourcesPolicy,
+} from "./finding-source-policy.ts";
+export { configuredFindingInventory } from "./configured-finding-inventory.ts";
+export type {
+  ConfiguredFindingInventoryInput,
+  ConfiguredFindingInventoryResult,
+} from "./configured-finding-inventory.ts";
+export { readFindingObservation } from "./github-finding-observations.ts";
+export type {
+  FindingObservation,
+  FindingReport,
+  FindingThread,
+  PullRequestFindingReads,
+} from "./github-finding-observations.ts";

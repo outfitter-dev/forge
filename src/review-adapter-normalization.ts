@@ -7,6 +7,7 @@ import type {
   ReviewObservationInput,
   ReviewAdapterObservation,
 } from "./review-collection-types.ts";
+import { validateReviewFollowUps } from "./review-follow-up.ts";
 
 /** Normalize only facts owned by this adapter, retaining a durable blocker for a detail-less failed verdict. */
 export const normalizeReviewObservation = (
@@ -64,6 +65,7 @@ export const normalizeReviewObservation = (
       "unavailable",
       "unreadable",
     ]);
+    validateReviewFollowUps(result);
     return result;
   } catch {
     return undefined;

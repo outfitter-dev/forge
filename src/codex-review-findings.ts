@@ -48,12 +48,41 @@ const unaccountedAdverseComments = (
   );
 };
 
+/** Scoped inventory owns canonical origins; attempt IDs refer to those exact versions. */
+const scopedReviewFindings = (
+  input: CodexReviewEvidenceInput,
+  owned: GitHubReviewThread[]
+) => {
+  const adverseComments = unaccountedAdverseComments(input, owned);
+  const findingIds = owned.map((thread) => thread.id);
+  for (const comment of adverseComments) {
+    const digest = createHash("sha256").update(comment.body).digest("hex");
+    const scopedId = `adverse-review:${comment.nodeId}:${comment.updatedAt}:${digest}`;
+    const legacyId = `adverse-review:${comment.id}:${comment.updatedAt}:${digest}`;
+    const canonical = input.findings.findings.find(
+      (finding) =>
+        finding.reviewer === input.reviewer.reviewer &&
+        finding.nativeRef === comment.nativeRef &&
+        (finding.id === scopedId || finding.id === legacyId)
+    );
+    findingIds.push(canonical?.id ?? scopedId);
+  }
+  return {
+    adverse: adverseComments.length > 0,
+    findingIds,
+    ledger: structuredClone(input.findings),
+  };
+};
+
 /** Updates only the configured reviewer's thread entries. Other origins and detail-less blockers persist. */
 export const codexReviewFindings = (
   input: CodexReviewEvidenceInput,
   attemptId: string,
   owned: GitHubReviewThread[]
 ) => {
+  if (input.findingSourcesOwnHistory === true) {
+    return scopedReviewFindings(input, owned);
+  }
   const threads = new Map(owned.map((thread) => [thread.id, thread]));
   const findings = input.findings.findings.map((finding): ReviewFinding => {
     if (

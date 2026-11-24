@@ -1,7 +1,7 @@
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 
-import type { ValidationIssue } from "./evidence-types.ts";
+import type { AgentReviewAttempt, ValidationIssue } from "./evidence-types.ts";
 import {
   invalid,
   InvalidEvidenceError,
@@ -21,7 +21,9 @@ const TOKEN = /^[!-~]+$/u;
 const REVIEW_KEYS = ["agentReviews", "reviewFindings", "reviewLadder"] as const;
 
 /** The three evaluator fields of a version 2 pull request; the evaluator validates their content. */
-export type ReviewEvidence = Record<(typeof REVIEW_KEYS)[number], unknown>;
+export type ReviewEvidence = Record<(typeof REVIEW_KEYS)[number], unknown> & {
+  resolutionReviews?: AgentReviewAttempt[];
+};
 
 export interface GateInputs {
   policy: GatePolicy;
@@ -179,6 +181,12 @@ export const readGateInputs = async (
   }
   let review: ReviewEvidence | null = null;
   if (args.reviewEvidence !== null) {
+    if (policy.value.findingSources !== undefined) {
+      return refused(
+        "--review-evidence",
+        "configured finding sources require collected review evidence"
+      );
+    }
     const reviewFile = await readJson(cwd, args.reviewEvidence);
     if (!reviewFile.readable) {
       return refused("--review-evidence", UNREADABLE);
