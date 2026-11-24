@@ -13,6 +13,7 @@ import type {
   PullRequestEvidenceV2,
   ReviewFinding,
 } from "./evidence-types.ts";
+import { boundFindingReportingSource } from "./finding-source-binding.ts";
 
 export interface Review {
   pr: PullRequestEvidenceV2;
@@ -34,6 +35,10 @@ const configuredNativeResolved = (
   resolution: Extract<FindingResolution, { kind: "configured-native" }>
 ): boolean => {
   const authority = policy.findingSources;
+  const reportingSource = boundFindingReportingSource(
+    finding,
+    pr.reviewFindings.coverage
+  );
   return (
     authority !== undefined &&
     authority.policyRevision === resolution.policyRevision &&
@@ -42,8 +47,8 @@ const configuredNativeResolved = (
     authority.sourceAccounts.some(
       (source) =>
         source.reviewer === finding.reviewer &&
-        source.accountId === finding.reportingSource?.accountId &&
-        source.actorType === finding.reportingSource.actorType
+        source.accountId === reportingSource?.accountId &&
+        source.actorType === reportingSource.actorType
     ) &&
     finding.kind === "finding" &&
     resolution.nativeRef === finding.id &&
@@ -58,7 +63,8 @@ const followUpCandidates = (finding: ReviewFinding, { policy, pr }: Review) => {
   const additional =
     policy.findingSources !== undefined &&
     finding.kind === "adverse-review" &&
-    finding.reportingSource !== undefined
+    boundFindingReportingSource(finding, pr.reviewFindings.coverage) !==
+      undefined
       ? (pr.resolutionReviews ?? [])
       : [];
   return [...pr.agentReviews, ...additional];
@@ -77,6 +83,7 @@ const resolved = (finding: ReviewFinding, review: Review): boolean => {
   if (resolution.kind === "native") {
     const reviewer = configured(policy, finding.reviewer);
     return (
+      policy.findingSources === undefined &&
       finding.reportingSource === undefined &&
       reviewer?.rung === "hosted" &&
       provenanceProblems(resolution.provenance, reviewer, "").length === 0
@@ -128,6 +135,13 @@ export const evaluateLedger = (review: Review, path: string) => {
       : ledger.coverage !== undefined &&
         authority.policyRevision === ledger.coverage.policyRevision &&
         authority.policyDigest === ledger.coverage.policyDigest &&
+        ledger.coverage.subject !== undefined &&
+        ledger.coverage.provenance !== undefined &&
+        bindingProblems(ledger.coverage.subject, review.pr.subject, "")
+          .length === 0 &&
+        provenanceProblems(ledger.coverage.provenance, review.pr.provenance, "")
+          .length === 0 &&
+        ledger.coverage.provenance.runId === review.pr.provenance.runId &&
         isDeepStrictEqual(
           accounts(authority.sourceAccounts),
           accounts(ledger.coverage.sourceAccounts)

@@ -11,6 +11,7 @@ import {
   object,
   text,
 } from "./evidence-validation-primitives.ts";
+import { boundFindingReportingSource } from "./finding-source-binding.ts";
 import type {
   ReviewAdapterObservation,
   ReviewCollectionConfiguration,
@@ -110,7 +111,8 @@ export const applyReviewFollowUps = (
       const [link] = matching;
       if (
         finding.kind !== "adverse-review" ||
-        finding.reportingSource === undefined ||
+        boundFindingReportingSource(finding, input.findings.coverage) ===
+          undefined ||
         matching.length !== 1 ||
         link === undefined
       ) {
@@ -207,7 +209,8 @@ export const collectedResolutionReviews = (
           const { resolution } = finding;
           return (
             finding.kind === "adverse-review" &&
-            finding.reportingSource !== undefined &&
+            boundFindingReportingSource(finding, input.findings.coverage) !==
+              undefined &&
             finding.reviewer === link.finding.reviewer &&
             finding.id === link.finding.id &&
             finding.attemptId === link.finding.attemptId &&

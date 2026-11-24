@@ -5,7 +5,11 @@ import type {
 } from "./collect-pull-request-types.ts";
 import type { ConfiguredFindingInventoryResult } from "./configured-finding-inventory.ts";
 import { configuredFindingInventory } from "./configured-finding-inventory.ts";
-import type { PullRequestSubject } from "./evidence-types.ts";
+import type {
+  PullRequestSubject,
+  ReviewFindingLedger,
+} from "./evidence-types.ts";
+import { boundFindingReportingSource } from "./finding-source-binding.ts";
 import { readFindingObservation } from "./github-finding-observations.ts";
 import type {
   FindingObservation,
@@ -89,6 +93,29 @@ export const readConfiguredFindings = async (
   }
 };
 
+/** Only the adopted Codex collector can attest the account behind its legacy origins. */
+const legacyCodexSources = (request: CompatiblePullRequestCollectionRequest) =>
+  (request.reviewAdapters ?? []).flatMap((entry) => {
+    if (entry.adapter !== "codex-github") {
+      return [];
+    }
+    const source = request.findingSources?.sources.find(
+      (candidate) =>
+        candidate.reviewer === entry.reviewer.reviewer &&
+        candidate.accountId ===
+          (entry.configuration as { botAccountId: number }).botAccountId
+    );
+    return source === undefined
+      ? []
+      : [
+          {
+            accountId: source.accountId,
+            actorType: source.actorType,
+            reviewer: source.reviewer,
+          },
+        ];
+  });
+
 /** The independent reviewer supplies attempts; scoped collection owns only finding history. */
 export const collectedFindingSources = (
   request: CompatiblePullRequestCollectionRequest,
@@ -100,31 +127,11 @@ export const collectedFindingSources = (
   if (request.findingSources === undefined) {
     return {};
   }
-  const accepted = new Map(
-    request.ledger.reviewFindings?.findings.map((finding) => [
-      identity(finding.reviewer, finding.id),
-      finding,
-    ])
-  );
-  // Legacy adapter resolution fields cannot clear a scoped entry. Only the
-  // current inventory or an explicit validated follow-up may change it.
-  const findings = {
-    ...ledger.reviewFindings,
-    findings: ledger.reviewFindings.findings.map((finding) =>
-      finding.reportingSource === undefined
-        ? finding
-        : {
-            ...finding,
-            resolution:
-              accepted.get(identity(finding.reviewer, finding.id))
-                ?.resolution ?? null,
-          }
-    ),
-  };
   const result = configuredFindingInventory({
-    findings,
+    findings: ledger.reviewFindings,
     first,
     issuer: request.provenance,
+    legacyCodexSources: legacyCodexSources(request),
     policy: request.findingSources,
     second,
     subject,
@@ -136,6 +143,7 @@ export const collectedFindingSources = (
 /** Preserve the current source claim while eligible adapters contribute attempts and explicit follow-ups. */
 export const retainFindingCoverage = (
   sources: { findingSources?: ConfiguredFindingInventoryResult["coverage"] },
+  baseline: ReviewFindingLedger,
   ledger: CanonicalReviewLedgerEntry,
   reviews: { reviewAdapters?: ReviewCollectionResult },
   input: Omit<ReviewObservationInput, "findings">
@@ -146,7 +154,22 @@ export const retainFindingCoverage = (
       recorded,
       ...coverage
     } = sources.findingSources;
-    ledger.reviewFindings = { ...ledger.reviewFindings, coverage, recorded };
+    const current = new Map(
+      baseline.findings.map((finding) => [
+        identity(finding.reviewer, finding.id),
+        finding,
+      ])
+    );
+    ledger.reviewFindings = {
+      coverage,
+      findings: ledger.reviewFindings.findings.map((finding) => {
+        const accepted = current.get(identity(finding.reviewer, finding.id));
+        return boundFindingReportingSource(finding, coverage) === undefined
+          ? finding
+          : { ...finding, resolution: accepted?.resolution ?? null };
+      }),
+      recorded,
+    };
   }
   if (reviews.reviewAdapters !== undefined) {
     ledger.reviewFindings = applyCollectedReviewFollowUps(

@@ -24,6 +24,8 @@ export interface PullRequestFindingReads {
 }
 
 export interface FindingReport {
+  /** The REST identity retained for exact legacy issue-comment reconciliation. */
+  databaseId?: number;
   id: string;
   nodeId: string;
   nativeRef: string;
@@ -269,6 +271,7 @@ export const readFindingObservation = async (
   const comments = issueComments.map((item): FindingReport => ({
     ...item,
     commitId: null,
+    databaseId: item.id,
     id: item.nodeId,
     state: null,
     surface: "issue-comment",

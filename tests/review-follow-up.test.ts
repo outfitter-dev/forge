@@ -137,8 +137,10 @@ test("resolution-only evidence requires scoped policy and a non-thread adverse t
     coverage: {
       policyDigest: policy.agentReview.findingSources.policyDigest,
       policyRevision: policy.agentReview.findingSources.policyRevision,
+      provenance: facts.pullRequest.provenance,
       references: ["fixture://stable-coverage"],
       sourceAccounts: policy.agentReview.findingSources.sourceAccounts,
+      subject: facts.pullRequest.subject,
     },
     findings: [
       {

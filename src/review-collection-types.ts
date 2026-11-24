@@ -8,6 +8,7 @@ import type {
   ReviewerPolicy,
   ReviewFindingLedger,
 } from "./evidence-types.ts";
+import type { FindingSourcesPolicy } from "./finding-source-policy.ts";
 import type { GatePolicy } from "./gate-policy.ts";
 import type { GitHubReadFailure } from "./github-pull-request-reads.ts";
 import type { GitHubReviewThread } from "./github-pull-request-types.ts";
@@ -32,6 +33,7 @@ export interface GateReviewAdapterPolicy {
 }
 
 export interface ReviewObservationInput extends ReviewAdapterInput {
+  findingSources?: FindingSourcesPolicy;
   snapshot: ObservedRevision | null;
   reviewThreads: GitHubReviewThread[];
 }

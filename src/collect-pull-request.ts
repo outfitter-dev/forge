@@ -101,6 +101,9 @@ const validRequest = (
     repository(request.repository, "repository");
     provenance(request.provenance, "provenance");
     if (request.findingSources !== undefined) {
+      if (Object.hasOwn(request, "codexReview")) {
+        return false;
+      }
       parseFindingSourcesPolicy(request.findingSources, "findingSources");
     }
     if (Object.hasOwn(request, "reviewAdapters")) {
@@ -362,12 +365,6 @@ export const collectPullRequest = async (
       kind: "pull_request" as const,
       repository: request.repository,
     };
-    const collectedReviews = collectedPullRequestReviews(
-      request,
-      { comments, first: observations, second: observationsAgain },
-      { ledger, reviewThreads, servedAt, subject },
-      registry
-    );
     const findingSources = collectedFindingSources(
       request,
       findingObservation,
@@ -375,12 +372,25 @@ export const collectPullRequest = async (
       subject,
       ledger
     );
-    retainFindingCoverage(findingSources, ledger, collectedReviews, {
-      reviewThreads,
-      servedAt,
-      snapshot: ledger.observedRevision,
-      subject,
-    });
+    const findingBaseline = structuredClone(ledger.reviewFindings);
+    const collectedReviews = collectedPullRequestReviews(
+      request,
+      { comments, first: observations, second: observationsAgain },
+      { ledger, reviewThreads, servedAt, subject },
+      registry
+    );
+    retainFindingCoverage(
+      findingSources,
+      findingBaseline,
+      ledger,
+      collectedReviews,
+      {
+        reviewThreads,
+        servedAt,
+        snapshot: ledger.observedRevision,
+        subject,
+      }
+    );
     return {
       ...collectedReviews,
       ...findingSources,

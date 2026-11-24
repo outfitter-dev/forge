@@ -30,6 +30,11 @@ export interface ConfiguredFindingInventoryInput {
   findings: ReviewFindingLedger;
   subject: PullRequestSubject;
   issuer: Provenance;
+  legacyCodexSources?: {
+    reviewer: string;
+    accountId: number;
+    actorType: "Bot";
+  }[];
 }
 
 export interface ConfiguredFindingInventoryResult {
@@ -44,6 +49,17 @@ interface Inventory {
   findings: Map<string, ReviewFinding>;
   diagnostics: Set<string>;
   references: Set<string>;
+  legacySources: Map<
+    string,
+    {
+      reviewer: string;
+      kind: ReviewFinding["kind"];
+      id: string;
+      attemptId: string;
+      nativeRef: string;
+      reportingSource: { accountId: number; actorType: "Bot" };
+    }
+  >;
 }
 
 const digest = (value: string) =>
@@ -71,6 +87,77 @@ const reference = ({ references }: Inventory, report: FindingReport) => {
   );
 };
 
+const legacySourceBridge = (state: Inventory, source: FindingSource) =>
+  state.input.legacyCodexSources?.some(
+    (known) =>
+      known.reviewer === source.reviewer &&
+      known.accountId === source.accountId &&
+      known.actorType === source.actorType
+  ) === true;
+const recordLegacySource = (
+  state: Inventory,
+  finding: ReviewFinding,
+  source: FindingSource
+) => {
+  state.legacySources.set(identity(finding.reviewer, finding.id), {
+    attemptId: finding.attemptId,
+    id: finding.id,
+    kind: finding.kind,
+    nativeRef: finding.nativeRef,
+    reportingSource: {
+      accountId: source.accountId,
+      actorType: source.actorType,
+    },
+    reviewer: finding.reviewer,
+  });
+};
+
+const isAcceptedUnconfiguredReport = (
+  state: Inventory,
+  report: FindingReport,
+  id: string
+) => {
+  const finding = state.findings.get(
+    identity(`unconfigured-github-bot/${report.author?.id}`, id)
+  );
+  return (
+    finding !== undefined &&
+    finding.kind === "adverse-review" &&
+    finding.nativeRef === report.nativeRef &&
+    finding.reportingSource?.accountId === report.author?.id &&
+    finding.reportingSource?.actorType === "Bot"
+  );
+};
+
+const reuseLegacyReport = (
+  state: Inventory,
+  legacy: ReviewFinding,
+  report: FindingReport,
+  source: FindingSource | undefined
+): boolean => {
+  if (
+    legacy.kind !== "adverse-review" ||
+    legacy.nativeRef !== report.nativeRef
+  ) {
+    return false;
+  }
+  if (legacy.reportingSource !== undefined) {
+    return (
+      legacy.reportingSource.accountId === report.author?.id &&
+      legacy.reportingSource.actorType === report.author?.type
+    );
+  }
+  if (
+    source === undefined ||
+    !legacy.attemptId.startsWith("codex/") ||
+    !legacySourceBridge(state, source)
+  ) {
+    return false;
+  }
+  recordLegacySource(state, legacy, source);
+  return true;
+};
+
 const adverseReport = (
   state: Inventory,
   report: FindingReport,
@@ -81,19 +168,39 @@ const adverseReport = (
     (report.author === null
       ? "unattributed-github-report"
       : `unconfigured-github-bot/${report.author.id}`);
+  const id = `adverse-review:${report.id}:${report.updatedAt}:${digest(report.body)}`;
+  if (isAcceptedUnconfiguredReport(state, report, id)) {
+    return;
+  }
+  // Old Codex collection used the REST database ID. Reuse its exact accepted
+  // observation when the current node proves the same report and body version.
+  const legacyId =
+    typeof report.databaseId === "number"
+      ? `adverse-review:${report.databaseId}:${report.updatedAt}:${digest(report.body)}`
+      : null;
+  const legacy =
+    legacyId === null
+      ? undefined
+      : state.findings.get(identity(reviewer, legacyId));
+  if (
+    legacy !== undefined &&
+    reuseLegacyReport(state, legacy, report, source)
+  ) {
+    return;
+  }
   put(state, {
     attemptId: attemptId(reviewer, report),
-    id: `adverse-review:${report.id}:${report.updatedAt}:${digest(report.body)}`,
+    id,
     kind: "adverse-review",
     nativeRef: report.nativeRef,
-    ...(source === undefined
-      ? {}
-      : {
+    ...(report.author?.type === "Bot"
+      ? {
           reportingSource: {
-            accountId: source.accountId,
-            actorType: source.actorType,
+            accountId: report.author.id,
+            actorType: "Bot" as const,
           },
-        }),
+        }
+      : {}),
     resolution: null,
     reviewer,
   });
@@ -127,6 +234,30 @@ const collectReport = (state: Inventory, report: FindingReport) => {
   if (classification.adverse) {
     adverseReport(state, report, source);
   }
+};
+
+const nativeSourceMatches = (
+  state: Inventory,
+  finding: ReviewFinding,
+  source: FindingSource,
+  thread: FindingThread
+) => {
+  if (finding.reportingSource !== undefined) {
+    return (
+      finding.reportingSource.accountId === source.accountId &&
+      finding.reportingSource.actorType === source.actorType
+    );
+  }
+  const matched =
+    finding.kind === "finding" &&
+    finding.attemptId.startsWith("codex/") &&
+    finding.id === thread.id &&
+    finding.nativeRef === thread.id &&
+    legacySourceBridge(state, source);
+  if (matched) {
+    recordLegacySource(state, finding, source);
+  }
+  return matched;
 };
 
 const collectThread = (state: Inventory, thread: FindingThread) => {
@@ -170,8 +301,7 @@ const collectThread = (state: Inventory, thread: FindingThread) => {
     const existing = state.findings.get(key);
     if (
       existing &&
-      existing.reportingSource?.accountId === source.accountId &&
-      existing.reportingSource.actorType === source.actorType &&
+      nativeSourceMatches(state, existing, source, thread) &&
       state.stable &&
       thread.isResolved &&
       source.formats.includes("github-thread-v1") &&
@@ -243,6 +373,7 @@ export const configuredFindingInventory = (
     diagnostics: new Set(),
     findings,
     input,
+    legacySources: new Map(),
     policy,
     references: new Set(),
     stable,
@@ -269,8 +400,12 @@ export const configuredFindingInventory = (
     }
   }
   const coverage: FindingCoverage = {
+    ...(state.legacySources.size === 0
+      ? {}
+      : { legacySources: [...state.legacySources.values()] }),
     policyDigest: policy.policyDigest,
     policyRevision: policy.policyRevision,
+    provenance: structuredClone(input.issuer),
     references: [...state.references].toSorted(),
     sourceAccounts: policy.sources.map(
       ({ reviewer, accountId, actorType }) => ({
@@ -279,6 +414,7 @@ export const configuredFindingInventory = (
         reviewer,
       })
     ),
+    subject: structuredClone(input.subject),
   };
   const recorded = state.diagnostics.size === 0;
   return {

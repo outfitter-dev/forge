@@ -4,7 +4,7 @@ Implementation and offline testing were authorized by Matt on November 24, 2026 
 
 ## Selecting the candidate policy
 
-The opt-in [`configured-reporters.candidate.json`](../examples/gate/configured-reporters.candidate.json) uses gate-policy schema 2 and `findingSources`. Its source set names the observed Codex, Devin, Cursor, Linear and GitHub Advanced Security account identities below. Each source declares all three supported GitHub surfaces, permitted format parsers and external coverage. `policyRevision` identifies the governing source revision; Forge derives `policyDigest` from the normalized scope and retains both with the coverage observation. A supplied digest must match that normalization.
+The opt-in [`configured-reporters.candidate.json`](../examples/gate/configured-reporters.candidate.json) uses gate-policy schema 2 and `findingSources`. Its source set names the observed Codex, Devin, Cursor, Linear and GitHub Advanced Security account identities below. Each source declares all three supported GitHub surfaces, permitted format parsers and external coverage. The candidate’s `policyRevision` identifies immutable governing source `76cb6e3a9ba9d29a8a90d9075a0db850c04dbcde`, which contains the configured-reporters implementation, contract and candidate definitions. Forge derives `policyDigest` from the exact normalized configuration, including that governance reference, and retains both with the coverage observation. A supplied digest must match that normalization. The trial operator separately records and verifies the full protected policy file’s SHA-256. These identities distinguish the governing definitions, the configured finding scope and the complete policy file used in a run.
 
 Pass the candidate’s protected absolute path to the ordinary `forge gate --policy` invocation. In this mode, `--review-evidence` is invalid input before collection. Finding coverage and native resolution come from the trusted collection. Independent clean-review attempts continue through the configured review adapters. The candidate marks every source’s external coverage unknown and lists GitHub code scanning as unqualified, so it cannot establish complete coverage until the live evidence is qualified. The committed `forge-gate.json` continues its existing supplied-global-ledger policy during that preparation.
 
@@ -22,7 +22,7 @@ The following identities were read from GitHub’s authenticated REST API on Nov
 
 The installed `codex-summary-v1` finding classifier accepts an issue comment containing only the `codex-pull-request-review-summary` marker and one valid `codex-review-state:v1` marker, apart from whitespace. The structured flags can preserve adverse evidence even when surrounding prose makes the full report unsupported. The historical PR 26 comment has additional rendered prose and therefore leaves this scoped inventory unknown. The existing clean-review adapter separately parses its supported review summary. Independent review acceptance still requires the original head/base binding and accepted provenance. An old summary cannot gain a base binding from the current collection.
 
-The installed `devin-review-v1` classifier recognizes a submitted-review prefix of `**Devin Review** found N potential issues.` for a positive decimal `N` as adverse evidence. Its count, badge and prose have no qualified complete grammar or finding-set mapping. Such a report remains an adverse entry with unknown coverage even when all visible native threads are resolved. The current implementation supplies no Devin clean-summary acceptance or summary-to-thread clearance.
+The installed `devin-review-v1` classifier recognizes a submitted-review prefix of `**Devin Review** found N potential issues.` for a positive decimal `N` as adverse evidence. The exact observed count and v4 badge, linking to the same repository and PR as the native review, are a recognized report format. A count alone cannot identify the reported findings. The adverse entry therefore remains open even when every visible thread is resolved. An eligible follow-up can explicitly address that entry while the original report remains visible. Unrecognized badge markup or extra prose leaves coverage unknown and preserves the positive adverse report. The current implementation supplies no Devin clean-summary acceptance or summary-to-thread clearance.
 
 The installed `cursor-summary-v1` classifier accepts only the observed complete issue-comment quota notice, including its fixed usage-limit wording, dashboard link and UUID request ID. The marked `CURSOR_SUMMARY` prose remains unsupported and leaves coverage unknown. A recognized quota notice establishes that the message reports unavailability. It supplies no clean review.
 
@@ -42,9 +42,11 @@ The existing alert remains source evidence to account for during live qualificat
 
 The trusted adapter result contract can carry `followUpResolutions`. Each link names the accepted finding’s exact reporter, ID, original attempt and native reference, plus a distinct follow-up attempt, `fixed` or `dismissed` disposition and evidence reference. Only a stable normalized installed-adapter result can supply the link. Its follow-up attempt must satisfy that adapter’s configured reviewer, issuer, current head/base, completion and independence rules. The collector applies accepted links after the current native inventory, preserves the original adverse entry and publishes the result with the same ledger compare-and-swap.
 
+In scoped schema 2 evidence, `resolutionReviews` can carry validated targeted attempts from later unselected adapters. The evaluator checks those attempts independently for explicit follow-up resolution while preserving the ordered clean-review selection in `agentReviews`. Native thread resolution cannot use these additional attempts. Legacy policies without `findingSources` reject this field.
+
 `tests/review-follow-up.test.ts` exercises this capability with an injected trusted test adapter, including exact linkage and rejection of wrong issuer, foreign reviewer, duplicate attempt, original-attempt reuse, unavailable result and changed observations. The broader scoped CLI suite exercises collection, persistence and gate decisions over controlled HTTP. No installed real provider currently emits qualified explicit follow-up links. In the current production adapters, native thread resolution is the available resolution path for scoped thread findings. An adverse report outside a thread stays blocked until a provider’s explicit follow-up contract is qualified.
 
-The evaluator independently requires a recorded finding ledger whose coverage policy revision, normalized digest and reporting account set match the configured scope. Scoped completeness cannot satisfy the legacy global policy, and a changed source scope cannot borrow an earlier completeness claim. Native resolutions retain their accepted scope and are rechecked against the current authority. These checks apply to direct evaluator callers as well as `forge gate`.
+The evaluator independently requires a recorded finding ledger whose coverage matches the current repository, PR, head, base, collector identity and run as well as the policy revision, normalized digest and reporting accounts. Scoped completeness cannot satisfy the legacy global policy, and a changed source scope cannot borrow an earlier completeness claim. Native resolutions retain their accepted scope and are rechecked against the current authority. These checks apply to direct evaluator callers as well as `forge gate`.
 
 ## Live trial acceptance
 
@@ -54,7 +56,7 @@ On a controlled Forge PR, demonstrate native open, resolved, reopened, outdated 
 
 The actual gate invocation must use collected finding evidence with protected ledger state. Supply no handwritten completeness claim or copied clean attempt. Read back same-head refresh, ledger persistence and the final GitHub status against the exact revision. A failed or ambiguous read, changed observation, unknown source or failed compare-and-swap must leave the gate blocked. Before enabling reporting, obtain the separate Forge pipeline, App, worker and credential approvals recorded on FOR-38.
 
-After that approval, the operator can make one bounded collection against the approved controlled PR using the following command. Record the approved, merged Forge commit in the trial authorization. Use a protected checkout of that exact source, its pinned Bun version and the independently selected protected candidate policy file. The environment variables identify the approved PR, exact head/base and qualified receipt file. `FORGE_GITHUB_TOKEN` must already be delivered through the approved credential path. The command emits no token value. It can return a blocked result while any candidate coverage remains unknown.
+After that approval, the operator can make one bounded collection against the approved controlled PR using the following command. Record the approved, merged Forge commit containing the reviewed repairs in the trial authorization. Use a protected checkout of that exact source, its pinned Bun version and the independently selected protected policy file. Record the file’s governing `findingSources.policyRevision` and full-file SHA-256 in the same authorization, then verify both before collection. The command requires `jq` and `shasum` for this readback. The environment variables also identify the approved PR, exact head/base and qualified receipt file. `FORGE_GITHUB_TOKEN` must already be delivered through the approved credential path. The command emits no token value. It can return a blocked result while any candidate coverage remains unknown.
 
 ```sh
 set -eu
@@ -67,7 +69,13 @@ test "$(bun --version)" = "$(cat "$forge_trial_install/.bun-version")" || exit 2
 : "${FORGE_TRIAL_HEAD:?exact approved head SHA required}"
 : "${FORGE_TRIAL_BASE:?exact approved base SHA required}"
 : "${FORGE_TRIAL_POLICY:?protected qualified policy path required}"
+: "${FORGE_TRIAL_POLICY_REVISION:?approved governing policy source revision required}"
+: "${FORGE_TRIAL_POLICY_SHA256:?approved full policy file SHA-256 required}"
 : "${FORGE_TRIAL_RECEIPT:?qualified receipt path required}"
+test "$(jq -er '.findingSources.policyRevision' "$FORGE_TRIAL_POLICY")" = "$FORGE_TRIAL_POLICY_REVISION" || exit 2
+forge_trial_policy_sha256="$(shasum -a 256 "$FORGE_TRIAL_POLICY")"
+forge_trial_policy_sha256="${forge_trial_policy_sha256%% *}"
+test "$forge_trial_policy_sha256" = "$FORGE_TRIAL_POLICY_SHA256" || exit 2
 forge_trial_run="$(mktemp -d)"
 mkdir "$forge_trial_run/work"
 cd "$forge_trial_run/work"

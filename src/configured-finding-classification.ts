@@ -1,4 +1,5 @@
 import { parseCodexSummary } from "./codex-summary.ts";
+import { classifyDevinFindingReport } from "./devin-finding-report.ts";
 import type { FindingReport } from "./github-finding-observations.ts";
 
 export interface FindingReportClassification {
@@ -75,14 +76,8 @@ export const classifyFindingReport = (
   ) {
     return codexFindingReport(report, accountId);
   }
-  // A count without a finding map cannot account for each native report.
-  // Badge prose has no qualified deterministic grammar yet.
-  if (
-    surface === "review" &&
-    formats.includes("devin-review-v1") &&
-    /^\*\*Devin Review\*\* found [1-9]\d* potential issues\./u.test(report.body)
-  ) {
-    return { adverse: true, known: false };
+  if (surface === "review" && formats.includes("devin-review-v1")) {
+    return classifyDevinFindingReport(report);
   }
   if (
     surface === "issue-comment" &&

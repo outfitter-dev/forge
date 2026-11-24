@@ -4,6 +4,7 @@ import type { PullRequestCollectionRequest } from "../src/collect-pull-request-t
 import { collectPullRequest } from "../src/collect-pull-request.ts";
 import { parseFindingSourcesPolicy } from "../src/finding-source-policy.ts";
 import { emptyReviewLedgerEntry } from "../src/review-ledger-entry.ts";
+import { request as legacyRequest } from "./codex-collection-fixtures.ts";
 import { provenance, REPOSITORY } from "./evidence-fixtures.ts";
 import { connection, findingSources } from "./finding-sources-gate-fixtures.ts";
 import { pullRequestResponse, threadPageResponse } from "./github-fixtures.ts";
@@ -50,6 +51,29 @@ test("missing finding reads fail before any requested source is read", async () 
     status: "unavailable",
   });
   expect(called).toBe(false);
+});
+
+test("mixed legacy Codex and scoped source policies are rejected before reads", async () => {
+  let called = false;
+  const source = reads();
+  const input = {
+    ...legacyRequest(),
+    findingSources: parseFindingSourcesPolicy(findingSources()),
+  };
+  const original = structuredClone(input.ledger);
+  const result = await collectPullRequest(input, {
+    ...source,
+    reviews: () => {
+      called = true;
+      return source.reviews();
+    },
+  });
+  expect(result).toEqual({
+    reason: "request-malformed",
+    status: "invalid-request",
+  });
+  expect(called).toBe(false);
+  expect(input.ledger).toEqual(original);
 });
 
 test("a scoped source exception produces a safe failed collection and preserves caller history", async () => {

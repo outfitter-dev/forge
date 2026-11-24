@@ -201,10 +201,24 @@ export interface ReviewFinding {
  * `recorded` is the trusted collector's completeness attestation, not proof.
  */
 export interface FindingCoverage {
+  /** Missing on historical scoped ledgers, which retain entries but supply no current completeness. */
+  subject?: PullRequestSubject;
+  provenance?: Provenance;
+  /** Exact legacy Codex origins freshly attributed through the installed collector and current service observation. */
+  legacySources?: LegacyFindingSourceBinding[];
   policyRevision: string;
   policyDigest: string;
   sourceAccounts: { reviewer: string; accountId: number; actorType: "Bot" }[];
   references: string[];
+}
+
+export interface LegacyFindingSourceBinding {
+  kind: ReviewFinding["kind"];
+  reviewer: string;
+  id: string;
+  attemptId: string;
+  nativeRef: string;
+  reportingSource: NonNullable<ReviewFinding["reportingSource"]>;
 }
 
 export interface ReviewFindingLedger {

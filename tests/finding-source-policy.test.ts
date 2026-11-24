@@ -44,6 +44,9 @@ test("the Forge candidate names observed reporters while retaining its live cove
   expect(candidate.findingSources?.unqualifiedSources).toEqual([
     "github-code-scanning",
   ]);
+  expect(candidate.findingSources?.policyRevision).toBe(
+    "76cb6e3a9ba9d29a8a90d9075a0db850c04dbcde"
+  );
   expect(
     candidate.findingSources?.sources
       .map((entry) => entry.accountId)

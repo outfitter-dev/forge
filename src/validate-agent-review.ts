@@ -193,11 +193,55 @@ const findingSourceAccounts = (value: unknown, path: string) => {
 
 const findingCoverage = (value: unknown, path: string) => {
   const coverage = object(value, path, [
+    "subject",
+    "provenance",
+    "legacySources",
     "policyRevision",
     "policyDigest",
     "sourceAccounts",
     "references",
   ]);
+  if (Object.hasOwn(coverage, "subject")) {
+    subject(coverage.subject, `${path}.subject`, "pull_request");
+  }
+  if (Object.hasOwn(coverage, "provenance")) {
+    provenance(coverage.provenance, `${path}.provenance`);
+  }
+  if (Object.hasOwn(coverage, "legacySources")) {
+    for (const [index, bindingValue] of array(
+      coverage.legacySources,
+      `${path}.legacySources`
+    ).entries()) {
+      const location = `${path}.legacySources[${index}]`;
+      const entry = object(bindingValue, location, [
+        "kind",
+        "reviewer",
+        "id",
+        "attemptId",
+        "nativeRef",
+        "reportingSource",
+      ]);
+      choice(entry.kind, `${location}.kind`, ["finding", "adverse-review"]);
+      for (const key of ["reviewer", "id", "attemptId", "nativeRef"]) {
+        text(entry[key], `${location}.${key}`);
+      }
+      const source = object(
+        entry.reportingSource,
+        `${location}.reportingSource`,
+        ["accountId", "actorType"]
+      );
+      count(source.accountId, `${location}.reportingSource.accountId`);
+      if (source.accountId === 0) {
+        invalid(
+          `${location}.reportingSource.accountId`,
+          "expected a positive account ID"
+        );
+      }
+      choice(source.actorType, `${location}.reportingSource.actorType`, [
+        "Bot",
+      ]);
+    }
+  }
   digest(coverage.policyRevision, `${path}.policyRevision`, 40);
   digest(coverage.policyDigest, `${path}.policyDigest`, 64);
   findingSourceAccounts(coverage.sourceAccounts, `${path}.sourceAccounts`);
