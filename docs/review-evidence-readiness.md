@@ -27,6 +27,23 @@ Read-only GitHub observations on November 24 covered [Forge PR 75](https://githu
 
 The earlier [PR 26 summary](https://github.com/outfitter-dev/forge/pull/26#issuecomment-6805023251), from adopted Codex account `199175422`, remained readable. It reported a completed code review without findings at head `41065355ea5802abcf635454bfc49506aac9241d`; the security section was inactive. A real `forge gate` invocation used the committed policy, that head, base `aa036c3ecee8685c33340c3a33d1687bb66caeac`, a fresh isolated state directory, and no receipt or supplied review-evidence file.
 
+To repeat the observation, start in a verified Forge install at the record's source revision with Bun 1.4.4 and a read-only GitHub credential already available as `FORGE_GITHUB_TOKEN`. The command refers to that environment variable through the normal CLI token contract and does not print it. Retain the result and state privately. GitHub's current responses may differ from this dated observation.
+
+```sh
+umask 077
+forge_coverage_install="$(pwd -P)"
+forge_coverage_run="$(mktemp -d)"
+mkdir "$forge_coverage_run/work"
+cd "$forge_coverage_run/work"
+bun "$forge_coverage_install/src/forge-cli.ts" gate \
+  --repository outfitter-dev/forge --pull-request 26 \
+  --policy "$forge_coverage_install/forge-gate.json" \
+  --state "$forge_coverage_run/state" --run-id for-52-readonly \
+  --expected-head 41065355ea5802abcf635454bfc49506aac9241d \
+  --expected-base aa036c3ecee8685c33340c3a33d1687bb66caeac \
+  --output-version 2 > "$forge_coverage_run/result.json"
+```
+
 That run exited one. The adapter parsed the clean summary and reported `summary-unbound`, because its historical base binding was unavailable in the fresh ledger. The agent-review gate also reported `findings-unknown`. Other gates lacked verification evidence and reflected the PR's current closed state. This run establishes read-only collection and refusal behavior. It supplies no current passing PR qualification. A newly observed snapshot cannot retroactively bind the base of an older review.
 
 ## Decision before a live green gate
