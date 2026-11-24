@@ -18,14 +18,14 @@ From the verified clone, `bun src/forge-cli.ts gate` reported the required input
 
 ## Recover an interrupted local operation
 
-In a separate bootstrapped development checkout, run the following credential-free rehearsal:
+The recovery suite ran from a separate clean, bootstrapped development checkout at `d55b658ca64733329668b4635b17cae8c0547289`, including the new recovery test. To reproduce that recorded run, check out that revision before running the following credential-free rehearsal:
 
 ```sh
 ./scripts/bootstrap.sh
 bun test tests/check-recovery.test.ts tests/check-cancellation.test.ts tests/review-ledger-store.test.ts
 ```
 
-The November 24 run passed 126 tests and 669 assertions. The recovery test starts the real check CLI against a disposable Git proposal, waits until its command starts, and sends SIGTERM. Although that command exits zero while handling the signal, Forge exits 130 and persists a canceled receipt. After command termination, a fresh invocation at the same source revision produces a new passing receipt. The canceled receipt remains byte-for-byte intact, with its own ID. The fixture changes only a control marker in its Git administrative directory to let the second invocation finish. Source, command and configuration bindings stay the same. This models an operator-approved retry of a harmless fixture command; a product owner must assess real command effects before retrying.
+The November 24 run passed 126 tests and 671 assertions. The recovery test starts the real check CLI against a disposable Git proposal, waits until its command starts, and sends SIGTERM. Although that command exits zero while handling the signal, Forge exits 130 and persists a canceled receipt. After command termination, a fresh invocation at the same source revision produces a new passing receipt. The canceled receipt remains byte-for-byte intact, with its own ID. The test also reads the restarted receipt from disk and compares the complete persisted JSON with the CLI output. A bounded wait and explicit process-group cleanup keep the fixture from surviving a broken cancellation path. The fixture changes only a control marker in its Git administrative directory to let the second invocation finish. Source, command and configuration bindings stay the same. This models an operator-approved retry of a harmless fixture command; a product owner must assess real command effects before retrying.
 
 The cancellation suite also kills the runner abruptly and checks that its already-published receipt remains unknown. No finished receipt or passing result is inferred after that interruption. Detached process cleanup still belongs to the selected host's supervisor.
 
