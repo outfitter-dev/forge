@@ -236,6 +236,12 @@ const collectReport = (state: Inventory, report: FindingReport) => {
   }
 };
 
+const legacyNativeThreadOrigin = (finding: ReviewFinding): boolean =>
+  finding.kind === "finding" &&
+  finding.reportingSource === undefined &&
+  finding.attemptId.startsWith("codex/") &&
+  finding.id === finding.nativeRef;
+
 const nativeSourceMatches = (
   state: Inventory,
   finding: ReviewFinding,
@@ -249,8 +255,7 @@ const nativeSourceMatches = (
     );
   }
   const matched =
-    finding.kind === "finding" &&
-    finding.attemptId.startsWith("codex/") &&
+    legacyNativeThreadOrigin(finding) &&
     finding.id === thread.id &&
     finding.nativeRef === thread.id &&
     legacySourceBridge(state, source);
@@ -363,7 +368,9 @@ export const configuredFindingInventory = (
         resolution:
           finding.resolution?.kind === "configured-native" ||
           finding.resolution?.kind === "native" ||
-          (finding.kind === "finding" && finding.reportingSource !== undefined)
+          (finding.kind === "finding" &&
+            finding.reportingSource !== undefined) ||
+          legacyNativeThreadOrigin(finding)
             ? null
             : finding.resolution,
       },

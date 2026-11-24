@@ -335,3 +335,88 @@ test.each([
     }
   }
 );
+
+test.each(["open", "missing"] as const)(
+  "legacy native thread cannot retain follow-up clearance when %s",
+  (mode) => {
+    const pr = passingPrV2();
+    const resolution = {
+      attemptId: "independent/follow-up",
+      disposition: "fixed" as const,
+      kind: "follow-up-review" as const,
+      nativeRef: "fixture://follow-up",
+      provenance: pr.provenance,
+      subject: pr.subject,
+    };
+    const legacy = {
+      attemptId: "codex/original-review",
+      id: "legacy-thread",
+      kind: "finding" as const,
+      nativeRef: "legacy-thread",
+      resolution,
+      reviewer: "reporter",
+    };
+    const observation: FindingObservation = {
+      comments: [],
+      reviews: [],
+      threads:
+        mode === "missing"
+          ? []
+          : [
+              {
+                comments: [report({ surface: "thread-comment" })],
+                id: legacy.id,
+                isOutdated: true,
+                isResolved: false,
+              },
+            ],
+    };
+    const result = configuredFindingInventory({
+      findings: { findings: [legacy], recorded: false },
+      first: observation,
+      issuer: pr.provenance,
+      legacyCodexSources: [
+        { accountId: account.id, actorType: "Bot", reviewer: "reporter" },
+      ],
+      policy: sources(),
+      second: structuredClone(observation),
+      subject: pr.subject,
+    });
+    expect(result.reviewFindings.findings[0]).toEqual({
+      ...legacy,
+      resolution: null,
+    });
+  }
+);
+
+test.each(["adverse", "other-native-reference", "other-collector"] as const)(
+  "unrelated legacy follow-up remains intact (%s)",
+  (mode) => {
+    const pr = passingPrV2();
+    const resolution = {
+      attemptId: "independent/follow-up",
+      disposition: "fixed" as const,
+      kind: "follow-up-review" as const,
+      nativeRef: "fixture://follow-up",
+      provenance: pr.provenance,
+      subject: pr.subject,
+    };
+    const legacy = {
+      attemptId:
+        mode === "other-collector"
+          ? "another-collector/review"
+          : "codex/original-review",
+      id: "legacy-entry",
+      kind:
+        mode === "adverse" ? ("adverse-review" as const) : ("finding" as const),
+      nativeRef:
+        mode === "other-native-reference"
+          ? "fixture://another-reference"
+          : "legacy-entry",
+      resolution,
+      reviewer: "reporter",
+    };
+    const result = inventory([], { findings: [legacy], recorded: false });
+    expect(result.reviewFindings.findings[0]).toEqual(legacy);
+  }
+);
