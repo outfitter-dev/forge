@@ -120,7 +120,7 @@ test.each([
       await captureBuildkiteProjectCheck({
         ...args,
         launcher: launcher(body),
-        timeoutMs: 200,
+        timeoutMs: reason === "deadline" ? 200 : 10_000,
       })
     ).toEqual({ reason, status: "not-captured" });
     expect(
