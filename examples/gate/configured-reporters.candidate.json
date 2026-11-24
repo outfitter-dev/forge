@@ -58,6 +58,15 @@
     "resolution": "github-native",
     "sources": [
       {
+        "reviewer": "github-advanced-security",
+        "accountId": 62310815,
+        "actorType": "Bot",
+        "formats": ["github-thread-v1"],
+        "surfaces": ["review", "issue-comment", "thread-comment"],
+        "externalCoverage": "unknown",
+        "qualificationRef": null
+      },
+      {
         "reviewer": "codex-github",
         "accountId": 199175422,
         "actorType": "Bot",

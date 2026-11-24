@@ -45,8 +45,20 @@ test("the Forge candidate names observed reporters while retaining its live cove
     "github-code-scanning",
   ]);
   expect(
-    candidate.findingSources?.sources.map((entry) => entry.accountId).toSorted()
-  ).toEqual([158_243_242, 199_175_422, 206_951_365, 222_613_912]);
+    candidate.findingSources?.sources
+      .map((entry) => entry.accountId)
+      .toSorted((left, right) => left - right)
+  ).toEqual([62_310_815, 158_243_242, 199_175_422, 206_951_365, 222_613_912]);
+  expect(
+    candidate.findingSources?.sources.find(
+      (entry) => entry.accountId === 62_310_815
+    )
+  ).toMatchObject({
+    actorType: "Bot",
+    externalCoverage: "unknown",
+    formats: ["github-thread-v1"],
+    reviewer: "github-advanced-security",
+  });
   expect(
     candidate.findingSources?.sources.every(
       (entry) =>
