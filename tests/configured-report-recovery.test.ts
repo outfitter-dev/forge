@@ -88,6 +88,37 @@ test("the exact observed Devin count and badge is understood as unmatched advers
 });
 
 test.each([
+  ["1 potential issue", true],
+  ["2 potential issues", true],
+  ["1 potential issues", false],
+  ["2 potential issue", false],
+] as const)(
+  "Devin summary grammar %s has known classification %s",
+  (phrase, known) => {
+    const body = summary.replace("3 potential issues", phrase);
+    expect(
+      classifyFindingReport(report({ body }), ["devin-review-v1"], account.id)
+    ).toEqual({ adverse: true, known });
+  }
+);
+
+test("the singular observed summary remains adverse when its badge or prose changes", () => {
+  const body = summary.replace("3 potential issues", "1 potential issue");
+  for (const altered of [
+    body.replace("pull/82", "pull/85"),
+    `${body} additional report`,
+  ]) {
+    expect(
+      classifyFindingReport(
+        report({ body: altered }),
+        ["devin-review-v1"],
+        account.id
+      )
+    ).toEqual({ adverse: true, known: false });
+  }
+});
+
+test.each([
   summary.replace('alt="Devin Review"', 'alt="new finding"'),
   summary.replace(
     "<!-- devin-review-badge-end -->",
