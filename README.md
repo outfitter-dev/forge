@@ -69,6 +69,7 @@ The GitHub **Ropes Markdown (advisory)** job reports findings in its log and run
 
 - [Forge check](docs/forge-check.md), [Forge gate](docs/forge-gate.md) and [Buildkite pipeline](docs/buildkite-pipeline.md) describe the implemented commands and their adoption limits.
 - [Review ledger store](docs/review-ledger-store.md) and [pull request collection](docs/pull-request-collection.md) define collection and persistence contracts.
+- [Review evidence readiness](docs/review-evidence-readiness.md) records the live reporting surfaces, existing coverage proofs and the completeness decision needed by the trusted lane.
 - [Canonical CI and release patterns](docs/ci-release-patterns.md) records extraction choices and product ownership. [Release composition](docs/release-composition.md) identifies the remaining consumer qualification.
 - [Buildkite lane configuration](docs/buildkite-lanes-plan.md), [worker lifecycle](docs/worker-lifecycle-plan.md), [configured-bot findings](docs/configured-bot-findings-proposal.md) and [human approval qualification](docs/human-approval-qualification.md) retain plans and decisions awaiting adoption.
 
