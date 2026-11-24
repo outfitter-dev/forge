@@ -42,7 +42,10 @@ export interface BuildkiteJobPolicy {
 const positiveInteger = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 
-const repositoryMatches = (value: unknown, repository: string): boolean =>
+export const buildkiteRepositoryMatches = (
+  value: unknown,
+  repository: string
+): boolean =>
   typeof value === "string" &&
   [
     `https://github.com/${repository}`,
@@ -151,7 +154,7 @@ const readPullRequest = (
     !isRecord(build.pipeline) ||
     build.pipeline.id !== policy.pipelineId ||
     build.pipeline.slug !== policy.pipelineSlug ||
-    !repositoryMatches(build.pipeline.repository, policy.repository) ||
+    !buildkiteRepositoryMatches(build.pipeline.repository, policy.repository) ||
     !Array.isArray(build.jobs)
   ) {
     throw new BuildkiteBuildError("mismatch");
@@ -160,7 +163,7 @@ const readPullRequest = (
   const pullRequest = build.pull_request;
   if (
     !isRecord(pullRequest) ||
-    !repositoryMatches(pullRequest.repository, policy.repository) ||
+    !buildkiteRepositoryMatches(pullRequest.repository, policy.repository) ||
     typeof pullRequest.id !== "string" ||
     !/^[1-9]\d*$/u.test(pullRequest.id) ||
     !positiveInteger(Number(pullRequest.id))

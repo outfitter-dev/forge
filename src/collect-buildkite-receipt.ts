@@ -1,5 +1,5 @@
 import { qualifyBuildkiteGateReceipt } from "./buildkite-gate-receipt.ts";
-import { buildkiteUuid } from "./buildkite-job.ts";
+import { buildkiteRepositoryMatches, buildkiteUuid } from "./buildkite-job.ts";
 import { BUILDKITE_PROJECT_STEP } from "./buildkite-pipeline.ts";
 import type {
   BuildkiteProjectAdmission,
@@ -35,11 +35,6 @@ export interface CollectionInput {
 
 const MAX_RECORD_BYTES = 1024 * 1024;
 const slug = (value: string) => /^[a-z0-9_-]+$/u.test(value);
-const repositoryMatches = (value: unknown, repository: string) =>
-  typeof value === "string" &&
-  [`https://github.com/${repository}`, `git@github.com:${repository}`].some(
-    (url) => value === url || value === `${url}.git`
-  );
 
 const selectedJob = (
   build: unknown,
@@ -58,10 +53,16 @@ const selectedJob = (
     !isRecord(build.pipeline) ||
     build.pipeline.id !== admission.pipelineId ||
     build.pipeline.slug !== input.pipelineSlug ||
-    !repositoryMatches(build.pipeline.repository, admission.repository) ||
+    !buildkiteRepositoryMatches(
+      build.pipeline.repository,
+      admission.repository
+    ) ||
     !isRecord(build.pull_request) ||
     build.pull_request.id !== String(admission.pullRequest) ||
-    !repositoryMatches(build.pull_request.repository, admission.repository) ||
+    !buildkiteRepositoryMatches(
+      build.pull_request.repository,
+      admission.repository
+    ) ||
     !Array.isArray(build.jobs)
   ) {
     return stop("build-mismatch");
@@ -154,18 +155,31 @@ export const collectBuildkiteReceipt = async (input: CollectionInput) => {
       }
       return response;
     };
-    const json = async (url: string): Promise<unknown> => {
+    const json = async (url: string) => {
       const response = await api(url);
       if (response.status !== 200 || response.redirected) {
         return stop("read-unavailable");
       }
-      return JSON.parse(
+      const value: unknown = JSON.parse(
         new TextDecoder("utf-8", { fatal: true }).decode(
           await boundedBytes(response, MAX_RECORD_BYTES)
         )
       );
+      const next = (response.headers.get("Link") ?? "")
+        .split(",")
+        .some((link) => {
+          const relation =
+            /;\s*rel\s*=\s*(?:"(?<quoted>[^"]*)"|(?<plain>[^;\s]+))/u.exec(
+              link
+            );
+          return (relation?.groups?.quoted ?? relation?.groups?.plain ?? "")
+            .split(/\s+/u)
+            .includes("next");
+        });
+      return { next, value };
     };
-    const job = selectedJob(await json(buildUrl), input);
+    const initialBuild = await json(buildUrl);
+    const job = selectedJob(initialBuild.value, input);
     if (job.state !== "passed" || job.exitStatus !== 0 || job.softFailed) {
       return { collected: false as const, reason: "job-nonpassing" };
     }
@@ -183,7 +197,8 @@ export const collectBuildkiteReceipt = async (input: CollectionInput) => {
       artifact,
       input.artifactOrigins
     );
-    const current = selectedJob(await json(buildUrl), input);
+    const currentBuild = await json(buildUrl);
+    const current = selectedJob(currentBuild.value, input);
     if (JSON.stringify(job) !== JSON.stringify(current)) {
       return stop("job-changed");
     }

@@ -10,7 +10,7 @@ type ApiRead = (
 ) => Promise<Response>;
 
 export const selectReceiptArtifact = async (
-  json: (url: string) => Promise<unknown>,
+  json: (url: string) => Promise<{ next: boolean; value: unknown }>,
   artifactRoot: string,
   jobId: string,
   artifactPath: string
@@ -18,7 +18,9 @@ export const selectReceiptArtifact = async (
   const matches: Record<string, unknown>[] = [];
   for (let page = 1; page <= MAX_ARTIFACT_PAGES; page += 1) {
     // oxlint-disable-next-line no-await-in-loop -- The next page is needed only after a full preceding page.
-    const artifacts = await json(`${artifactRoot}?per_page=100&page=${page}`);
+    const { next, value: artifacts } = await json(
+      `${artifactRoot}?per_page=100&page=${page}`
+    );
     if (
       !Array.isArray(artifacts) ||
       artifacts.length > 100 ||
@@ -31,7 +33,7 @@ export const selectReceiptArtifact = async (
         matches.push(artifact);
       }
     }
-    if (artifacts.length < 100) {
+    if (!next) {
       break;
     }
     if (page === MAX_ARTIFACT_PAGES) {

@@ -87,6 +87,7 @@ interface Scenario {
   after?: unknown;
   artifacts?: unknown;
   artifactPage?: (page: number) => unknown;
+  artifactNext?: (page: number) => boolean;
   before?: unknown;
   download?: Response;
   storage?: () => Response;
@@ -114,9 +115,14 @@ const transport = (scenario: Scenario = {}) => {
     }
     if (target.includes("?per_page=")) {
       const page = Number(new URL(target).searchParams.get("page"));
-      return json(
-        scenario.artifactPage?.(page) ?? scenario.artifacts ?? [artifact]
-      );
+      const value = scenario.artifactPage?.(page) ??
+        scenario.artifacts ?? [artifact];
+      const next =
+        scenario.artifactNext?.(page) ??
+        (Array.isArray(value) && value.length === 100);
+      return Response.json(value, {
+        headers: next ? { Link: `<${target}>; rel="next"` } : {},
+      });
     }
     if (target.endsWith("/download")) {
       return (
@@ -367,4 +373,54 @@ test("a refused storage redirect cannot retry with the Buildkite credential", as
     reason: "artifact-download-unavailable",
   });
   expect(calls.at(-1)?.authorization).toBeNull();
+});
+
+test.each(["pipeline", "pull_request"])(
+  "accepts bootstrap's legacy repository identity in %s",
+  async (field) => {
+    const value = {
+      ...build,
+      [field]: {
+        ...build[field as "pipeline" | "pull_request"],
+        repository: `git://github.com/${admission.repository}.git`,
+      },
+    };
+    const { result } = collect({ after: value, before: value });
+    expect(await result).toMatchObject({
+      collected: true,
+      verification: { verified: true },
+    });
+  }
+);
+
+test("a full tenth artifact page with no next link is complete", async () => {
+  const full = Array.from({ length: 100 }, (_, index) => ({
+    ...artifact,
+    path: `other-${index}`,
+  }));
+  const { result, calls } = collect({
+    artifactNext: (page) => page < 10,
+    artifactPage: (page) => (page === 10 ? [artifact, ...full.slice(1)] : full),
+  });
+  expect(await result).toMatchObject({
+    collected: true,
+    verification: { verified: true },
+  });
+  expect(calls.filter((call) => call.url.includes("?per_page="))).toHaveLength(
+    10
+  );
+});
+
+test("a short page with a next link still contributes later duplicate artifacts", async () => {
+  const { result, calls } = collect({
+    artifactNext: (page) => page === 1,
+    artifactPage: () => [artifact],
+  });
+  expect(await result).toEqual({
+    collected: false,
+    reason: "artifact-mismatch",
+  });
+  expect(calls.filter((call) => call.url.includes("?per_page="))).toHaveLength(
+    2
+  );
 });
