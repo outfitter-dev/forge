@@ -302,7 +302,9 @@ test.each(["staging", "committed"] as const)(
     };
     const { captureBuildkiteProjectCheck } = await import(${JSON.stringify(path.resolve(import.meta.dir, "../src/buildkite-project-capture.ts"))});
     const result = await captureBuildkiteProjectCheck(${JSON.stringify(args)}, controller.signal);
-    console.log(JSON.stringify({ result, aborted: controller.signal.aborted, record: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId, "capture.json"))}), directory: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId))}) }));
+    const receipt = result.status === "captured" ? JSON.parse(fs.readFileSync(result.receiptFile, "utf8")) : null;
+    const observedReceipt = receipt === null ? null : Object.fromEntries(["admission", "cancellation", "cause", "completion", "configBefore", "configAfter", "diagnostic", "evidence", "exitCode", "outcome", "runtime", "sourceBefore", "sourceAfter"].map(key => [key, receipt[key]]));
+    console.log(JSON.stringify({ result, receipt: observedReceipt, aborted: controller.signal.aborted, record: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId, "capture.json"))}), directory: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId))}) }));
   `;
     const child = Bun.spawnSync([process.execPath, "-e", source], {
       cwd: path.resolve(import.meta.dir, ".."),
@@ -320,6 +322,13 @@ test.each(["staging", "committed"] as const)(
     } else {
       expect(observed).toMatchObject({
         directory: true,
+        receipt: {
+          admission: "started",
+          completion: "observed",
+          evidence: "stable",
+          exitCode: 0,
+          outcome: "passed",
+        },
         record: true,
         result: { capture: { runnerExitCode: 0 }, status: "captured" },
       });
