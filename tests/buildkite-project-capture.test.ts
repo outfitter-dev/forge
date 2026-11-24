@@ -282,11 +282,11 @@ test.each(["SIGINT", "SIGTERM"] as const)(
   10_000
 );
 
-test.each(["staging", "committed"] as const)(
-  "cancellation at %s respects the capture publication commit point",
-  (phase) => {
-    const args = input();
-    const source = `
+const observePublication = (
+  args: ReturnType<typeof input>,
+  phase: "staging" | "committed"
+) => {
+  const source = `
     const fs = require("node:fs");
     const promises = require("node:fs/promises");
     const controller = new AbortController();
@@ -302,14 +302,34 @@ test.each(["staging", "committed"] as const)(
     };
     const { captureBuildkiteProjectCheck } = await import(${JSON.stringify(path.resolve(import.meta.dir, "../src/buildkite-project-capture.ts"))});
     const result = await captureBuildkiteProjectCheck(${JSON.stringify(args)}, controller.signal);
-    console.log(JSON.stringify({ result, aborted: controller.signal.aborted, record: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId, "capture.json"))}), directory: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId))}) }));
+    let receipt = null;
+    let receiptDiagnostic = "not-captured";
+    if (result.status === "captured") {
+      receiptDiagnostic = "unavailable";
+      try {
+        const text = fs.readFileSync(result.receiptFile, "utf8");
+        receiptDiagnostic = text.length === 0 ? "empty" : "invalid-json";
+        if (text.length > 0) {
+          receipt = JSON.parse(text);
+          receiptDiagnostic = "parsed";
+        }
+      } catch {}
+    }
+    const observedReceipt = receipt === null ? null : Object.fromEntries(["admission", "cancellation", "cause", "completion", "configBefore", "configAfter", "diagnostic", "evidence", "exitCode", "outcome", "runtime", "sourceBefore", "sourceAfter"].map(key => [key, receipt[key]]));
+    console.log(JSON.stringify({ result, receipt: observedReceipt, receiptDiagnostic, aborted: controller.signal.aborted, record: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId, "capture.json"))}), directory: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId))}) }));
   `;
-    const child = Bun.spawnSync([process.execPath, "-e", source], {
-      cwd: path.resolve(import.meta.dir, ".."),
-      env: {},
-    });
-    expect(child.exitCode).toBe(0);
-    const observed = JSON.parse(child.stdout.toString());
+  const child = Bun.spawnSync([process.execPath, "-e", source], {
+    cwd: path.resolve(import.meta.dir, ".."),
+    env: {},
+  });
+  expect(child.exitCode).toBe(0);
+  return JSON.parse(child.stdout.toString());
+};
+
+test.each(["staging", "committed"] as const)(
+  "cancellation at %s respects the capture publication commit point",
+  (phase) => {
+    const observed = observePublication(input(), phase);
     expect(observed.aborted).toBe(true);
     if (phase === "staging") {
       expect(observed).toMatchObject({
@@ -320,9 +340,38 @@ test.each(["staging", "committed"] as const)(
     } else {
       expect(observed).toMatchObject({
         directory: true,
+        receipt: {
+          admission: "started",
+          completion: "observed",
+          evidence: "stable",
+          exitCode: 0,
+          outcome: "passed",
+        },
         record: true,
         result: { capture: { runnerExitCode: 0 }, status: "captured" },
       });
     }
+  }
+);
+
+test.each([
+  ["", 2, "empty"],
+  ["not-json", 1, "invalid-json"],
+] as const)(
+  "publication diagnostics retain runner failure for %s receipt",
+  (bytes, code, receiptDiagnostic) => {
+    const args = input();
+    const observed = observePublication(
+      { ...args, launcher: launcher(`printf '%s' '${bytes}'; exit ${code}`) },
+      "committed"
+    );
+    expect(observed).toMatchObject({
+      aborted: true,
+      directory: true,
+      receipt: null,
+      receiptDiagnostic,
+      record: true,
+      result: { capture: { runnerExitCode: code }, status: "captured" },
+    });
   }
 );
