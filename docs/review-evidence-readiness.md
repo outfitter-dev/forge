@@ -6,6 +6,8 @@ Qualification record for FOR-52, November 24, 2026, against Forge `bd873454a67db
 
 The adapter can collect Codex's supported summary and native review threads. A trusted caller can supply a global finding ledger through `--review-evidence`. `recorded: true` is that caller's completeness claim. Parsing the file and storing it do not authenticate its writer or establish which reporting surfaces it covered. The lane must establish that authority and coverage before supplying the file.
 
+Every unresolved native review thread independently blocks the mergeability gate, regardless of its author. The inventory requirement also accounts for findings outside those threads and retains accepted adverse reports across later observations.
+
 Existing CLI tests exercise the accepted contract under the committed policy and its equivalent test policies. Run them from a bootstrapped checkout with the pinned Bun version.
 
 ```sh
