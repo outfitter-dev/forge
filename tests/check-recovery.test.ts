@@ -30,7 +30,10 @@ test("a fresh check after cancellation preserves the canceled attempt at the sam
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   try {
     const deadline = Date.now() + 4000;
-    while (!existsSync(path.join(root, ".git/started"))) {
+    while (
+      !existsSync(path.join(root, ".git/started")) ||
+      readFileSync(path.join(root, ".git/started"), "utf-8").trim() === ""
+    ) {
       if (Date.now() > deadline) {
         throw new Error("Check command did not start");
       }
