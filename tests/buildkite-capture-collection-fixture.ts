@@ -6,6 +6,7 @@ import path from "node:path";
 import { readBuildkiteProjectCapture } from "../src/buildkite-capture-store.ts";
 import { captureBuildkiteProjectCheck } from "../src/buildkite-project-capture.ts";
 import { digest } from "../src/check-config.ts";
+import { collectBuildkiteGateReceipt } from "../src/collect-buildkite-gate-receipt.ts";
 import { collectBuildkiteReceipt } from "../src/collect-buildkite-receipt.ts";
 import { parseGatePolicy } from "../src/gate-policy.ts";
 import { fixture, gitFixture } from "./check-fixtures.ts";
@@ -60,7 +61,8 @@ export const projectRun = async (script = "exit 0") => {
   const captureRoot = mkdtempSync(
     path.join(tmpdir(), "forge-protected-capture-")
   );
-  temporary.push(captureRoot);
+  const outputRoot = mkdtempSync(path.join(tmpdir(), "forge-gate-handoff-"));
+  temporary.push(captureRoot, outputRoot);
   const captured = await captureBuildkiteProjectCheck({
     base,
     captureRoot,
@@ -99,6 +101,7 @@ export const projectRun = async (script = "exit 0") => {
     admission,
     bytes,
     capture,
+    captureRoot,
     expectation: {
       checks: policy.checks,
       commandDigest: digest(JSON.stringify(command)),
@@ -119,16 +122,14 @@ export const projectRun = async (script = "exit 0") => {
       superseded: false,
       type: "script",
     },
+    outputRoot,
   };
 };
 
 export type ProjectRun = Awaited<ReturnType<typeof projectRun>>;
 
 /** Buildkite and artifact custody are controlled transports around real capture bytes. */
-export const collectCapturedProject = (
-  input: ProjectRun,
-  downloaded = input.bytes
-) => {
+const collectionFixture = (input: ProjectRun, downloaded = input.bytes) => {
   const { admission, capture, expectation, job } = input;
   const buildUrl =
     "https://api.buildkite.com/v2/organizations/example/pipelines/forge/builds/1";
@@ -202,7 +203,7 @@ export const collectCapturedProject = (
     },
     { preconnect: fetch.preconnect }
   );
-  return collectBuildkiteReceipt({
+  const options = {
     admission,
     artifactOrigins: ["https://artifact.example"],
     artifactPath: "receipt.json",
@@ -213,10 +214,31 @@ export const collectCapturedProject = (
     pipelineSlug: "forge",
     readToken: "fixture-read-token",
     request,
-  }).then((result) => {
-    if (result.collected) {
-      expect(reads.filter((url) => url === buildUrl)).toHaveLength(2);
-    }
-    return result;
-  });
+  };
+  return { buildUrl, options, reads };
 };
+
+export const collectCapturedProject = async (
+  input: ProjectRun,
+  downloaded = input.bytes
+) => {
+  const transport = collectionFixture(input, downloaded);
+  const result = await collectBuildkiteReceipt(transport.options);
+  if (result.collected) {
+    expect(
+      transport.reads.filter((url) => url === transport.buildUrl)
+    ).toHaveLength(2);
+  }
+  return result;
+};
+
+export const collectCapturedGateReceipt = (
+  input: ProjectRun,
+  outputRoot: string,
+  downloaded = input.bytes
+) =>
+  collectBuildkiteGateReceipt({
+    ...collectionFixture(input, downloaded).options,
+    captureRoot: input.captureRoot,
+    outputRoot,
+  });

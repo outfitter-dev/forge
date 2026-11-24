@@ -5,6 +5,7 @@ import path from "node:path";
 import { qualifyBuildkiteGateReceipt } from "../src/buildkite-gate-receipt.ts";
 import { VERIFICATION_GATES } from "../src/index.ts";
 import {
+  collectCapturedGateReceipt,
   collectCapturedProject,
   policyFile,
   projectRun,
@@ -31,7 +32,7 @@ afterEach(cleanupGateWorkspace);
 /** Only qualified bytes enter the real gate CLI, with a separate ledger. */
 const gateRun = (
   input: ProjectRun,
-  qualification: { receipt: Uint8Array | null },
+  qualification: { receipt: Uint8Array | null } | { receiptFile: string },
   expectedHead = input.admission.head,
   expectedBase = input.admission.base
 ) => {
@@ -62,7 +63,12 @@ const gateRun = (
     "--policy",
     policyFile
   );
-  if (qualification.receipt) {
+  if ("receiptFile" in qualification) {
+    args.push("--receipt", qualification.receiptFile);
+    expect(new Uint8Array(readFileSync(qualification.receiptFile))).toEqual(
+      input.bytes
+    );
+  } else if (qualification.receipt) {
     const file = path.join(ws.inputs, "qualified-receipt.json");
     writeFileSync(file, qualification.receipt);
     args.push("--receipt", file);
@@ -94,14 +100,23 @@ const gateRun = (
 
 test("captured project runner bytes qualify through the committed policy and gate CLI", async () => {
   const input = await projectRun();
-  const qualified = await collectCapturedProject(input);
-  expect(qualified.collected).toBe(true);
-  if (!qualified.collected) {
+  const qualified = await collectCapturedGateReceipt(input, input.outputRoot);
+  expect(qualified.status).toBe("ready");
+  if (qualified.status !== "ready") {
     throw new Error(qualified.reason);
   }
-  expect(qualified.verification).toMatchObject({ verified: true });
-  expect(qualified.receipt).toEqual(input.bytes);
-  expect(qualified.receipt).not.toBe(input.bytes);
+  expect(qualified.capture).toEqual(input.capture);
+  expect(new Uint8Array(readFileSync(qualified.receiptFile))).toEqual(
+    input.bytes
+  );
+  const repeated = await collectCapturedGateReceipt(input, input.outputRoot);
+  expect(repeated).toEqual({
+    reason: "output-unavailable",
+    status: "withheld",
+  });
+  expect(new Uint8Array(readFileSync(qualified.receiptFile))).toEqual(
+    input.bytes
+  );
   expect(new TextDecoder().decode(input.bytes).endsWith("\n")).toBe(true);
   const { ran } = gateRun(input, qualified);
   expect(ran.exitCode).toBe(0);
@@ -238,17 +253,21 @@ test("downloaded bytes differing from protected capture cannot qualify the gate"
   const input = await projectRun();
   const downloaded = new Uint8Array(input.bytes);
   downloaded[0] = 32;
-  const result = await collectCapturedProject(input, downloaded);
-  expect(result.collected).toBe(true);
-  if (!result.collected) {
-    throw new Error(result.reason);
+  const result = await collectCapturedGateReceipt(
+    input,
+    input.outputRoot,
+    downloaded
+  );
+  expect(result.status).toBe("withheld");
+  if (result.status !== "withheld") {
+    throw new Error("Changed artifact unexpectedly qualified");
   }
   expect(result.verification).toEqual({
     reason: "receipt-digest-mismatch",
     verified: false,
   });
-  expect(result.receipt).toBeNull();
-  const { ran } = gateRun(input, result);
+  expect(result.reason).toBe("receipt-unqualified");
+  const { ran } = gateRun(input, { receipt: null });
   expect(ran.exitCode).toBe(1);
   for (const name of VERIFICATION_GATES) {
     expect(gate(ran, name).codes).toEqual(["missing-evidence"]);
