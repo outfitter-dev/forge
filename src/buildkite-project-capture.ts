@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { renameSync } from "node:fs";
 import { mkdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -6,7 +7,6 @@ import { buildkiteUuid, fullCommit } from "./buildkite-job.ts";
 import { BUILDKITE_MAX_RECEIPT_BYTES } from "./buildkite-project-receipt.ts";
 import type { BuildkiteProjectCapture } from "./buildkite-project-receipt.ts";
 import { digest } from "./check-config.ts";
-import { writePrivateFile } from "./write-private-file.ts";
 
 export interface BuildkiteProjectLaunch {
   jobId: string;
@@ -207,16 +207,18 @@ export const captureBuildkiteProjectCheck = async (
   try {
     // Receipts are UTF-8 JSON stdout, and publication preserves every byte.
     await writeFile(receiptFile, output.bytes, { flag: "wx", mode: 0o600 });
+    const pending = path.join(directory, "capture.pending");
+    await writeFile(pending, JSON.stringify(capture), {
+      flag: "wx",
+      mode: 0o600,
+    });
     if (signal?.aborted) {
       await rm(directory, { force: true, recursive: true });
       return { reason: "canceled", status: "not-captured" };
     }
-    // The record is published last, so an interrupted write cannot qualify.
-    await writePrivateFile(
-      path.join(directory, "capture.json"),
-      JSON.stringify(capture),
-      "remove-temporary"
-    );
+    // Commit point: no event-loop turn can deliver cancellation between this
+    // final check and publication. A later abort cannot retract a visible record.
+    renameSync(pending, path.join(directory, "capture.json"));
     return { capture, receiptFile, status: "captured" };
   } catch {
     await rm(directory, { force: true, recursive: true });

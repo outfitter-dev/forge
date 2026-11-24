@@ -281,3 +281,48 @@ test.each(["SIGINT", "SIGTERM"] as const)(
   },
   10_000
 );
+
+test.each(["staging", "committed"] as const)(
+  "cancellation at %s respects the capture publication commit point",
+  (phase) => {
+    const args = input();
+    const source = `
+    const fs = require("node:fs");
+    const promises = require("node:fs/promises");
+    const controller = new AbortController();
+    const write = promises.writeFile;
+    promises.writeFile = async (...values) => {
+      await write(...values);
+      if (String(values[0]).endsWith("capture.pending") && ${JSON.stringify(phase)} === "staging") controller.abort();
+    };
+    const rename = fs.renameSync;
+    fs.renameSync = (...values) => {
+      rename(...values);
+      if (${JSON.stringify(phase)} === "committed") controller.abort();
+    };
+    const { captureBuildkiteProjectCheck } = await import(${JSON.stringify(path.resolve(import.meta.dir, "../src/buildkite-project-capture.ts"))});
+    const result = await captureBuildkiteProjectCheck(${JSON.stringify(args)}, controller.signal);
+    console.log(JSON.stringify({ result, aborted: controller.signal.aborted, record: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId, "capture.json"))}), directory: fs.existsSync(${JSON.stringify(path.join(args.captureRoot, jobId))}) }));
+  `;
+    const child = Bun.spawnSync([process.execPath, "-e", source], {
+      cwd: path.resolve(import.meta.dir, ".."),
+      env: {},
+    });
+    expect(child.exitCode).toBe(0);
+    const observed = JSON.parse(child.stdout.toString());
+    expect(observed.aborted).toBe(true);
+    if (phase === "staging") {
+      expect(observed).toMatchObject({
+        directory: false,
+        record: false,
+        result: { reason: "canceled", status: "not-captured" },
+      });
+    } else {
+      expect(observed).toMatchObject({
+        directory: true,
+        record: true,
+        result: { capture: { runnerExitCode: 0 }, status: "captured" },
+      });
+    }
+  }
+);
