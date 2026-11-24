@@ -135,3 +135,22 @@ test.each([1, 2])("documented gate hook handles collector exit %i", (exit) => {
     expect(args).toContain("--expected-base");
   }
 });
+
+test.each([-1, 0, 1.5])(
+  "CLI treats invalid build number %i as an operator input error",
+  (buildNumber) => {
+    const invalid = path.join(root, `invalid-${buildNumber}.json`);
+    writeFileSync(
+      invalid,
+      JSON.stringify({
+        ...JSON.parse(readFileSync(config, "utf-8")),
+        buildNumber,
+      })
+    );
+    const child = Bun.spawnSync([process.execPath, cli, invalid], {
+      env: { FORGE_BUILDKITE_READ_TOKEN: token },
+    });
+    expect(child.exitCode).toBe(2);
+    expect(new TextDecoder().decode(child.stdout)).toBe("");
+  }
+);

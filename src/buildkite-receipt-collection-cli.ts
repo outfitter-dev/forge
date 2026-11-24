@@ -32,7 +32,8 @@ const run = async () => {
         "pipelineSlug",
         "artifactPath",
       ].every((key) => typeof value[key] === "string") ||
-      typeof value.buildNumber !== "number"
+      !Number.isSafeInteger(value.buildNumber) ||
+      Number(value.buildNumber) < 1
     ) {
       return 2;
     }
@@ -42,7 +43,10 @@ const run = async () => {
       request: fetch,
     });
     console.log(JSON.stringify(result));
-    return result.status === "ready" ? 0 : 1;
+    if (result.status === "ready") {
+      return 0;
+    }
+    return result.reason === "input-invalid" ? 2 : 1;
   } catch {
     console.error("Forge could not collect the project receipt.");
     return 2;
