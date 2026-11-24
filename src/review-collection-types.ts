@@ -108,8 +108,10 @@ export interface ReviewCollectionResult {
     agentReviews: AgentReviewAttempt[];
     links: ReviewFollowUpResolution[];
     state: ReviewCollectionState;
+    selected: boolean;
   }[];
   agentReviews: AgentReviewAttempt[];
+  resolutionReviews?: AgentReviewAttempt[];
   reviewFindings: ReviewFindingLedger;
   /** Describes these configured adapters only. Forge never claims that Ranger exhausted its execution ladder. */
   exhausted: boolean;

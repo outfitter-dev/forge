@@ -84,7 +84,12 @@ const agentReviews = (value: unknown, path: string) => {
   }
 };
 
-const pullRequest = (value: unknown, path: string, version: SchemaVersion) => {
+const pullRequest = (
+  value: unknown,
+  path: string,
+  version: SchemaVersion,
+  resolutionReviewsEnabled: boolean
+) => {
   const result = object(value, path, [
     "subject",
     "provenance",
@@ -99,12 +104,16 @@ const pullRequest = (value: unknown, path: string, version: SchemaVersion) => {
     "unresolvedThreads",
     // Version 1 has no review ledger or ladder; it keeps its original fields.
     ...(version === 2 ? ["reviewFindings", "reviewLadder"] : []),
+    ...(resolutionReviewsEnabled ? ["resolutionReviews"] : []),
   ]);
   subject(result.subject, `${path}.subject`, "pull_request");
   provenance(result.provenance, `${path}.provenance`);
   checks(result.checks, `${path}.checks`);
   if (version === 2) {
     reviewAttempts(result.agentReviews, `${path}.agentReviews`);
+    if (Object.hasOwn(result, "resolutionReviews")) {
+      reviewAttempts(result.resolutionReviews, `${path}.resolutionReviews`);
+    }
     reviewFindings(result.reviewFindings, `${path}.reviewFindings`);
     reviewLadder(result.reviewLadder, `${path}.reviewLadder`);
   } else {
@@ -188,7 +197,11 @@ const validatePolicy = (value: unknown): SchemaVersion => {
   return 1;
 };
 
-const validateFacts = (value: unknown, version: SchemaVersion) => {
+const validateFacts = (
+  value: unknown,
+  version: SchemaVersion,
+  resolutionReviewsEnabled: boolean
+) => {
   const common = ["schemaVersion", "event", "modelAssessment"];
   // Inspect the discriminant before accepting event-specific fields.
   const result = object(value, "facts", [
@@ -217,7 +230,12 @@ const validateFacts = (value: unknown, version: SchemaVersion) => {
   }
   if (result.event === "pull_request") {
     object(value, "facts", [...common, "pullRequest"]);
-    pullRequest(result.pullRequest, "facts.pullRequest", version);
+    pullRequest(
+      result.pullRequest,
+      "facts.pullRequest",
+      version,
+      resolutionReviewsEnabled
+    );
     return;
   }
   object(value, "facts", [...common, "candidate", "members", "admissions"]);
@@ -239,7 +257,12 @@ const validateFacts = (value: unknown, version: SchemaVersion) => {
     result.admissions,
     "facts.admissions"
   ).entries()) {
-    pullRequest(admission, `facts.admissions[${index}]`, version);
+    pullRequest(
+      admission,
+      `facts.admissions[${index}]`,
+      version,
+      resolutionReviewsEnabled
+    );
   }
 };
 
@@ -252,7 +275,12 @@ export const validateEvidenceInput = (
     // Validate the same detached snapshot that will be evaluated, not a second
     // read of a caller-owned object with potentially changing property values.
     const input = structuredClone({ facts, policy });
-    validateFacts(input.facts, validatePolicy(input.policy));
+    const version = validatePolicy(input.policy);
+    const resolutionReviewsEnabled =
+      version === 2 &&
+      (input.policy as EvidenceInputV2["policy"]).agentReview.findingSources !==
+        undefined;
+    validateFacts(input.facts, version, resolutionReviewsEnabled);
     // Both versions and every nested field have been checked above.
     return {
       input: input as EvidenceInput | EvidenceInputV2,

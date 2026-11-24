@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { collectedReviewAdapters } from "../src/collect-review-adapters.ts";
+import { evaluateEvidence } from "../src/evaluate-evidence.ts";
 import type {
   ReviewFinding,
   ReviewFindingLedger,
@@ -10,6 +11,11 @@ import type {
   ReviewSourceObservation,
 } from "../src/review-collection-types.ts";
 import { applyCollectedReviewFollowUps } from "../src/review-follow-up.ts";
+import {
+  localAttempt,
+  passingFactsV2,
+  policyV2,
+} from "./agent-review-fixtures.ts";
 import { subject } from "./evidence-fixtures.ts";
 import { fakeAdapter, secondary } from "./review-collection-fixtures.ts";
 
@@ -103,4 +109,79 @@ test.each([
     mode === "linked" ? "follow-up-review" : null
   );
   expect<unknown>({ ...result.findings[0], resolution: null }).toEqual(finding);
+});
+
+test("resolution-only evidence requires scoped policy and a non-thread adverse target", () => {
+  const policy = policyV2();
+  policy.agentReview.findingSources = {
+    policyDigest: "a".repeat(64),
+    policyRevision: "b".repeat(40),
+    reviewers: ["reporting-only-bot"],
+    sourceAccounts: [
+      { accountId: 123, actorType: "Bot", reviewer: "reporting-only-bot" },
+    ],
+  };
+  const facts = passingFactsV2();
+  const followUp = localAttempt({
+    attemptId: "explicit-follow-up",
+    subject: facts.pullRequest.subject,
+  });
+  facts.pullRequest.agentReviews = [
+    localAttempt({
+      attemptId: "selected-clean",
+      subject: facts.pullRequest.subject,
+    }),
+  ];
+  facts.pullRequest.resolutionReviews = [followUp];
+  facts.pullRequest.reviewFindings = {
+    coverage: {
+      policyDigest: policy.agentReview.findingSources.policyDigest,
+      policyRevision: policy.agentReview.findingSources.policyRevision,
+      references: ["fixture://stable-coverage"],
+      sourceAccounts: policy.agentReview.findingSources.sourceAccounts,
+    },
+    findings: [
+      {
+        attemptId: "reporter/original-attempt",
+        id: "adverse-summary",
+        kind: "adverse-review",
+        nativeRef: "fixture://adverse-summary",
+        reportingSource: { accountId: 123, actorType: "Bot" },
+        resolution: {
+          attemptId: followUp.attemptId,
+          disposition: "fixed",
+          kind: "follow-up-review",
+          nativeRef: "fixture://qualified-follow-up",
+          provenance: followUp.provenance,
+          subject: followUp.subject,
+        },
+        reviewer: "reporting-only-bot",
+      },
+    ],
+    recorded: true,
+  };
+  expect(evaluateEvidence(facts, policy)).toMatchObject({
+    eligible: true,
+    status: "evaluated",
+  });
+  const nativeTarget = structuredClone(facts);
+  const [nativeFinding] = nativeTarget.pullRequest.reviewFindings.findings;
+  if (nativeFinding === undefined) {
+    throw new Error("missing fixture target");
+  }
+  nativeFinding.kind = "finding";
+  expect(evaluateEvidence(nativeTarget, policy)).toMatchObject({
+    eligible: false,
+    status: "evaluated",
+  });
+  const noSelectedReview = structuredClone(facts);
+  noSelectedReview.pullRequest.agentReviews = [];
+  expect(evaluateEvidence(noSelectedReview, policy)).toMatchObject({
+    eligible: false,
+    status: "evaluated",
+  });
+  expect(evaluateEvidence(facts, policyV2())).toMatchObject({
+    issues: [{ path: "facts.pullRequest.resolutionReviews" }],
+    status: "invalid",
+  });
 });

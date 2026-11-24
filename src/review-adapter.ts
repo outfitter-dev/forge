@@ -13,6 +13,7 @@ import {
 
 /** Plain enumerable data shared by review collectors. Provider observations stay on the concrete result. */
 export interface CollectedReviewEvidence {
+  resolutionReviews?: AgentReviewAttempt[];
   agentReviews: AgentReviewAttempt[];
   reviewFindings: ReviewFindingLedger;
   /** A single adapter cannot attest that the caller exhausted its review ladder. */

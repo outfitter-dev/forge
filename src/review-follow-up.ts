@@ -181,3 +181,53 @@ export const applyCollectedReviewFollowUps = (
   }
   return findings;
 };
+
+/** Keep linked unselected reviews available only for resolving their accepted scoped adverse entries. */
+export const collectedResolutionReviews = (
+  collection: ReviewCollectionResult,
+  input: ReviewObservationInput
+): AgentReviewAttempt[] => {
+  if (input.findings.coverage === undefined) {
+    return [];
+  }
+  const reviews: AgentReviewAttempt[] = [];
+  for (const {
+    agentReviews,
+    entry,
+    links,
+    selected,
+    state,
+  } of collection.followUpResolutions ?? []) {
+    if (selected || (state !== "passed" && state !== "failed")) {
+      continue;
+    }
+    for (const attempt of agentReviews) {
+      const linked = links.some((link) =>
+        input.findings.findings.some((finding) => {
+          const { resolution } = finding;
+          return (
+            finding.kind === "adverse-review" &&
+            finding.reportingSource !== undefined &&
+            finding.reviewer === link.finding.reviewer &&
+            finding.id === link.finding.id &&
+            finding.attemptId === link.finding.attemptId &&
+            finding.nativeRef === link.finding.nativeRef &&
+            resolution?.kind === "follow-up-review" &&
+            resolution.attemptId === attempt.attemptId &&
+            link.attemptId === attempt.attemptId &&
+            resolution.nativeRef === link.nativeRef &&
+            isDeepStrictEqual(resolution.provenance, attempt.provenance)
+          );
+        })
+      );
+      if (
+        linked &&
+        qualifiedAttempt(attempt, entry, input) &&
+        !reviews.some((known) => isDeepStrictEqual(known, attempt))
+      ) {
+        reviews.push(structuredClone(attempt));
+      }
+    }
+  }
+  return reviews;
+};

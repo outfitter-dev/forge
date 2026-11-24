@@ -1,16 +1,21 @@
 import { afterEach, expect, test } from "bun:test";
 
 import { gateExitCode } from "../src/gate-document.ts";
+import type { GateOutputDocument } from "../src/gate-output.ts";
+import type { ReviewCollectionState } from "../src/review-collection-types.ts";
 import { runGate } from "../src/run-gate.ts";
-import { LOCAL } from "./agent-review-fixtures.ts";
+import { HOSTED, LOCAL } from "./agent-review-fixtures.ts";
 import {
   findingPass,
   findingSources,
   connection,
+  sourceComments,
   invoke,
   report,
   scopedPolicy,
 } from "./finding-sources-gate-fixtures.ts";
+import { comment } from "./gate-codex-fixtures.ts";
+import { pullRequest, SERVED } from "./gate-fixtures.ts";
 import type { ScriptedResponse } from "./gate-fixtures.ts";
 import {
   cleanupGateWorkspace,
@@ -29,6 +34,77 @@ afterEach(() => {
   cleanupGateWorkspace();
 });
 
+const sourceForMode = (mode: string) => {
+  let source = findingPass();
+  if (mode === "selected-pending") {
+    source = findingPass({
+      pullRequest: {
+        body: pullRequest({
+          head: { ref: "feature", repo: { id: 100 }, sha: "e".repeat(40) },
+        }),
+        date: SERVED,
+      },
+    });
+  }
+  if (mode === "selected-failed") {
+    const adverseSummary = comment({
+      has_any_findings: true,
+      has_unresolved_findings: true,
+    });
+    source = findingPass({
+      comments: sourceComments({
+        ...adverseSummary,
+        body: String(adverseSummary.body)
+          .replace("private-code-review-body", "")
+          .trim(),
+      }),
+    });
+  }
+  return source;
+};
+const primaryStates: Record<string, ReviewCollectionState> = {
+  "selected-failed": "failed",
+  "selected-pending": "pending",
+};
+
+const assertResolutionOnlyEvidence = (
+  document: GateOutputDocument,
+  state: ReviewCollectionState,
+  passing: boolean
+) => {
+  if (
+    document.status !== "evaluated" ||
+    document.schemaVersion !== 2 ||
+    document.evaluation.schemaVersion !== 2
+  ) {
+    throw new Error("expected evaluated schema2 document");
+  }
+  expect(
+    document.reviewAdapters?.adapters.map(({ selected }) => selected)
+  ).toEqual([true, false]);
+  const primary = document.reviewAdapters?.adapters[0];
+  expect(primary?.state).toBe(state);
+  const reviewGate = document.evaluation.gates.find(
+    ({ name }) => name === "agent-review"
+  );
+  expect(reviewGate?.conclusion).toBe(passing ? "success" : "failure");
+  const { facts } = document.evaluation.input;
+  if (facts.event !== "pull_request" || facts.schemaVersion !== 2) {
+    throw new Error("expected scoped pull-request evaluation");
+  }
+  expect(
+    facts.pullRequest.agentReviews.map(({ reviewer }) => reviewer)
+  ).toEqual([HOSTED]);
+  expect(
+    facts.pullRequest.resolutionReviews?.map(({ reviewer }) => reviewer)
+  ).toEqual([LOCAL]);
+  expect(
+    document.evaluation.agentReview?.[0]?.satisfiedBy?.every(
+      (id) => !id.startsWith("secondary/")
+    )
+  ).toBe(true);
+};
+
 /** A trusted installed collector fixture supplies an explicit linkage to one retained entry. */
 test.each([
   "missing-link",
@@ -37,10 +113,24 @@ test.each([
   "stale-review",
   "inherited-context",
   "implicit-own-resolution",
+  "unselected-follow-up",
+  "selected-pending",
+  "selected-failed",
 ] as const)(
   "a trusted follow-up collector resolves only the explicitly linked entry (%s)",
   async (mode) => {
-    const linked = mode === "linked";
+    const laterFollowUp = [
+      "unselected-follow-up",
+      "selected-pending",
+      "selected-failed",
+    ].includes(mode);
+    const linked = [
+      "linked",
+      "unselected-follow-up",
+      "selected-pending",
+      "selected-failed",
+    ].includes(mode);
+    const passing = ["linked", "unselected-follow-up"].includes(mode);
     const ws = workspace();
     seedLedger(ws);
     const sources = findingSources();
@@ -83,7 +173,7 @@ test.each([
       resolution: null,
       reviewer: mode === "implicit-own-resolution" ? LOCAL : "reporting-bot",
     });
-    const source = findingPass();
+    const source = sourceForMode(mode);
     const fetchFixture = (
       input: Parameters<typeof fetch>[0],
       init?: RequestInit
@@ -164,16 +254,20 @@ test.each([
       return result;
     };
     const adapters = policy.reviewAdapters as Record<string, unknown>[];
+    const followUpPolicy = {
+      adapter: "secondary",
+      configuration: {},
+      reviewer: LOCAL,
+    };
     const document = await runGate({
       adapterRegistry: { ...registry(), secondary: followUp },
       args: [
         ...gateArgs(ws, {
           policy: {
             ...policy,
-            reviewAdapters: [
-              { adapter: "secondary", configuration: {}, reviewer: LOCAL },
-              ...adapters,
-            ],
+            reviewAdapters: laterFollowUp
+              ? [...adapters, followUpPolicy]
+              : [followUpPolicy, ...adapters],
           },
           review: null,
         }),
@@ -184,8 +278,15 @@ test.each([
       env: { FORGE_GITHUB_TOKEN: TOKEN },
     });
     expect(gateExitCode(document), JSON.stringify(document)).toBe(
-      linked ? 0 : 1
+      passing ? 0 : 1
     );
+    if (laterFollowUp) {
+      assertResolutionOnlyEvidence(
+        document,
+        primaryStates[mode] ?? "passed",
+        passing
+      );
+    }
     const [persisted] = JSON.parse(ledgerText(ws)).reviewFindings.findings;
     expect(persisted.id).toBe(retained.id);
     expect(persisted.resolution?.kind ?? null).toBe(

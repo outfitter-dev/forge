@@ -238,6 +238,8 @@ export interface PullRequestEvidenceOf<Review> {
 export type PullRequestEvidence = PullRequestEvidenceOf<AgentReviewEvidence>;
 
 export interface PullRequestEvidenceV2 extends PullRequestEvidenceOf<AgentReviewAttempt> {
+  /** Explicit targeted follow-ups may resolve scoped adverse entries without satisfying the clean-review requirement. */
+  resolutionReviews?: AgentReviewAttempt[];
   reviewFindings: ReviewFindingLedger;
   reviewLadder: ReviewLadder | null;
 }

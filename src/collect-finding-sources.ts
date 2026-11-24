@@ -18,7 +18,10 @@ import type {
   ReviewObservationInput,
 } from "./review-collection-types.ts";
 import { identity } from "./review-finding-ledger.ts";
-import { applyCollectedReviewFollowUps } from "./review-follow-up.ts";
+import {
+  applyCollectedReviewFollowUps,
+  collectedResolutionReviews,
+} from "./review-follow-up.ts";
 import type { CanonicalReviewLedgerEntry } from "./review-ledger.ts";
 
 export const findingReadCapability = (
@@ -156,5 +159,15 @@ export const retainFindingCoverage = (
     reviews.reviewAdapters.reviewFindings = structuredClone(
       ledger.reviewFindings
     );
+    const resolutionReviews = collectedResolutionReviews(
+      reviews.reviewAdapters,
+      {
+        ...input,
+        findings: ledger.reviewFindings,
+      }
+    );
+    if (resolutionReviews.length > 0) {
+      reviews.reviewAdapters.resolutionReviews = resolutionReviews;
+    }
   }
 };

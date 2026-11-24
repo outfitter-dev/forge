@@ -193,6 +193,7 @@ export const collectedReviewAdapters = (
           agentReviews: result.agentReviews,
           entry,
           links: result.followUpResolutions,
+          selected,
           state: result.state,
         });
       }

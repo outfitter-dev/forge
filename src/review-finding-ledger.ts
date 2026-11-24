@@ -53,6 +53,17 @@ const configuredNativeResolved = (
   );
 };
 
+/** Only active scoped policy admits resolution-only evidence for a retained non-thread adverse entry. */
+const followUpCandidates = (finding: ReviewFinding, { policy, pr }: Review) => {
+  const additional =
+    policy.findingSources !== undefined &&
+    finding.kind === "adverse-review" &&
+    finding.reportingSource !== undefined
+      ? (pr.resolutionReviews ?? [])
+      : [];
+  return [...pr.agentReviews, ...additional];
+};
+
 /** Absence, a push, a timeout, or another reviewer's clean result resolves nothing. */
 const resolved = (finding: ReviewFinding, review: Review): boolean => {
   const { resolution } = finding;
@@ -71,7 +82,7 @@ const resolved = (finding: ReviewFinding, review: Review): boolean => {
       provenanceProblems(resolution.provenance, reviewer, "").length === 0
     );
   }
-  const followUps = pr.agentReviews.filter(
+  const followUps = followUpCandidates(finding, review).filter(
     (attempt) => attempt.attemptId === resolution.attemptId
   );
   const [followUp] = followUps;
