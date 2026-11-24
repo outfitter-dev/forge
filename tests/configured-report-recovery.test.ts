@@ -72,20 +72,35 @@ const inventory = (
   });
 };
 
-test("the exact observed Devin count and badge is understood as unmatched adverse evidence", () => {
-  expect(
-    classifyFindingReport(report(), ["devin-review-v1"], account.id)
-  ).toEqual({ adverse: true, known: true });
-  const result = inventory([report()], { findings: [], recorded: false });
-  expect(result.reviewFindings.recorded).toBe(true);
-  expect(result.reviewFindings.findings).toMatchObject([
-    {
-      kind: "adverse-review",
-      reportingSource: { accountId: 123, actorType: "Bot" },
-      resolution: null,
-    },
-  ]);
-});
+test.each([
+  [summary, true],
+  [summary.replace("3 potential issues", "1 potential issue"), true],
+  [
+    summary
+      .replace("3 potential issues", "1 potential issue")
+      .replace("pull/82", "pull/85"),
+    false,
+  ],
+] as const)(
+  "the observed report %s survives inventory collection with coverage %p",
+  (body, known) => {
+    expect(
+      classifyFindingReport(report({ body }), ["devin-review-v1"], account.id)
+    ).toEqual({ adverse: true, known });
+    const result = inventory([report({ body })], {
+      findings: [],
+      recorded: false,
+    });
+    expect(result.reviewFindings.recorded).toBe(known);
+    expect(result.reviewFindings.findings).toMatchObject([
+      {
+        kind: "adverse-review",
+        reportingSource: { accountId: 123, actorType: "Bot" },
+        resolution: null,
+      },
+    ]);
+  }
+);
 
 test.each([
   ["1 potential issue", true],
