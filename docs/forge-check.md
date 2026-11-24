@@ -8,7 +8,7 @@ From the repository root, after `./scripts/bootstrap.sh`:
 
 ```sh
 bun run forge check
-bun run forge check --config forge.json --base <full-commit-object-id>
+bun run forge check --config forge.json --base-sha <full-commit-object-id>
 bun run check:hook
 ```
 
