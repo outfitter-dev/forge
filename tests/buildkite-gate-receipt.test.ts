@@ -249,6 +249,19 @@ test("a changed admitted base stops before the isolated ledger is updated", asyn
   expect(ledgerText(ws)).toBe(before);
 });
 
+test("a shared protected root can capture and publish the gate handoff", async () => {
+  const input = await projectRun();
+  const result = await collectCapturedGateReceipt(input, input.captureRoot);
+  expect(result.status).toBe("ready");
+  if (result.status !== "ready") {
+    throw new Error(result.reason);
+  }
+  expect(result.receiptFile).toBe(
+    path.join(input.captureRoot, `${input.admission.jobId}.receipt.json`)
+  );
+  expect(gateRun(input, result).ran.exitCode).toBe(0);
+});
+
 test("downloaded bytes differing from protected capture cannot qualify the gate", async () => {
   const input = await projectRun();
   const downloaded = new Uint8Array(input.bytes);

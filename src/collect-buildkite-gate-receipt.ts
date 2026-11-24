@@ -1,4 +1,4 @@
-import { mkdir, realpath, stat, writeFile } from "node:fs/promises";
+import { realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { readBuildkiteProjectCapture } from "./buildkite-capture-store.ts";
@@ -56,11 +56,12 @@ export const collectBuildkiteGateReceipt = async (
         verification: collection.verification,
       } as const;
     }
-    // A job gets one immutable handoff. Interruption or duplicate collection
-    // refuses reuse so an earlier path can never silently change under gate.
-    const directory = path.join(output, input.admission.jobId);
-    await mkdir(directory, { mode: 0o700 });
-    const receiptFile = path.join(directory, "receipt.json");
+    // A job gets one immutable handoff. Exclusive creation refuses reuse so
+    // an earlier path can never silently change under gate.
+    const receiptFile = path.join(
+      output,
+      `${input.admission.jobId}.receipt.json`
+    );
     await writeFile(receiptFile, collection.receipt, {
       flag: "wx",
       mode: 0o600,
