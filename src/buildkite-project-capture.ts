@@ -37,7 +37,8 @@ type CaptureResult =
         | "launch-failed"
         | "output-limit"
         | "deadline"
-        | "runner-signaled";
+        | "runner-signaled"
+        | "canceled";
     };
 
 const within = (parent: string, child: string) => {
@@ -50,11 +51,8 @@ const within = (parent: string, child: string) => {
   );
 };
 
-/** Host-owned launch and stdout capture. The wrapper owns identity and isolation. */
-export const captureBuildkiteProjectCheck = async (
-  input: BuildkiteProjectLaunch
-): Promise<CaptureResult> => {
-  if (
+const validLaunch = (input: BuildkiteProjectLaunch): boolean =>
+  !(
     !buildkiteUuid(input.jobId) ||
     !fullCommit(input.head) ||
     !fullCommit(input.base) ||
@@ -73,7 +71,14 @@ export const captureBuildkiteProjectCheck = async (
         path.isAbsolute(value) &&
         ![...value].some((character) => (character.codePointAt(0) ?? 0) < 32)
     )
-  ) {
+  );
+
+/** Host-owned launch and stdout capture. The wrapper owns identity and isolation. */
+export const captureBuildkiteProjectCheck = async (
+  input: BuildkiteProjectLaunch,
+  signal?: AbortSignal
+): Promise<CaptureResult> => {
+  if (!validLaunch(input)) {
     return { reason: "invalid-input", status: "not-captured" };
   }
   let directory: string;
@@ -112,12 +117,14 @@ export const captureBuildkiteProjectCheck = async (
           | "launch-failed"
           | "output-limit"
           | "deadline"
-          | "runner-signaled";
+          | "runner-signaled"
+          | "canceled";
       }
   >((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
-    let reason: "output-limit" | "deadline" | null = null;
+    let reason: "output-limit" | "deadline" | "canceled" | null = null;
+    let escalation: ReturnType<typeof setTimeout> | undefined;
     const child = spawn(
       input.launcher,
       [input.runner, input.repository, input.head, input.base, input.toolBin],
@@ -128,35 +135,52 @@ export const captureBuildkiteProjectCheck = async (
         stdio: ["ignore", "pipe", "inherit"],
       }
     );
-    const kill = () => {
+    const kill = (value: NodeJS.Signals) => {
       try {
         if (child.pid) {
-          process.kill(-child.pid, "SIGKILL");
+          process.kill(-child.pid, value);
         }
       } catch {
-        // Already exited. The outcome still waits for stdout to close.
+        // An already exited process group is normal.
       }
-      child.stdout.destroy();
     };
-    const timer = setTimeout(() => {
-      reason = "deadline";
-      kill();
-    }, input.timeoutMs);
+    const stop = (cause: "output-limit" | "deadline" | "canceled") => {
+      if (reason) {
+        return;
+      }
+      reason = cause;
+      // The compiled runner forwards TERM to the check's own process group.
+      kill("SIGTERM");
+      escalation = setTimeout(() => {
+        kill("SIGKILL");
+        child.stdout.destroy();
+      }, 5000);
+    };
+    const cancel = () => stop("canceled");
+    signal?.addEventListener("abort", cancel, { once: true });
+    const timer = setTimeout(() => stop("deadline"), input.timeoutMs);
+    const cleanup = () => {
+      clearTimeout(timer);
+      clearTimeout(escalation);
+      signal?.removeEventListener("abort", cancel);
+    };
+    if (signal?.aborted) {
+      cancel();
+    }
     child.stdout.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > BUILDKITE_MAX_RECEIPT_BYTES) {
-        reason = "output-limit";
-        kill();
-      } else {
+        stop("output-limit");
+      } else if (!reason) {
         chunks.push(chunk);
       }
     });
     child.on("error", () => {
-      clearTimeout(timer);
+      cleanup();
       resolve({ reason: "launch-failed" });
     });
     child.on("close", (code) => {
-      clearTimeout(timer);
+      cleanup();
       if (reason) {
         resolve({ reason });
       } else if (code === null) {
@@ -170,6 +194,10 @@ export const captureBuildkiteProjectCheck = async (
     await rm(directory, { force: true, recursive: true });
     return { reason: output.reason, status: "not-captured" };
   }
+  if (signal?.aborted) {
+    await rm(directory, { force: true, recursive: true });
+    return { reason: "canceled", status: "not-captured" };
+  }
   const capture: BuildkiteProjectCapture = {
     jobId: input.jobId,
     receiptSha256: digest(output.bytes),
@@ -179,6 +207,10 @@ export const captureBuildkiteProjectCheck = async (
   try {
     // Receipts are UTF-8 JSON stdout, and publication preserves every byte.
     await writeFile(receiptFile, output.bytes, { flag: "wx", mode: 0o600 });
+    if (signal?.aborted) {
+      await rm(directory, { force: true, recursive: true });
+      return { reason: "canceled", status: "not-captured" };
+    }
     // The record is published last, so an interrupted write cannot qualify.
     await writePrivateFile(
       path.join(directory, "capture.json"),

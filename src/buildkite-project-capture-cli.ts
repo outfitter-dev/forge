@@ -30,11 +30,21 @@ const run = async () => {
     ) {
       return 2;
     }
-    const result = await captureBuildkiteProjectCheck(
-      value as unknown as BuildkiteProjectLaunch
-    );
-    console.log(JSON.stringify(result));
-    return result.status === "captured" ? result.capture.runnerExitCode : 1;
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    process.on("SIGINT", cancel);
+    process.on("SIGTERM", cancel);
+    try {
+      const result = await captureBuildkiteProjectCheck(
+        value as unknown as BuildkiteProjectLaunch,
+        controller.signal
+      );
+      console.log(JSON.stringify(result));
+      return result.status === "captured" ? result.capture.runnerExitCode : 1;
+    } finally {
+      process.off("SIGINT", cancel);
+      process.off("SIGTERM", cancel);
+    }
   } catch {
     console.error("Forge could not capture the project check.");
     return 2;

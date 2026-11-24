@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -195,3 +196,88 @@ test("capture reader refuses an oversized or foreign job record", async () => {
   );
   expect(await readBuildkiteProjectCapture(args.captureRoot, jobId)).toBeNull();
 });
+
+const waitForPid = async (file: string) => {
+  const deadline = Date.now() + 4000;
+  while (!existsSync(file) || readFileSync(file, "utf-8").trim() === "") {
+    if (Date.now() > deadline) {
+      throw new Error("Project command did not start");
+    }
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    await Bun.sleep(10);
+  }
+  return Number(readFileSync(file, "utf-8"));
+};
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const ignoringCommand =
+  "printf '%s' $$ > .git/capture-child; trap '' TERM; while :; do /bin/sleep 1; done";
+
+test("deadline reaches the real check's separate process group", async () => {
+  const args = input(ignoringCommand);
+  const running = captureBuildkiteProjectCheck({ ...args, timeoutMs: 1200 });
+  const pid = await waitForPid(
+    path.join(args.projectRoot, ".git/capture-child")
+  );
+  try {
+    expect(await running).toEqual({
+      reason: "deadline",
+      status: "not-captured",
+    });
+    expect(alive(pid)).toBe(false);
+    expect(existsSync(path.join(args.captureRoot, jobId))).toBe(false);
+  } finally {
+    if (alive(pid)) {
+      process.kill(-pid, "SIGKILL");
+    }
+  }
+}, 10_000);
+
+test.each(["SIGINT", "SIGTERM"] as const)(
+  "CLI %s cancels the real check and removes its reservation",
+  async (signal) => {
+    const args = input(ignoringCommand);
+    const config = path.join(directory(), "launch.json");
+    writeFileSync(config, JSON.stringify(args), { mode: 0o600 });
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.resolve(
+          import.meta.dir,
+          "../src/buildkite-project-capture-cli.ts"
+        ),
+        config,
+      ],
+      {
+        cwd: path.resolve(import.meta.dir, ".."),
+        env: {},
+        stderr: "pipe",
+        stdout: "pipe",
+      }
+    );
+    let pid = 0;
+    try {
+      pid = await waitForPid(path.join(args.projectRoot, ".git/capture-child"));
+      child.kill(signal);
+      expect(await child.exited).toBe(1);
+      expect(JSON.parse(await new Response(child.stdout).text())).toEqual({
+        reason: "canceled",
+        status: "not-captured",
+      });
+      expect(alive(pid)).toBe(false);
+      expect(existsSync(path.join(args.captureRoot, jobId))).toBe(false);
+    } finally {
+      child.kill();
+      if (pid > 0 && alive(pid)) {
+        process.kill(-pid, "SIGKILL");
+      }
+    }
+  },
+  10_000
+);
