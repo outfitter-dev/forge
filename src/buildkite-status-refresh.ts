@@ -29,6 +29,11 @@ interface RefreshPolicy {
 
 const VALID_REPOSITORY = /^[\w.-]+\/[\w.-]+$/u;
 const VALID_LABEL = /^[!-~](?:[ -~]*[!-~])?$/u;
+/** Shared validation before refresh selection, preview or publication effects. */
+export const validBuildkiteStatusRefreshPolicy = (policy: RefreshPolicy) =>
+  VALID_REPOSITORY.test(policy.repository) &&
+  VALID_LABEL.test(policy.holdLabel);
+
 const sameName = (left: string, right: string) =>
   left.replaceAll(/[A-Z]/gu, (letter) => letter.toLowerCase()) ===
   right.replaceAll(/[A-Z]/gu, (letter) => letter.toLowerCase());
@@ -70,8 +75,7 @@ export const selectBuildkiteStatusRefresh = (
   policy: RefreshPolicy
 ): RefreshTarget | null => {
   if (
-    !VALID_REPOSITORY.test(policy.repository) ||
-    !VALID_LABEL.test(policy.holdLabel) ||
+    !validBuildkiteStatusRefreshPolicy(policy) ||
     !isRecord(payload) ||
     !isRecord(payload.repository) ||
     typeof payload.repository.full_name !== "string" ||
@@ -179,8 +183,7 @@ export const previewBuildkiteStatusRefresh = ({
   if (
     subject === null ||
     target.repository !== policy.repository ||
-    !VALID_REPOSITORY.test(policy.repository) ||
-    !VALID_LABEL.test(policy.holdLabel)
+    !validBuildkiteStatusRefreshPolicy(policy)
   ) {
     return { reason: "admission-refused", status: "withheld" };
   }

@@ -1,0 +1,23 @@
+# Status publication rehearsal
+
+`createBuildkiteStatusPublication` composes the existing [fresh gate preview](buildkite-pipeline.md#status-refresh-preview) with an explicit status transport. One publisher owns one repository, head commit and status context. Its caller supplies a unique trusted run identifier, an approved build link, the target PR and a function that invokes the verified gate with qualified evidence. The operation serializes gate evaluations against their shared ledger and serializes writes within that publisher instance. A separate write queue lets a newer pending invalidation reach the service while an older evaluation finishes. Completion of an evaluation superseded by a later refresh is suppressed.
+
+Every admitted refresh first writes `pending` and waits for confirmation before collecting its subject or evaluating. This supersedes an old success while a new answer is being collected. The transport must return the complete authenticated list of open PRs on the selected repository and head. A missing observation, zero PRs or multiple PRs leaves the status pending. A unique PR must be open, unmerged and from the selected repository, and retain the selected head. All policy validation, including the hold label, is shared with refresh selection and preview and completes before any transport effect. After evaluation the operation rereads that list and applies the existing preview's exact head/base, hold, draft, mergeability and run checks. A fresh eligible gate produces `success`; a fresh nonpassing gate produces `failure`. The gate remains the owner of eligibility.
+
+The transport's `write` must resolve only after its service has confirmed the write. Any thrown result is ambiguous. The operation stops its publisher before attempting one `latest` readback, reports whether the exact requested status was observed and includes the latest observed status when available. A failed pending write can therefore report an old success still visible remotely. It never claims that a pending invalidation occurred when delivery could not be established. An unreadable readback stays unknown. All later refreshes on that publisher are withheld without another write, including when the requested write appeared in readback. A matching read cannot establish that a timed-out remote request has finished.
+
+Run the credential-free rehearsal from a bootstrapped Forge checkout:
+
+```sh
+bun test tests/buildkite-status-publication.test.ts tests/buildkite-status-refresh.test.ts
+```
+
+The tests invoke the real evaluator and refresh preview with a controlled transport. They cover a passing gate, same-head hold and removal, late completion after a newer failure, supersession during a final read, unavailable reads and evaluations, changed head/base, shared-head ambiguity, duplicate run identifiers, and ambiguous writes before and after the service applied them. The transport exposes write order and readback directly. These observations qualify the operation's behavior against that supplied transport.
+
+## Live adoption requirements
+
+The caller and transport are trusted adapters. They must authenticate service observations, select the approved publishing App, supply the complete PR inventory and latest status from that producer, enforce bounds and timeouts, and keep secrets out of the proposed checkout. The operation accepts parsed typed observations and does no network I/O itself. Creating another publisher for the same status identity does not share its generation counter, stopped state or run identifiers.
+
+Before a live adapter uses this operation, the operator must establish one exclusive writer per repository/head/context across jobs and hosts. It must also serialize evaluations that share a PR ledger across publisher instances or different heads. It must preserve ownership while a request is in flight and define durable fencing and reconciliation across crashes, restart and an ambiguous delivery. A new process cannot safely infer that a prior request ended from the latest status alone. Reconcile and drain prior requests before transferring ownership or constructing a replacement publisher. A process-local queue cannot provide that host guarantee.
+
+The host must also qualify event authentication and routing for review, thread and hold changes, fresh source and gate collection, pending invalidation on delivery failure, and operator recovery. A successful read or a shape-valid gate does not establish receipt custody or review completeness. The approved pipeline/App/context and these live ownership rules remain FOR-38 qualification work. This rehearsal installs no webhook, service, credentials or status-writing transport.

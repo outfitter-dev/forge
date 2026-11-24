@@ -151,3 +151,5 @@ The remaining project and gate hooks must implement their own dispatch and quali
 The project launcher must run the declared check in isolation and capture its receipt under the admitted job identity. The trusted worker must authenticate the Buildkite job outcome and protected capture, apply the receipt verifier, then pass the trusted policy, state and revision pair to [Forge gate](forge-gate.md). Use `--expected-head` for the exact commit that will receive the status and `--expected-base` for the admitted PR base. If either differs from GitHub’s collected subject, the gate exits 3 before updating its ledger.
 
 Status publication awaits a qualified subject and producer boundary. No preview or emitted notification grants a GitHub success status. Live worker deployment, authenticated review/hold triggers, verification of GitHub App access, and the acceptance scenarios remain FOR-38 work. The emitter creates no pipeline, build, worker or credential.
+
+The [status publication rehearsal](buildkite-status-publication.md) joins the fresh gate preview to a controlled transport and documents the remaining exclusive-writer and restart qualification.
