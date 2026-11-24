@@ -126,27 +126,53 @@ test("hold and removal produce fresh nonpassing and passing statuses on the same
   expect(new Set(f.writes.map(({ head }) => head))).toEqual(new Set([HEAD]));
 });
 
-test("an older clean evaluation cannot overwrite a newer held decision", async () => {
+test("pending does not wait for an old evaluation, while ledger evaluations stay exclusive", async () => {
   const f = fixture();
   const started = Promise.withResolvers<undefined>();
   const old = Promise.withResolvers<GateStatusDocument>();
+  const pending = Promise.withResolvers<undefined>();
+  const originalWrite = f.transport.write;
+  f.transport.write = async (value) => {
+    await originalWrite(value);
+    if (value.description === "Forge held: pending") {
+      pending.resolve(undefined);
+    }
+  };
+  let active = 0;
+  let maximum = 0;
+  let newerEvaluated = false;
   const first = f.publisher.refresh({
     ...attempt("old"),
-    evaluate: () => {
+    evaluate: async () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
       started.resolve(undefined);
-      return old.promise;
+      try {
+        return await old.promise;
+      } finally {
+        active -= 1;
+      }
     },
   });
   await started.promise;
   f.pulls([{ ...pull, labels: [{ id: 2, name: "forge:hold" }] }]);
-  expect(
-    await f.publisher.refresh({
-      ...attempt("held"),
-      evaluate: () => Promise.resolve(gateFor("held", true)),
-    })
-  ).toMatchObject({ state: "failure" });
+  const latest = f.publisher.refresh({
+    ...attempt("held"),
+    evaluate: () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      newerEvaluated = true;
+      active -= 1;
+      return Promise.resolve(gateFor("held", true));
+    },
+  });
+  await pending.promise;
+  expect(f.writes.map(({ state }) => state)).toEqual(["pending", "pending"]);
+  expect(newerEvaluated).toBe(false);
   old.resolve(gateFor("old"));
   expect(await first).toEqual({ reason: "superseded", status: "withheld" });
+  expect(await latest).toMatchObject({ state: "failure" });
+  expect(maximum).toBe(1);
   expect(f.writes.map(({ state }) => state)).toEqual([
     "pending",
     "pending",
@@ -323,3 +349,26 @@ test("a refresh requested during the final subject read supersedes the older dec
     "Forge new-read: success",
   ]);
 });
+
+test.each(["forge:hold ", " forge:hold", "forge:hold\n", "forge:blocK"])(
+  "invalid hold label %s is refused before any transport effect",
+  async (holdLabel) => {
+    const f = fixture();
+    let reads = 0;
+    f.transport.pullRequests = () => {
+      reads += 1;
+      return Promise.resolve([pull]);
+    };
+    const publisher = createBuildkiteStatusPublication({
+      ...policy,
+      holdLabel,
+      transport: f.transport,
+    });
+    expect(await publisher.refresh(attempt("invalid-policy"))).toEqual({
+      reason: "invalid-input",
+      status: "withheld",
+    });
+    expect(reads).toBe(0);
+    expect(f.writes).toHaveLength(0);
+  }
+);

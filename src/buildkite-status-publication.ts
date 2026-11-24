@@ -1,5 +1,8 @@
 import { fullCommit } from "./buildkite-job.ts";
-import { previewBuildkiteStatusRefresh } from "./buildkite-status-refresh.ts";
+import {
+  previewBuildkiteStatusRefresh,
+  validBuildkiteStatusRefreshPolicy,
+} from "./buildkite-status-refresh.ts";
 import type { GateStatusDocument } from "./buildkite-status-refresh.ts";
 import type { GitHubPullRequest } from "./github-pull-request-types.ts";
 
@@ -57,8 +60,8 @@ const sameWrite = (
 
 /**
  * One exclusive host owner creates one publisher per repository/head/context.
- * This serializes this instance's writes only. Host custody and durable restart
- * reconciliation must be qualified before a live adapter can adopt it.
+ * This instance serializes evaluations and writes. Cross-instance ledger and
+ * status ownership, custody and restart recovery require live qualification.
  */
 export const createBuildkiteStatusPublication = ({
   repository,
@@ -76,6 +79,7 @@ export const createBuildkiteStatusPublication = ({
   let newest = 0;
   let stopped = false;
   let writes: Promise<unknown> = Promise.resolve();
+  let evaluations: Promise<unknown> = Promise.resolve();
   const identifiers = new Set<string>();
   const exclusive = <T>(work: () => Promise<T>): Promise<T> => {
     const next = writes.then(work);
@@ -154,10 +158,9 @@ export const createBuildkiteStatusPublication = ({
       ) => Promise<GateStatusDocument | null>;
     }): Promise<PublicationResult> {
       if (
-        !/^[\w.-]+\/[\w.-]+$/u.test(repository) ||
+        !validBuildkiteStatusRefreshPolicy({ holdLabel, repository }) ||
         !fullCommit(head) ||
         !/^[!-~]{1,100}$/u.test(context) ||
-        !holdLabel.trim() ||
         !Number.isSafeInteger(pullRequest) ||
         pullRequest <= 0 ||
         !/^[\w-]{1,64}$/u.test(runId) ||
@@ -198,12 +201,32 @@ export const createBuildkiteStatusPublication = ({
         return admitted;
       }
       const before = admitted.pull;
-      let gate: GateStatusDocument | null = null;
-      try {
-        gate = await evaluate(before);
-      } catch {
-        // The confirmed pending status remains the service's latest answer.
+      // Gate collection mutates the shared review ledger. Keep evaluations
+      // exclusive independently of writes so a newer pending invalidation can
+      // reach the service while an older evaluation is still finishing.
+      const evaluation = evaluations.then(
+        async (): Promise<
+          { gate: GateStatusDocument | null } | PublicationResult
+        > => {
+          if (stopped) {
+            return { reason: "publisher-stopped", status: "withheld" };
+          }
+          if (generation !== newest) {
+            return { reason: "superseded", status: "withheld" };
+          }
+          try {
+            return { gate: await evaluate(before) };
+          } catch {
+            return { gate: null };
+          }
+        }
+      );
+      evaluations = evaluation.catch(() => null);
+      const evaluated = await evaluation;
+      if (!("gate" in evaluated)) {
+        return evaluated;
       }
+      const { gate } = evaluated;
       return exclusive(async () => {
         if (stopped) {
           return { reason: "publisher-stopped", status: "withheld" };
