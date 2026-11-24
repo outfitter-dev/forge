@@ -19,3 +19,36 @@ bun test tests/collect-buildkite-receipt.test.ts
 ```
 
 The transport cases are offline. They prove request bindings, bounded reads, credential handling and rejection behavior against recorded API shapes. Actual Buildkite responses, storage destinations and permissions still need qualification on the configured installation.
+
+## Protected gate handoff
+
+`collectBuildkiteGateReceipt` connects the protected capture reader, authenticated collector and gate file input. The trusted host supplies the admitted job identity, execution expectations, API selectors, approved storage origins, `captureRoot` and `outputRoot`. Both roots must be absolute. They may resolve to the same protected directory; capture records and published gate receipts use distinct paths. The output root must already exist, owned by the collector account with mode 0700. The capture reader enforces its documented record permissions. These checks depend on the host keeping both roots outside proposal access and job cleanup.
+
+The operation reads `captureRoot/<job-id>/capture.json` through `readBuildkiteProjectCapture`. A missing capture stops before network collection. A qualified download is published once to `outputRoot/<job-id>.receipt.json`, with a mode 0600 file. Only `status: "ready"` supplies a receipt path. Failed collection or verification supplies a fixed withholding reason. A duplicate or interrupted output file is refused, so a previously returned path cannot silently change on a later invocation. Reconcile an interrupted file under host ownership or admit a new job attempt before trying again.
+
+The CLI in `src/buildkite-receipt-collection-cli.ts` takes one absolute operator-selected JSON file. That protected file contains the same `admission`, `expectation`, `organizationSlug`, `pipelineSlug`, `buildNumber`, `artifactPath` and `artifactOrigins` inputs as the collector, plus the two roots. It contains no `capture` field or API credential. The CLI reads the token only from `FORGE_BUILDKITE_READ_TOKEN`, uses its installed fetch transport, and refuses verbose-fetch configuration. Exit zero means a ready file was published, exit one means evidence was withheld, and exit two means the invocation or operator file could not be accepted.
+
+Build this CLI from the approved install, with the pinned Bun version and both autoload options disabled, as for the project-capture CLI. The host's credential delivery mechanism then invokes the compiled collector outside proposal workspaces. An illustrative protected gate hook uses its result without reimplementing correlation:
+
+```sh
+set -eu
+if /opt/forge/bootstrap/forge-buildkite-collect /etc/forge/collect.json > "$collection_result"; then
+  receipt=$(jq -er 'select(.status == "ready") | .receiptFile' "$collection_result")
+  set -- --receipt "$receipt"
+else
+  collection_exit=$?
+  if [ "$collection_exit" -ne 1 ]; then
+    exit "$collection_exit"
+  fi
+  set --
+fi
+/opt/forge/releases/APPROVED_COMMIT/bin/forge gate \
+  --repository "$admitted_repository" --pull-request "$admitted_pr" \
+  --expected-head "$admitted_head" --expected-base "$admitted_base" \
+  --policy "$trusted_policy" --state "$trusted_state" --run-id "$admitted_run" \
+  "$@" --review-evidence "$qualified_review_evidence"
+```
+
+A withheld receipt still reaches the gate with no `--receipt` argument, producing missing verification evidence. Invalid collector invocation stops the hook. The hook's variables, compiled paths, policy, review evidence, result file and credential environment are host-selected protected inputs. The example assumes that installation layout and qualified review evidence exist. Capture delivery between the project and trusted hosts, artifact upload, actual download-origin qualification, PR freshness, worker isolation and live status publication still need host integration and approval. The gate checks the supplied revision pair again against its own GitHub collection.
+
+`tests/buildkite-gate-receipt.test.ts` now exercises the real capture operation and protected reader, retrieves those bytes through the actual collector with controlled HTTP responses, publishes the gate handoff and gives that exact file to the real gate CLI. A changed artifact body is refused against the protected digest, an actual command exit 17 stays nonpassing, and duplicate file publication leaves the earlier bytes intact. The transport fixtures establish operation composition and preserve the explicitly unqualified live boundaries.
