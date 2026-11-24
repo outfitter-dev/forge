@@ -1,5 +1,13 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  readFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -80,4 +88,50 @@ test("public output directories are refused before collection", async () => {
     reason: "output-unavailable",
     status: "withheld",
   });
+});
+
+test.each([1, 2])("documented gate hook handles collector exit %i", (exit) => {
+  const collector = path.join(root, `collector-${exit}`);
+  const gate = path.join(root, `gate-${exit}`);
+  const observed = path.join(root, `observed-${exit}`);
+  writeFileSync(collector, `#!/bin/sh\nexit ${exit}\n`);
+  writeFileSync(gate, '#!/bin/sh\nprintf "%s\\n" "$@" > "$gate_observed"\n');
+  chmodSync(collector, 0o700);
+  chmodSync(gate, 0o700);
+  const document = readFileSync(
+    path.resolve(import.meta.dir, "../docs/buildkite-receipt-collection.md"),
+    "utf-8"
+  );
+  const example = document
+    .split("## Protected gate handoff")[1]
+    ?.split("```sh\n")[1]
+    ?.split("```")[0];
+  if (!example) {
+    throw new Error("Documented gate hook was unavailable");
+  }
+  const script = example
+    .replaceAll("/opt/forge/bootstrap/forge-buildkite-collect", collector)
+    .replaceAll("/opt/forge/releases/APPROVED_COMMIT/bin/forge", gate);
+  const child = Bun.spawnSync(["/bin/sh", "-c", script], {
+    env: {
+      admitted_base: "b".repeat(40),
+      admitted_head: "a".repeat(40),
+      admitted_pr: "1",
+      admitted_repository: "example/project",
+      admitted_run: "fixture-run",
+      collection_result: path.join(root, `result-${exit}`),
+      gate_observed: observed,
+      qualified_review_evidence: "trusted-review.json",
+      trusted_policy: "trusted-policy.json",
+      trusted_state: "trusted-state",
+    },
+  });
+  expect(child.exitCode).toBe(exit === 1 ? 0 : 2);
+  expect(existsSync(observed)).toBe(exit === 1);
+  if (exit === 1) {
+    const args = readFileSync(observed, "utf-8").trim().split("\n");
+    expect(args).not.toContain("--receipt");
+    expect(args).toContain("--expected-head");
+    expect(args).toContain("--expected-base");
+  }
 });
