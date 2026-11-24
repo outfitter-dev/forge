@@ -1,13 +1,16 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterEach, expect, test } from "bun:test";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { qualifyBuildkiteGateReceipt } from "../src/buildkite-gate-receipt.ts";
-import { digest } from "../src/check-config.ts";
-import { parseGatePolicy } from "../src/gate-policy.ts";
 import { VERIFICATION_GATES } from "../src/index.ts";
-import { fixture, gitFixture } from "./check-fixtures.ts";
+import {
+  collectCapturedProject,
+  policyFile,
+  projectRun,
+  repository,
+} from "./buildkite-capture-collection-fixture.ts";
+import type { ProjectRun } from "./buildkite-capture-collection-fixture.ts";
 import { codexPass, comment, comments } from "./gate-codex-fixtures.ts";
 import { PULL_REQUEST, pullRequest, SERVED } from "./gate-fixtures.ts";
 import {
@@ -18,113 +21,17 @@ import {
   gateArgs,
   ledgerText,
   notCollected,
-  root,
   run,
   seedLedger,
   workspace,
 } from "./gate-test-harness.ts";
 
-const repository = "outfitter-dev/forge";
-const policyFile = path.join(root, "forge-gate.json");
-const policy = parseGatePolicy(JSON.parse(readFileSync(policyFile, "utf-8")));
-const temporary: string[] = [];
-let executable = "";
-
-beforeAll(() => {
-  const buildRoot = mkdtempSync(path.join(tmpdir(), "forge-receipt-proof-"));
-  temporary.push(buildRoot);
-  executable = path.join(buildRoot, "project-check");
-  const build = Bun.spawnSync([
-    process.execPath,
-    "build",
-    "--compile",
-    "--no-compile-autoload-dotenv",
-    "--no-compile-autoload-bunfig",
-    path.join(root, "src/buildkite-project-check.ts"),
-    "--outfile",
-    executable,
-  ]);
-  expect(build.exitCode).toBe(0);
-});
 afterEach(cleanupGateWorkspace);
-afterAll(() => {
-  for (const directory of temporary) {
-    rmSync(directory, { force: true, recursive: true });
-  }
-});
-
-const uuid = (digit: number) => `00000000-0000-4000-8000-00000000000${digit}`;
-
-/** Executes a real disposable project. Buildkite identity and custody are fixtures. */
-const projectRun = (script = "exit 0") => {
-  const project = fixture();
-  temporary.push(project);
-  const base = gitFixture(project, "rev-parse", "HEAD");
-  const command = ["/bin/sh", "-c", script];
-  const config = JSON.stringify({
-    check: { command, id: "check" },
-    repository,
-    schemaVersion: 1,
-  });
-  writeFileSync(path.join(project, "forge.json"), config);
-  gitFixture(project, "add", "forge.json");
-  gitFixture(project, "commit", "-qm", "proposal");
-  const head = gitFixture(project, "rev-parse", "HEAD");
-  const child = Bun.spawnSync(
-    [executable, repository, head, base, path.dirname(process.execPath)],
-    { cwd: project, env: {} }
-  );
-  // Capture stdout directly, including its newline, outside the proposal tree.
-  const bytes = new Uint8Array(child.stdout);
-  const admission = {
-    base,
-    buildId: uuid(1),
-    head,
-    jobId: uuid(2),
-    organizationId: uuid(3),
-    pipelineId: uuid(4),
-    pullRequest: PULL_REQUEST,
-    queueId: uuid(5),
-    repository,
-  };
-  const { base: _base, ...identity } = admission;
-  return {
-    admission,
-    bytes,
-    capture: {
-      jobId: admission.jobId,
-      receiptSha256: digest(bytes),
-      runnerExitCode: child.exitCode,
-    },
-    expectation: {
-      checks: policy.checks,
-      commandDigest: digest(JSON.stringify(command)),
-      configDigest: digest(config),
-      provenance: policy.evidence.verification,
-      runtime: {
-        arch: process.arch,
-        bun: Bun.version,
-        platform: process.platform,
-      },
-    },
-    job: {
-      ...identity,
-      exitStatus: child.exitCode,
-      softFailed: false,
-      state: child.exitCode === 0 ? "passed" : "failed",
-      stepKey: "forge-check",
-      superseded: false,
-      type: "script",
-    },
-  };
-};
-
-type ProjectRun = ReturnType<typeof projectRun>;
 
 /** Only qualified bytes enter the real gate CLI, with a separate ledger. */
 const gateRun = (
   input: ProjectRun,
-  qualification: ReturnType<typeof qualifyBuildkiteGateReceipt>,
+  qualification: { receipt: Uint8Array | null },
   expectedHead = input.admission.head,
   expectedBase = input.admission.base
 ) => {
@@ -185,9 +92,13 @@ const gateRun = (
   };
 };
 
-test("captured project runner bytes qualify through the committed policy and gate CLI", () => {
-  const input = projectRun();
-  const qualified = qualifyBuildkiteGateReceipt(input);
+test("captured project runner bytes qualify through the committed policy and gate CLI", async () => {
+  const input = await projectRun();
+  const qualified = await collectCapturedProject(input);
+  expect(qualified.collected).toBe(true);
+  if (!qualified.collected) {
+    throw new Error(qualified.reason);
+  }
   expect(qualified.verification).toMatchObject({ verified: true });
   expect(qualified.receipt).toEqual(input.bytes);
   expect(qualified.receipt).not.toBe(input.bytes);
@@ -212,8 +123,10 @@ test.each([
   "oversized",
 ])(
   "%s project evidence stays withheld and blocks every mapped verification gate",
-  (scenario) => {
-    const input = projectRun(scenario === "failed" ? "exit 17" : "exit 0");
+  async (scenario) => {
+    const input = await projectRun(
+      scenario === "failed" ? "exit 17" : "exit 0"
+    );
     if (scenario === "failed") {
       expect(input.capture.runnerExitCode).toBe(1);
       expect(input.job).toMatchObject({ exitStatus: 1, state: "failed" });
@@ -290,8 +203,8 @@ test.each([
   }
 );
 
-test("a changed admitted head stops before the isolated ledger is updated", () => {
-  const input = projectRun();
+test("a changed admitted head stops before the isolated ledger is updated", async () => {
+  const input = await projectRun();
   const { before, ran, ws } = gateRun(
     input,
     qualifyBuildkiteGateReceipt(input),
@@ -305,8 +218,8 @@ test("a changed admitted head stops before the isolated ledger is updated", () =
   expect(ledgerText(ws)).toBe(before);
 });
 
-test("a changed admitted base stops before the isolated ledger is updated", () => {
-  const input = projectRun();
+test("a changed admitted base stops before the isolated ledger is updated", async () => {
+  const input = await projectRun();
   const { before, ran, ws } = gateRun(
     input,
     qualifyBuildkiteGateReceipt(input),
@@ -319,4 +232,42 @@ test("a changed admitted base stops before the isolated ledger is updated", () =
     stage: "subject",
   });
   expect(ledgerText(ws)).toBe(before);
+});
+
+test("downloaded bytes differing from protected capture cannot qualify the gate", async () => {
+  const input = await projectRun();
+  const downloaded = new Uint8Array(input.bytes);
+  downloaded[0] = 32;
+  const result = await collectCapturedProject(input, downloaded);
+  expect(result.collected).toBe(true);
+  if (!result.collected) {
+    throw new Error(result.reason);
+  }
+  expect(result.verification).toEqual({
+    reason: "receipt-digest-mismatch",
+    verified: false,
+  });
+  expect(result.receipt).toBeNull();
+  const { ran } = gateRun(input, result);
+  expect(ran.exitCode).toBe(1);
+  for (const name of VERIFICATION_GATES) {
+    expect(gate(ran, name).codes).toEqual(["missing-evidence"]);
+  }
+});
+
+test("an actual failed command stays blocked through the authenticated collector", async () => {
+  const input = await projectRun("exit 17");
+  expect(JSON.parse(new TextDecoder().decode(input.bytes))).toMatchObject({
+    admission: "started",
+    completion: "observed",
+    exitCode: 17,
+    outcome: "failed",
+  });
+  const result = await collectCapturedProject(input);
+  expect(result).toEqual({ collected: false, reason: "job-nonpassing" });
+  const { ran } = gateRun(input, { receipt: null });
+  expect(ran.exitCode).toBe(1);
+  for (const name of VERIFICATION_GATES) {
+    expect(gate(ran, name).codes).toEqual(["missing-evidence"]);
+  }
 });
