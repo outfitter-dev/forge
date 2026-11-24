@@ -72,19 +72,65 @@ const inventory = (
   });
 };
 
-test("the exact observed Devin count and badge is understood as unmatched adverse evidence", () => {
-  expect(
-    classifyFindingReport(report(), ["devin-review-v1"], account.id)
-  ).toEqual({ adverse: true, known: true });
-  const result = inventory([report()], { findings: [], recorded: false });
-  expect(result.reviewFindings.recorded).toBe(true);
-  expect(result.reviewFindings.findings).toMatchObject([
-    {
-      kind: "adverse-review",
-      reportingSource: { accountId: 123, actorType: "Bot" },
-      resolution: null,
-    },
-  ]);
+test.each([
+  [summary, true],
+  [summary.replace("3 potential issues", "1 potential issue"), true],
+  [
+    summary
+      .replace("3 potential issues", "1 potential issue")
+      .replace("pull/82", "pull/85"),
+    false,
+  ],
+] as const)(
+  "the observed report %s survives inventory collection with coverage %p",
+  (body, known) => {
+    expect(
+      classifyFindingReport(report({ body }), ["devin-review-v1"], account.id)
+    ).toEqual({ adverse: true, known });
+    const result = inventory([report({ body })], {
+      findings: [],
+      recorded: false,
+    });
+    expect(result.reviewFindings.recorded).toBe(known);
+    expect(result.reviewFindings.findings).toMatchObject([
+      {
+        kind: "adverse-review",
+        reportingSource: { accountId: 123, actorType: "Bot" },
+        resolution: null,
+      },
+    ]);
+  }
+);
+
+test.each([
+  ["1 potential issue", true],
+  ["2 potential issues", true],
+  ["1 potential issues", false],
+  ["2 potential issue", false],
+] as const)(
+  "Devin summary grammar %s has known classification %s",
+  (phrase, known) => {
+    const body = summary.replace("3 potential issues", phrase);
+    expect(
+      classifyFindingReport(report({ body }), ["devin-review-v1"], account.id)
+    ).toEqual({ adverse: true, known });
+  }
+);
+
+test("the singular observed summary remains adverse when its badge or prose changes", () => {
+  const body = summary.replace("3 potential issues", "1 potential issue");
+  for (const altered of [
+    body.replace("pull/82", "pull/85"),
+    `${body} additional report`,
+  ]) {
+    expect(
+      classifyFindingReport(
+        report({ body: altered }),
+        ["devin-review-v1"],
+        account.id
+      )
+    ).toEqual({ adverse: true, known: false });
+  }
 });
 
 test.each([

@@ -2,8 +2,8 @@ import type { FindingReportClassification } from "./configured-finding-classific
 import type { FindingReport } from "./github-finding-observations.ts";
 
 const COUNT =
-  /^\*\*Devin Review\*\* found (?<count>[1-9]\d*) potential issues\.\n\n/u;
-const ADVERSE = /^\*\*Devin Review\*\* found [1-9]\d* potential issues\./u;
+  /^\*\*Devin Review\*\* found (?<count>[1-9]\d*) potential issue(?<plural>s?)\.\n\n/u;
+const ADVERSE = /^\*\*Devin Review\*\* found [1-9]\d* potential issues?\./u;
 
 const reviewPath = (nativeRef: string): string | null => {
   try {
@@ -33,7 +33,12 @@ export const classifyDevinFindingReport = (
   const matched = COUNT.exec(report.body);
   const count = Number(matched?.groups?.count);
   const path = reviewPath(report.nativeRef);
-  if (matched === null || path === null || !Number.isSafeInteger(count)) {
+  if (
+    matched === null ||
+    path === null ||
+    !Number.isSafeInteger(count) ||
+    (count === 1) !== (matched.groups?.plural === "")
+  ) {
     return { adverse, known: false };
   }
   const expected = `${matched[0]}<!-- devin-review-badge-begin -->\n<a href="https://app.devin.ai/review${path}" target="_blank"><picture><source media="(prefers-color-scheme: dark)" srcset="https://static.devin.ai/assets/gh-devin-review-dark.svg?v=4"><img src="https://static.devin.ai/assets/gh-devin-review-light.svg?v=4" alt="Devin Review"></picture></a>\n<!-- devin-review-badge-end -->`;
