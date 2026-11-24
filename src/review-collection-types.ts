@@ -44,9 +44,23 @@ export type ReviewCollectionState =
   | "unreadable";
 
 export interface ReviewAdapterObservation extends CollectedReviewEvidence {
+  /** Explicit links emitted by a trusted installed adapter after qualifying a follow-up report. */
+  followUpResolutions?: ReviewFollowUpResolution[];
   state: ReviewCollectionState;
   diagnostics: string[];
   observations: unknown;
+}
+
+export interface ReviewFollowUpResolution {
+  finding: {
+    reviewer: string;
+    id: string;
+    attemptId: string;
+    nativeRef: string;
+  };
+  attemptId: string;
+  disposition: "fixed" | "dismissed";
+  nativeRef: string;
 }
 
 export interface ReviewAdapterDefinition {
@@ -88,6 +102,13 @@ export type ReviewSourceObservation =
     };
 
 export interface ReviewCollectionResult {
+  /** Trusted normalized links from stable sources, applied after native inventory reconciliation. */
+  followUpResolutions?: {
+    entry: ReviewCollectionConfiguration;
+    agentReviews: AgentReviewAttempt[];
+    links: ReviewFollowUpResolution[];
+    state: ReviewCollectionState;
+  }[];
   agentReviews: AgentReviewAttempt[];
   reviewFindings: ReviewFindingLedger;
   /** Describes these configured adapters only. Forge never claims that Ranger exhausted its execution ladder. */

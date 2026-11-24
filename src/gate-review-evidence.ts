@@ -10,11 +10,12 @@ import {
 export const gateReviewEvidence = (
   findings: ReviewFindingLedger,
   collected: CollectedReviewEvidence | undefined,
-  supplied: ReviewEvidence | null
+  supplied: ReviewEvidence | null,
+  collectorOwnsFindings = false
 ): ReviewEvidence => {
-  if (collected !== undefined && supplied === null) {
+  if (supplied === null && (collected !== undefined || collectorOwnsFindings)) {
     return {
-      agentReviews: collected.agentReviews,
+      agentReviews: collected?.agentReviews ?? [],
       reviewFindings: findings,
       reviewLadder: null,
     };

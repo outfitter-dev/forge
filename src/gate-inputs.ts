@@ -179,6 +179,12 @@ export const readGateInputs = async (
   }
   let review: ReviewEvidence | null = null;
   if (args.reviewEvidence !== null) {
+    if (policy.value.findingSources !== undefined) {
+      return refused(
+        "--review-evidence",
+        "configured finding sources require collected review evidence"
+      );
+    }
     const reviewFile = await readJson(cwd, args.reviewEvidence);
     if (!reviewFile.readable) {
       return refused("--review-evidence", UNREADABLE);

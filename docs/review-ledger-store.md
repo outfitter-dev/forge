@@ -107,6 +107,8 @@ Malformed or duplicate supplied histories are not ingested and retain the evalua
 
 A valid supplied history records its explicit completeness with the combined entries. Explicit unknown remains unknown and blocking. With Codex disabled, an absent file supplies the legacy unknown placeholder for evaluation. With Codex enabled, the mandatory `findingHistory` policy selects the trusted source-coverage claim. `"codex-only"` claims configured Codex plus persisted entries cover owned reporting history. `"supplied-global-ledger"` requires current valid unique `recorded: true` supplied history on every run, including after a prior complete file was stored. Eligible reviewer choices do not establish source coverage. Persisted blockers reach evaluation in every path.
 
+The opt-in [`findingSources` policy](configured-bot-findings-qualification.md) collects its current coverage directly and rejects `--review-evidence`. It binds coverage and native thread resolutions to the source-policy revision and normalized digest. Earlier findings retain their accepted origin across source removal and policy changes. A complete trusted native observation can resolve the same configured reporter’s thread under the accepted GitHub resolution authority. A reopened or missing thread loses that native resolution. Reports outside a thread retain the eligible independent follow-up requirement. Stored completeness from an older collection cannot establish current coverage.
+
 ## Files
 
 Each pull request has one entry file directly inside `directory`:

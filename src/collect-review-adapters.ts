@@ -173,6 +173,9 @@ export const collectedReviewAdapters = (
   let selecting = true;
   const agentReviews: AgentReviewAttempt[] = [];
   const adapters: ReviewCollectionResult["adapters"] = [];
+  const followUpResolutions: NonNullable<
+    ReviewCollectionResult["followUpResolutions"]
+  > = [];
   for (const [index, entry] of entries.entries()) {
     const normalized = normalizeObservation(
       entry,
@@ -185,6 +188,14 @@ export const collectedReviewAdapters = (
     if (normalized.accepted) {
       const { result } = normalized;
       findings = result.reviewFindings;
+      if (result.followUpResolutions !== undefined) {
+        followUpResolutions.push({
+          agentReviews: result.agentReviews,
+          entry,
+          links: result.followUpResolutions,
+          state: result.state,
+        });
+      }
       complete &&= findings.recorded && entry.findingsComplete;
       if (selected) {
         agentReviews.push(...result.agentReviews);
@@ -235,6 +246,7 @@ export const collectedReviewAdapters = (
     }
   }
   return {
+    ...(followUpResolutions.length === 0 ? {} : { followUpResolutions }),
     adapters,
     agentReviews,
     exhausted: entries.length > 0 && selecting,

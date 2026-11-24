@@ -18,7 +18,9 @@ No single review provider is required. Agent review needs one acceptable, comple
 
 Missing, stale, canceled, failed, ambiguous, or incomplete required evidence cannot authorize progression. An evaluation that could not complete cannot authorize progression either. Report what is known and what remains unsatisfied. Model judgment can contribute an assessment under explicit policy; it cannot override a deterministic blocker.
 
-The [configured-bot finding proposal](configured-bot-findings-proposal.md) is pending Matt’s confirmation. It defines proposed source coverage and handling of adverse reports outside review threads for FOR-38.
+Matt approved implementing and testing [configured-bot findings](configured-bot-findings-proposal.md) on November 24, 2026. A consumer may opt into a finding inventory scoped to explicitly configured reporting bots and qualified reporting surfaces. A completeness claim identifies that scope and its policy revision, requires a complete stable collection, and preserves every accepted earlier blocker, including reports from a removed source. Unsupported formats, unqualified external surfaces, unknown reporting identities and incomplete reads keep coverage unknown. Adding a finding source supplies no authority to satisfy the independent clean-review requirement.
+
+For an opted-in consumer, a complete trusted observation of the same native thread’s resolved state may clear that thread’s blocker under the configured reporter’s accepted provenance. The consumer thereby accepts GitHub’s repository permissions for who may resolve that thread. Reopening it restores the blocker, and disappearance loses the native resolution. An adverse report outside a thread retains the existing eligible independent follow-up requirement. Generic approval, edits that remove adverse text and a later clean report cannot clear it. The [qualification record](configured-bot-findings-qualification.md) identifies observed formats and remaining live adoption requirements.
 
 ## Evidence belongs to an exact subject
 

@@ -147,10 +147,20 @@ const resolution = (value: unknown, path: string) => {
     "subject",
     "attemptId",
     "disposition",
+    "policyRevision",
+    "policyDigest",
   ]);
-  choice(result.kind, `${path}.kind`, ["native", "follow-up-review"]);
+  choice(result.kind, `${path}.kind`, [
+    "native",
+    "configured-native",
+    "follow-up-review",
+  ]);
   if (result.kind === "native") {
     object(value, path, common);
+  } else if (result.kind === "configured-native") {
+    object(value, path, [...common, "policyRevision", "policyDigest"]);
+    digest(result.policyRevision, `${path}.policyRevision`, 40);
+    digest(result.policyDigest, `${path}.policyDigest`, 64);
   } else {
     subject(result.subject, `${path}.subject`, "pull_request");
     text(result.attemptId, `${path}.attemptId`);
@@ -160,8 +170,50 @@ const resolution = (value: unknown, path: string) => {
   text(result.nativeRef, `${path}.nativeRef`);
 };
 
+const findingSourceAccounts = (value: unknown, path: string) => {
+  const seen = new Set<unknown>();
+  const accounts = new Set<unknown>();
+  for (const [index, entry] of array(value, path).entries()) {
+    const at = `${path}[${index}]`;
+    const account = object(entry, at, ["reviewer", "accountId", "actorType"]);
+    text(account.reviewer, `${at}.reviewer`);
+    count(account.accountId, `${at}.accountId`);
+    if (
+      account.accountId === 0 ||
+      seen.has(account.reviewer) ||
+      accounts.has(account.accountId)
+    ) {
+      invalid(at, "expected unique nonzero source account");
+    }
+    seen.add(account.reviewer);
+    accounts.add(account.accountId);
+    choice(account.actorType, `${at}.actorType`, ["Bot"]);
+  }
+};
+
+const findingCoverage = (value: unknown, path: string) => {
+  const coverage = object(value, path, [
+    "policyRevision",
+    "policyDigest",
+    "sourceAccounts",
+    "references",
+  ]);
+  digest(coverage.policyRevision, `${path}.policyRevision`, 40);
+  digest(coverage.policyDigest, `${path}.policyDigest`, 64);
+  findingSourceAccounts(coverage.sourceAccounts, `${path}.sourceAccounts`);
+  for (const [index, entry] of array(
+    coverage.references,
+    `${path}.references`
+  ).entries()) {
+    text(entry, `${path}.references[${index}]`);
+  }
+};
+
 export const reviewFindings = (value: unknown, path: string) => {
-  const ledger = object(value, path, ["recorded", "findings"]);
+  const ledger = object(value, path, ["recorded", "findings", "coverage"]);
+  if (ledger.coverage !== undefined) {
+    findingCoverage(ledger.coverage, `${path}.coverage`);
+  }
   choice(ledger.recorded, `${path}.recorded`, [true, false]);
   for (const [index, item] of array(
     ledger.findings,
@@ -175,7 +227,25 @@ export const reviewFindings = (value: unknown, path: string) => {
       "attemptId",
       "nativeRef",
       "resolution",
+      "reportingSource",
     ]);
+    if (finding.reportingSource !== undefined) {
+      const source = object(
+        finding.reportingSource,
+        `${location}.reportingSource`,
+        ["accountId", "actorType"]
+      );
+      count(source.accountId, `${location}.reportingSource.accountId`);
+      if (source.accountId === 0) {
+        invalid(
+          `${location}.reportingSource.accountId`,
+          "expected a positive account ID"
+        );
+      }
+      choice(source.actorType, `${location}.reportingSource.actorType`, [
+        "Bot",
+      ]);
+    }
     choice(finding.kind, `${location}.kind`, ["finding", "adverse-review"]);
     for (const key of ["reviewer", "id", "attemptId", "nativeRef"]) {
       text(finding[key], `${location}.${key}`);
@@ -197,7 +267,33 @@ export const reviewLadder = (value: unknown, path: string) => {
 };
 
 export const agentReviewPolicy = (value: unknown, path: string) => {
-  const result = object(value, path, ["reviewers", "instructions", "ladder"]);
+  const result = object(value, path, [
+    "reviewers",
+    "instructions",
+    "ladder",
+    "findingSources",
+  ]);
+  if (result.findingSources !== undefined) {
+    const sources = object(result.findingSources, `${path}.findingSources`, [
+      "policyRevision",
+      "policyDigest",
+      "reviewers",
+      "sourceAccounts",
+    ]);
+    findingSourceAccounts(
+      sources.sourceAccounts,
+      `${path}.findingSources.sourceAccounts`
+    );
+    digest(sources.policyRevision, `${path}.findingSources.policyRevision`, 40);
+    digest(sources.policyDigest, `${path}.findingSources.policyDigest`, 64);
+    const names = array(sources.reviewers, `${path}.findingSources.reviewers`);
+    for (const [index, name] of names.entries()) {
+      text(name, `${path}.findingSources.reviewers[${index}]`);
+    }
+    if (new Set(names).size !== names.length) {
+      invalid(`${path}.findingSources.reviewers`, "expected unique reporters");
+    }
+  }
   const reviewers = array(result.reviewers, `${path}.reviewers`);
   if (reviewers.length === 0) {
     invalid(`${path}.reviewers`, "at least one eligible reviewer is required");

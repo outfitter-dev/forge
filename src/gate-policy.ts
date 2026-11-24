@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 import type { ProducerPolicy } from "./evidence-types.ts";
 import {
   choice,
@@ -7,6 +9,8 @@ import {
   repository,
   text,
 } from "./evidence-validation-primitives.ts";
+import { parseFindingSourcesPolicy } from "./finding-source-policy.ts";
+import type { FindingSourcesPolicy } from "./finding-source-policy.ts";
 import { parseGateCodexReviewPolicy } from "./gate-codex-policy.ts";
 import { parseGateReviewAdapters } from "./gate-review-adapters.ts";
 import type { CheckReceiptExpectation } from "./normalize-check-receipts.ts";
@@ -38,6 +42,8 @@ export interface GatePolicy {
   checks: CheckReceiptExpectation["checks"];
   /** Explicit optional hosted collector adoption, distinct from eligible evaluator reviewers. */
   reviewAdapters: GateReviewAdapterPolicy[];
+  /** Opted-in reporting coverage and native thread resolution, separate from clean-review eligibility. */
+  findingSources?: FindingSourcesPolicy;
   /**
    * How a repository adopts the collector's rule for `mergeAuthorized`: the
    * head branch is in the base repository and the pull request does not carry
@@ -111,9 +117,13 @@ export const parseGatePolicy = (
     "mergeAuthorization",
     "codexReview",
     "reviewAdapters",
+    "findingSources",
   ]);
   choice(root.schemaVersion, "gatePolicy.schemaVersion", [1, 2]);
   const legacy = root.schemaVersion === 1;
+  if (legacy && Object.hasOwn(root, "findingSources")) {
+    invalid("gatePolicy.findingSources", "requires policy schema version 2");
+  }
   const unsupported = legacy ? "reviewAdapters" : "codexReview";
   if (Object.hasOwn(root, unsupported)) {
     invalid(
@@ -135,6 +145,9 @@ export const parseGatePolicy = (
   // A policy that names no rule, or another one, has not adopted this one.
   choice(authorization.rule, "gatePolicy.mergeAuthorization.rule", [RULE]);
   const checkedEvidence = evidence(root.evidence, "gatePolicy.evidence");
+  const findingSources = Object.hasOwn(root, "findingSources")
+    ? parseFindingSourcesPolicy(root.findingSources)
+    : undefined;
   let reviewAdapters: GateReviewAdapterPolicy[];
   if (legacy) {
     reviewAdapters = [];
@@ -160,6 +173,45 @@ export const parseGatePolicy = (
     );
   }
 
+  const { agentReview } = checkedEvidence;
+  if (isRecord(agentReview)) {
+    const authority =
+      findingSources === undefined
+        ? undefined
+        : {
+            policyDigest: findingSources.policyDigest,
+            policyRevision: findingSources.policyRevision,
+            reviewers: findingSources.sources.map((source) => source.reviewer),
+            sourceAccounts: findingSources.sources.map(
+              ({ reviewer, accountId, actorType }) => ({
+                accountId,
+                actorType,
+                reviewer,
+              })
+            ),
+          };
+    if (
+      Object.hasOwn(agentReview, "findingSources") &&
+      !isDeepStrictEqual(agentReview.findingSources, authority)
+    ) {
+      invalid(
+        "gatePolicy.evidence.agentReview.findingSources",
+        "must match the declared finding source policy"
+      );
+    }
+    if (authority !== undefined) {
+      checkedEvidence.agentReview = {
+        ...agentReview,
+        findingSources: authority,
+      };
+    }
+  } else if (findingSources !== undefined) {
+    invalid(
+      "gatePolicy.evidence.agentReview",
+      "expected an agent review policy"
+    );
+  }
+
   return {
     checks: {
       build: text(checks.build, "gatePolicy.checks.build"),
@@ -176,6 +228,7 @@ export const parseGatePolicy = (
       rule: RULE,
     },
     reviewAdapters,
+    ...(findingSources === undefined ? {} : { findingSources }),
     schemaVersion: 2,
   };
 };

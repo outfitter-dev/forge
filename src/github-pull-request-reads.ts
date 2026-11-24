@@ -2,6 +2,7 @@ import type {
   PullRequestCommentReads,
   PullRequestReads,
 } from "./collect-pull-request-types.ts";
+import type { PullRequestFindingReads } from "./github-finding-observations.ts";
 import { wholeSecondUtc } from "./utc-instant.ts";
 
 /** The only origin a request is ever made to. */
@@ -56,6 +57,47 @@ const COMMENTS_QUERY = `query($owner: String!, $name: String!, $number: Int!, $c
             ... on Bot { databaseId }
           }
         }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`;
+
+const FINDING_REPORT_FIELDS = `id url body updatedAt lastEditedAt
+  author { __typename login ... on User { databaseId } ... on Bot { databaseId } }
+  editor { __typename login ... on User { databaseId } ... on Bot { databaseId } }
+  commit { oid }`;
+
+const FINDING_THREADS_QUERY = `query ForgeFindingThreads($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name, followRenames: false) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100, after: $cursor) {
+        nodes { id isResolved isOutdated
+          comments(first: 100) { nodes { ${FINDING_REPORT_FIELDS} } pageInfo { hasNextPage endCursor } }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`;
+
+const FINDING_REVIEWS_QUERY = `query ForgeFindingReviews($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name, followRenames: false) {
+    pullRequest(number: $number) {
+      reviews(first: 100, after: $cursor) {
+        nodes { ${FINDING_REPORT_FIELDS} state }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`;
+
+const FINDING_THREAD_COMMENTS_QUERY = `query ForgeFindingThreadComments($threadId: ID!, $cursor: String) {
+  node(id: $threadId) {
+    ... on PullRequestReviewThread {
+      id
+      comments(first: 100, after: $cursor) {
+        nodes { ${FINDING_REPORT_FIELDS} }
         pageInfo { hasNextPage endCursor }
       }
     }
@@ -171,7 +213,7 @@ const anotherPage = (link: string | null): boolean =>
  */
 export const githubPullRequestReads = (
   options: GitHubPullRequestReadsOptions
-): PullRequestReads & PullRequestCommentReads => {
+): PullRequestReads & PullRequestCommentReads & PullRequestFindingReads => {
   // Taken once, so changing the caller's object later changes no request.
   // Types are checked too: a pattern reads a missing token as `undefined`.
   const {
@@ -294,6 +336,18 @@ export const githubPullRequestReads = (
     },
     reviewThreads: (cursor) => graphQL(THREADS_QUERY, cursor),
     reviews: () => list(`${repository}/pulls/${pullNumber}/reviews`),
+    scopedReviewThreads: (cursor) => graphQL(FINDING_THREADS_QUERY, cursor),
+    scopedReviews: (cursor) => graphQL(FINDING_REVIEWS_QUERY, cursor),
+    scopedThreadComments: async (threadId, cursor) => {
+      const response = await request(
+        "/graphql",
+        JSON.stringify({
+          query: FINDING_THREAD_COMMENTS_QUERY,
+          variables: { cursor, threadId },
+        })
+      );
+      return response.body;
+    },
     timeline: () => list(`${repository}/issues/${pullNumber}/timeline`),
   };
 };
